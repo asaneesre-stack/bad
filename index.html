@@ -180,6 +180,14 @@
         ul li button.check-out-btn { background-color: #6c757d; color: white; }
         ul li button.delete-btn { background-color: var(--danger-color); color: white; }
 
+        /* NEW: Clickable Player Name Style */
+        .player-name-clickable {
+            cursor: pointer;
+            font-weight: 600;
+            color: var(--primary-color);
+            text-decoration: underline;
+        }
+
         .player-level {
             background-color: #e0e0e0;
             padding: 2px 8px;
@@ -466,14 +474,15 @@
         }
         .modal-content {
             background-color: var(--card-bg);
-            margin: 15% auto;
+            margin: 10% auto;
             padding: 20px;
             border: 1px solid #888;
             width: 90%;
-            max-width: 400px;
+            max-width: 600px; /* Increased max-width for history table */
             border-radius: 8px;
-            text-align: center;
+            text-align: left;
         }
+        .modal-content h3 { text-align: center; }
         .modal-content button {
             display: block;
             width: 80%;
@@ -505,6 +514,7 @@
             .court-card { max-width: 100%; }
             .timer-display { font-size: 2em; }
             th, td { padding: 6px; font-size: 13px; }
+            .modal-content { margin: 5% auto; }
         }
     </style>
 </head>
@@ -517,7 +527,7 @@
     <main class="container">
         <section class="card" id="rotation-dashboard">
             <h2>📊 Rotation Dashboard (คนรอทำรอบ)</h2>
-            <p style="color: #666; font-size: 14px;">แสดงผู้เล่นที่พร้อมเล่น (Ready) เรียงจากจำนวนรอบการเล่นน้อยที่สุด</p>
+            <p style="color: #666; font-size: 14px;">แสดงผู้เล่นที่พร้อมเล่น (Ready) เรียงจากจำนวนรอบการเล่นน้อยที่สุด (คลิกที่ชื่อเพื่อดูประวัติ)</p>
             <ul class="dashboard-list" id="rotation-list">
                 </ul>
         </section>
@@ -569,7 +579,7 @@
                 <p id="selected-placeholder" style="margin: 0; color: #666;">รอการเลือกผู้เล่น...</p>
             </div>
             
-            <h3 style="margin-top: 15px; margin-bottom: 5px;">ผู้เล่นที่ว่าง</h3>
+            <h3 style="margin-top: 15px; margin-bottom: 5px;">ผู้เล่นที่ว่าง (<span id="available-pairing-count">0</span> คน)</h3>
             <ul id="available-pairing-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 0 10px;">
                 </ul>
             
@@ -591,7 +601,7 @@
     </section>
 
     <section class="card history-section">
-        <h2>ประวัติการแข่งขัน</h2>
+        <h2>ประวัติการแข่งขันทั้งหมด</h2>
         <table>
             <thead>
                 <tr>
@@ -609,6 +619,24 @@
             <div id="modal-court-options"></div>
         </div>
     </div>
+    
+    <div id="player-history-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closePlayerHistoryModal()">&times;</span>
+            <h3 id="player-history-name">ประวัติผู้เล่น</h3>
+            <div id="player-stats-summary" style="margin-bottom: 15px;"></div>
+            <h4 style="margin-top: 20px; text-align: center; border-bottom: 1px solid #eee; padding-bottom: 5px;">ประวัติการแข่งขัน</h4>
+            <table style="width: 100%;">
+                <thead>
+                    <tr>
+                        <th>เวลา</th><th>สนาม</th><th>ทีม</th><th>ผล</th>
+                    </tr>
+                </thead>
+                <tbody id="player-match-history"></tbody>
+            </table>
+        </div>
+    </div>
+
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -659,11 +687,18 @@
         const modal = document.getElementById('court-modal');
         const modalOptions = document.getElementById('modal-court-options');
         
-        // NEW ELEMENTS
+        // NEW ELEMENTS for Pairing
         const pairingSearchInput = document.getElementById('pairing-search');
         const selectedPlayersDisplay = document.getElementById('selected-players-display');
         const selectedCountEl = document.getElementById('selected-count');
         const availablePairingListEl = document.getElementById('available-pairing-list');
+        const availablePairingCountEl = document.getElementById('available-pairing-count');
+
+        // NEW ELEMENTS for Player History Modal
+        const playerHistoryModal = document.getElementById('player-history-modal');
+        const playerHistoryNameEl = document.getElementById('player-history-name');
+        const playerStatsSummaryEl = document.getElementById('player-stats-summary');
+        const playerMatchHistoryEl = document.getElementById('player-match-history');
 
         // --- Initialization ---
         function loadData() {
@@ -694,6 +729,21 @@
                 
                 const allCourtIds = courts.map(c => c.id);
                 nextCourtId = allCourtIds.length > 0 ? Math.max(...allCourtIds) + 1 : 3;
+
+                // Rebuild pairingStats from history since it's not explicitly saved, 
+                // but needed for player history calc and popular pairs stats
+                pairingStats = new Map();
+                gameHistory.forEach(game => {
+                    const pair1Names = game.pair1.split(' / ');
+                    const pair2Names = game.pair2.split(' / ');
+                    
+                    const pair1Players = pair1Names.map(name => getAllActivePlayers().find(p => p.name === name)).filter(Boolean);
+                    const pair2Players = pair2Names.map(name => getAllActivePlayers().find(p => p.name === name)).filter(Boolean);
+
+                    if (pair1Players.length === 2) updatePairingStats(pair1Players);
+                    if (pair2Players.length === 2) updatePairingStats(pair2Players);
+                });
+
 
             } catch (e) {
                 console.error("Error loading data from localStorage:", e);
@@ -729,7 +779,8 @@
         // NEW: Event listener for list clicks and search input
         availablePairingListEl.addEventListener('click', (e) => {
             const li = e.target.closest('li');
-            if (li && li.dataset.playerId) {
+            // Allow click on li OR a non-clickable span within the li
+            if (li && li.dataset.playerId && !e.target.classList.contains('player-name-clickable')) { 
                 togglePlayerSelection(parseInt(li.dataset.playerId));
             }
         });
@@ -755,10 +806,17 @@
             if (!player) {
                 player = readyPlayers.find(p => p.id === numericId);
             }
+            // Check if player is currently on court (to get most up-to-date data)
+            if (!player) {
+                for (const court of courts) {
+                    player = court.players.find(p => p.id === numericId);
+                    if (player) return player;
+                }
+            }
             return player;
         }
         function getAllActivePlayers() {
-            return allPlayers.concat(readyPlayers);
+            return allPlayers.concat(readyPlayers).concat(courts.flatMap(c => c.players));
         }
         function getLevelRank(level) {
             return levelRanks[level] || 3; // Default to N (3) if level is unknown
@@ -774,7 +832,13 @@
             importStatusBox.className = 'import-status-box ' + type;
         }
         window.closeModal = function() { modal.style.display = 'none'; pendingPair = null; }
-        window.onclick = function(event) { if (event.target == modal) closeModal(); }
+        // NEW: Player History Modal Close Function
+        window.closePlayerHistoryModal = function() { playerHistoryModal.style.display = 'none'; }
+        
+        window.onclick = function(event) { 
+            if (event.target == modal) closeModal(); 
+            if (event.target == playerHistoryModal) closePlayerHistoryModal(); // Close history modal
+        }
 
         // --- Player Management ---
         function handleAddPlayer(e) {
@@ -853,7 +917,7 @@
                 pairingStats = new Map();
                 playerRotationCounts = new Map(); 
                 nextPlayerId = 1; 
-                currentSelectedPairing = []; // NEW
+                currentSelectedPairing = []; 
                 
                 courts.forEach(c => {
                     if (c.timerInterval) {
@@ -873,6 +937,7 @@
                 renderHistory();
                 renderStats();
                 renderRotationDashboard();
+                renderPairingSelectionUI();
             }
         }
 
@@ -887,6 +952,7 @@
             saveData(); 
             renderAllLists(); 
             renderRotationDashboard(); 
+            renderPairingSelectionUI(); 
         }
         window.uncheckIn = function(playerId) { 
             // NEW: Check if player is currently selected for pairing
@@ -898,6 +964,7 @@
             saveData(); 
             renderAllLists(); 
             renderRotationDashboard(); 
+            renderPairingSelectionUI(); 
         }
         
         window.deletePlayer = function(playerId) {
@@ -920,6 +987,7 @@
                 saveData();
                 renderAllLists();
                 renderRotationDashboard(); 
+                renderPairingSelectionUI(); 
             }
         }
 
@@ -938,7 +1006,8 @@
 
             allPlayers.forEach(player => {
                 const li = document.createElement('li');
-                li.innerHTML = `<span>${player.name} <span class="player-level">${player.level}</span></span><button class="check-in-btn" onclick="checkIn(${player.id})">เช็คชื่อ</button>`;
+                // Make name clickable
+                li.innerHTML = `<span><span class="player-name-clickable" onclick="showPlayerHistory(${player.id})">${player.name}</span> <span class="player-level">${player.level}</span></span><button class="check-in-btn" onclick="checkIn(${player.id})">เช็คชื่อ</button>`;
                 playerListEl.appendChild(li);
             });
 
@@ -950,7 +1019,7 @@
                 li.className = 'ready-player';
                 li.innerHTML = `
                     <span>
-                        ${player.name} 
+                        <span class="player-name-clickable" onclick="showPlayerHistory(${player.id})">${player.name}</span> 
                         <span class="player-level">${player.level}</span>
                         <span class="player-rotation">${rotationCount} รอบ</span> 
                         ${isPlaying ? '<span style="color: var(--danger-color); font-weight: 700; margin-left: 5px;">(กำลังเล่น)</span>' : ''}
@@ -990,16 +1059,116 @@
 
             rotationData.forEach(({ player, count }) => {
                 const li = document.createElement('li');
+                // Make name clickable
                 li.innerHTML = `
-                    ${player.name} (${player.level}) <br>
+                    <span class="player-name-clickable" onclick="showPlayerHistory(${player.id})">${player.name}</span> (${player.level}) <br>
                     <span class="low-rotation-count">${count} รอบ</span>
                 `;
                 rotationListEl.appendChild(li);
             });
         }
+        
+        // NEW: Player History Display Function
+        window.showPlayerHistory = function(playerId) {
+            const player = findPlayerById(playerId);
+            if (!player) return;
+
+            // 1. Calculate Stats
+            let totalGames = 0;
+            let gamesWon = 0;
+            let partnerStats = new Map(); // Map<PlayerId, GamesTogether>
+            
+            playerHistoryNameEl.textContent = `ประวัติผู้เล่น: ${player.name} (${player.level})`;
+
+            // 2. Filter and Process History
+            const playerMatches = gameHistory.filter(game => 
+                game.pair1.includes(player.name) || game.pair2.includes(player.name)
+            ).reverse(); // Show newest match first
+            
+            playerMatchHistoryEl.innerHTML = '';
+            
+            playerMatches.forEach(game => {
+                totalGames++;
+                
+                const pair1Names = game.pair1.split(' / ');
+                const pair2Names = game.pair2.split(' / ');
+                
+                const isPlayerInPair1 = pair1Names.includes(player.name);
+                const isPlayerInPair2 = pair2Names.includes(player.name);
+
+                let isWin = false;
+                let playerPairNames;
+                let opponentPairNames;
+
+                if (game.winner.includes(player.name)) {
+                    isWin = true;
+                    gamesWon++;
+                }
+
+                if (isPlayerInPair1) {
+                    playerPairNames = pair1Names;
+                    opponentPairNames = pair2Names;
+                } else if (isPlayerInPair2) {
+                    playerPairNames = pair2Names;
+                    opponentPairNames = pair1Names;
+                } else {
+                    return; 
+                }
+                
+                // Identify Partner 
+                const partnerName = playerPairNames.find(name => name !== player.name);
+                
+                if (partnerName) {
+                    const partner = getAllActivePlayers().find(p => p.name === partnerName);
+                    if (partner) {
+                        partnerStats.set(partner.id, (partnerStats.get(partner.id) || 0) + 1);
+                    }
+                }
+                
+                // Build Table Row
+                const resultText = isWin ? 
+                    '<span style="color: var(--secondary-color); font-weight: 700;">ชนะ</span>' : 
+                    '<span style="color: var(--danger-color); font-weight: 700;">แพ้</span>';
+                    
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${game.time}</td>
+                    <td>${game.courtName}</td>
+                    <td>กับ **${partnerName || 'N/A'}** vs ${opponentPairNames.join(' & ')}</td>
+                    <td>${resultText}</td>
+                `;
+                playerMatchHistoryEl.appendChild(tr);
+            });
+
+            // 3. Summarize Stats
+            const winRate = totalGames > 0 ? ((gamesWon / totalGames) * 100).toFixed(1) : '0.0';
+            
+            let partnerSummary = [];
+            
+            // Get Partner Names and Sort
+            Array.from(partnerStats.entries())
+                .sort((a, b) => b[1] - a[1]) // Sort by count descending
+                .slice(0, 3) // Top 3 partners
+                .forEach(([partnerId, count]) => {
+                    const partner = findPlayerById(partnerId);
+                    if (partner) {
+                         partnerSummary.push(`**${partner.name}** (${count} ครั้ง)`);
+                    }
+                });
+
+            const summaryHTML = `
+                <p><strong>จำนวนรอบ:</strong> ${playerRotationCounts.get(player.id) || 0} รอบ</p>
+                <p><strong>รวมเกมที่เล่น:</strong> ${totalGames} เกม</p>
+                <p><strong>ชนะ:</strong> ${gamesWon} เกม | <strong>อัตราการชนะ:</strong> <span style="font-size: 1.1em; color: ${winRate >= 50 ? 'var(--secondary-color)' : 'var(--danger-color)'}">${winRate}%</span></p>
+                <p><strong>คู่หูยอดนิยม:</strong> ${partnerSummary.length > 0 ? partnerSummary.join(', ') : 'ยังไม่มีข้อมูลคู่หู'}</p>
+            `;
+            
+            playerStatsSummaryEl.innerHTML = summaryHTML;
+            playerHistoryModal.style.display = 'block';
+        }
 
 
-        // --- NEW Pairing Selection Logic ---
+        // --- Pairing Selection Logic ---
 
         /** สลับการเลือกผู้เล่นเข้า/ออกจาก currentSelectedPairing */
         function togglePlayerSelection(playerId) {
@@ -1035,7 +1204,12 @@
             selectedCountEl.textContent = currentSelectedPairing.length;
 
             if (currentSelectedPairing.length === 0) {
-                selectedPlayersDisplay.appendChild(document.getElementById('selected-placeholder') || document.createElement('p'));
+                const placeholder = document.getElementById('selected-placeholder') || document.createElement('p');
+                placeholder.id = 'selected-placeholder';
+                placeholder.style.margin = '0';
+                placeholder.style.color = '#666';
+                placeholder.textContent = 'รอการเลือกผู้เล่น...';
+                selectedPlayersDisplay.appendChild(placeholder);
             } else {
                 currentSelectedPairing.forEach(player => {
                     const tag = document.createElement('span');
@@ -1062,6 +1236,11 @@
                 !courts.some(c => c.players.some(cp => cp.id === p.id))
             );
 
+            // NEW: Update the available player count
+            if (availablePairingCountEl) {
+                availablePairingCountEl.textContent = availablePlayers.length;
+            }
+
             // Sort by rotation count (low to high)
             availablePlayers.sort((a, b) => {
                 const countA = playerRotationCounts.get(a.id) || 0;
@@ -1081,8 +1260,11 @@
                 const li = document.createElement('li');
                 li.dataset.playerId = player.id;
                 li.className = isSelected ? 'selected-for-pairing' : '';
-                li.style.opacity = isSelected || currentSelectedPairing.length >= 4 ? '0.6' : '1';
-                li.style.cursor = isSelected || currentSelectedPairing.length >= 4 ? 'not-allowed' : 'pointer';
+                // Only allow selection if not selected AND total count is < 4
+                if (!isSelected && currentSelectedPairing.length >= 4) {
+                     li.style.opacity = '0.6';
+                     li.style.cursor = 'not-allowed';
+                }
 
                 li.innerHTML = `
                     <span>
@@ -1110,7 +1292,10 @@
             currentSelectedPairing = [];
 
             // 1. Group players by Level
-            const playersByLevel = { 'BG': [], 'N-': [], 'N': [], 'N+': [] };
+            const playersByLevel = {}; 
+            ['BG', 'N-', 'N', 'N+'].forEach(level => { // Initialize for all relevant levels
+                playersByLevel[level] = [];
+            });
             availablePlayers.forEach(p => {
                 playersByLevel[p.level]?.push(p);
             });
@@ -1167,7 +1352,6 @@
             renderPairingSelectionUI();
         }
 
-        // REMOVED populatePairingDropdowns, updateDropdownStates
 
         function showCourtSelectionModal() {
             if (currentSelectedPairing.length !== 4) {
@@ -1344,7 +1528,7 @@
                         renderAllLists(); 
                         renderCourts(); 
                         renderRotationDashboard();
-                        renderPairingSelectionUI(); // Update pairing list status
+                        renderPairingSelectionUI(); 
                     }
                     break;
                 case 'show-end-game':
@@ -1509,7 +1693,7 @@
         renderStats(); 
         renderCourts();
         renderRotationDashboard();
-        renderPairingSelectionUI(); // NEW: Initial render of the pairing UI
+        renderPairingSelectionUI(); 
     });
     </script>
 </body>
