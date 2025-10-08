@@ -637,8 +637,35 @@
         </div>
     </div>
 
-
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    
     <script>
+    // ****************************************
+    // 🔥 ขั้นตอนที่ 1: แทนที่ Configuration BLOCK นี้ทั้งหมด (สำคัญมาก!) 🔥
+    // ****************************************
+    
+    /* *** สำคัญ: กรุณาแทนที่ BLOCK นี้ทั้งหมด ด้วย Firebase Configuration ที่ได้จาก Console ของคุณ ***
+    1. ไปที่ Firebase Console (Settings -> Project Settings) 
+    2. เลือก Web App (ไอคอน </>)
+    3. คัดลอกโค้ด JavaScript Object ที่ชื่อว่า 'firebaseConfig' มาวางทับด้านล่างนี้
+    */
+    const firebaseConfig = {
+        apiKey: "AIzaSyC2qjF0P4t_YOUR_API_KEY_HERE_s8ZtT8b0", // <--- แก้ไข
+        authDomain: "your-project-id-12345.firebaseapp.com", // <--- แก้ไข
+        projectId: "your-project-id-12345", // <--- แก้ไข
+        storageBucket: "your-project-id-12345.appspot.com", // <--- แก้ไข
+        messagingSenderId: "987654321000", // <--- แก้ไข
+        appId: "1:987654321000:web:abcdef1234567890" // <--- แก้ไข
+    };
+    
+    // Initialize Firebase and Firestore (db instance จะถูกใช้ในโค้ด)
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore(); 
+    // ****************************************
+    // END: FIREBASE INITIALIZATION BLOCK
+    // ****************************************
+
     document.addEventListener('DOMContentLoaded', () => {
         // --- ค่าคงที่สำหรับจัดอันดับมือ ---
         const levelRanks = {
@@ -703,6 +730,8 @@
         // --- Initialization ---
         function loadData() {
             try {
+                // NOTE: โค้ดนี้ยังใช้ localStorage ในการเก็บข้อมูล
+                // หากต้องการให้ใช้ Firestore จริงจัง ต้องเขียนฟังก์ชันนี้ใหม่
                 const storedPlayers = JSON.parse(localStorage.getItem('allPlayers')) || [];
                 allPlayers = storedPlayers.filter(p => !p.isReady); 
                 readyPlayers = storedPlayers.filter(p => p.isReady); 
@@ -751,6 +780,8 @@
         }
 
         function saveData() {
+            // NOTE: โค้ดนี้ยังใช้ localStorage ในการบันทึกข้อมูล
+            // หากต้องการให้ใช้ Firestore จริงจัง ต้องเขียนฟังก์ชันนี้ใหม่
             const playersToSave = [
                 ...allPlayers.map(p => ({ ...p, isReady: false })),
                 ...readyPlayers.map(p => ({ ...p, isReady: true }))
