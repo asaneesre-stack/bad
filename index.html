@@ -3,1729 +3,2020 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจัดการก๊วนแบดมินตัน (เสริม Dashboard)</title>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;600&display=swap" rel="stylesheet">
-    
+    <title>จัดการก๊วนแบดมินตัน</title>
     <style>
         :root {
-            --primary-color: #1a73e8;
-            --secondary-color: #34a853;
-            --danger-color: #ea4335;
-            --warning-color: #fbbc04;
-            --bg-color: #f0f2f5;
-            --card-bg: #fff;
-            --text-color: #333;
-            --border-color: #ddd;
-            --shadow: 0 4px 8px rgba(0,0,0,0.1);
+            --primary: #1a2b47;
+            --secondary: #00a8cc;
+            --accent: #f39c12;
+            --success: #27ae60;
+            --danger: #e74c3c;
+            --light: #f8f9fa;
+            --dark: #343a3c;
+            --white: #ffffff;
+            --shadow: 0 4px 15px rgba(0,0,0,0.08);
+            --border-radius: 12px;
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Kanit', sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--light);
             margin: 0;
-            padding: 10px;
-        }
-
-        header {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        header h1 {
-            color: var(--primary-color);
-            font-size: 1.8em;
-            margin: 10px 0;
+            padding: 0;
+            color: var(--dark);
+            line-height: 1.6;
         }
 
         .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: var(--white);
+            padding: 1.5rem 1rem;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        nav {
+            background-color: var(--white);
+            padding: 0;
             display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
             justify-content: center;
+            flex-wrap: wrap;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        nav button {
+            background-color: transparent;
+            color: var(--dark);
+            border: none;
+            padding: 1rem 1.2rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+        }
+
+        nav button:hover, nav button.active {
+            background-color: rgba(0, 168, 204, 0.1);
+            color: var(--secondary);
+            border-bottom-color: var(--secondary);
+        }
+
+        main {
+            padding: 1.5rem 0;
+        }
+
+        .view {
+            display: none;
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        .view.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .card {
-            background: var(--card-bg);
-            padding: 15px;
-            border-radius: 8px;
+            background-color: var(--white);
+            border-radius: var(--border-radius);
             box-shadow: var(--shadow);
-            flex: 1 1 300px;
-            min-width: 280px;
-        }
-        
-        /* ขยายพื้นที่ Rotation Dashboard */
-        #rotation-dashboard {
-            flex: 1 1 100%; /* ให้เต็มความกว้าง */
-            max-width: 100%;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
         }
 
-        .card h2, .card h3 {
+        .card h2 {
             margin-top: 0;
-            color: var(--primary-color);
-            border-bottom: 2px solid #eee;
-            padding-bottom: 5px;
-            margin-bottom: 15px;
+            border-bottom: 2px solid var(--light);
+            padding-bottom: 0.75rem;
+            color: var(--primary);
+            font-size: 1.5rem;
         }
 
-        .form-group {
+        .card h3 {
+            color: var(--secondary);
+            margin-top: 1.5rem;
+        }
+
+        form {
             display: flex;
             flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        #add-player-form {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            width: 100%;
-        }
-        #add-player-form > * {
-            flex-grow: 1;
-        }
-        #add-player-form button {
-            flex-grow: 0;
+            gap: 1rem;
+            align-items: flex-end;
         }
 
-        #add-player-form input, #add-player-form select, textarea {
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 16px;
+        form div {
+            flex: 1;
+            min-width: 200px;
         }
 
-        #add-player-form button, #paste-import-btn, #clear-all-players-btn {
-            padding: 10px 15px;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-            white-space: nowrap;
-            font-size: 16px;
-        }
-        .add-player-btn {
-            background-color: #28a745; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
             font-weight: 600;
-        }
-        .add-player-btn:hover {
-            background-color: #218838; 
+            color: var(--dark);
         }
 
-        #paste-import-btn {
-            background-color: #007bff;
+        input, select, textarea {
             width: 100%;
-            margin-top: 10px;
-        }
-        #clear-all-players-btn {
-            background-color: var(--danger-color);
-            width: 100%;
-            margin-top: 10px;
+            padding: 0.8rem;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s, box-shadow 0.3s;
         }
 
-        /* ส่วนนำเข้าข้อมูล */
-        #import-status-box {
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #e9e9e9;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            font-size: 14px;
-            white-space: pre-wrap;
-            word-break: break-all;
-            display: none;
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 3px rgba(0, 168, 204, 0.2);
         }
-        #import-status-box.error { background-color: #f8d7da; border-color: #f5c6cb; color: #721c24; }
-        #import-status-box.success { background-color: #d4edda; border-color: #c3e6cb; color: #155724; }
-        #paste-import-container { margin-top: 15px; display: none; }
-        #paste-data { width: 100%; height: 120px; box-sizing: border-box; }
-        .toggle-paste { color: var(--primary-color); cursor: pointer; text-decoration: underline; font-size: 14px; }
+
+        button {
+            background-color: var(--secondary);
+            color: var(--white);
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background-color 0.3s, transform 0.1s;
+            min-height: 48px; /* Easier to tap */
+        }
+
+        button:hover {
+            background-color: #0089a9;
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button.danger { background-color: var(--danger); }
+        button.danger:hover { background-color: #c0392b; }
+        button.success { background-color: var(--success); }
+        button.success:hover { background-color: #229954; }
+        button.warning { background-color: var(--accent); }
+        button.warning:hover { background-color: #e67e22; }
+        button.secondary { background-color: #6c757d; }
+        button.secondary:hover { background-color: #5a6268; }
+        /* ปุ่มเสมอ */
+        button.draw { background-color: #f1c40f; color: var(--dark); }
+        button.draw:hover { background-color: #d8ac0c; }
+
 
         ul {
             list-style-type: none;
             padding: 0;
+            margin: 0;
         }
 
-        ul li {
-            background: #f9f9f9;
-            padding: 10px;
-            margin-bottom: 8px;
-            border-radius: 4px;
+        li {
+            background-color: var(--light);
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            border-radius: 8px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            flex-wrap: wrap;
-            gap: 5px;
-            transition: background-color 0.2s;
+            transition: box-shadow 0.3s;
         }
-        ul li.ready-player {
-            background-color: #e6ffe6;
-            border-left: 5px solid var(--secondary-color);
-        }
-        ul li span {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        ul li button {
-            padding: 5px 10px;
-            font-size: 14px;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        ul li button.check-in-btn { background-color: var(--secondary-color); color: white; }
-        ul li button.check-out-btn { background-color: #6c757d; color: white; }
-        ul li button.delete-btn { background-color: var(--danger-color); color: white; }
-
-        /* NEW: Clickable Player Name Style */
-        .player-name-clickable {
-            cursor: pointer;
-            font-weight: 600;
-            color: var(--primary-color);
-            text-decoration: underline;
+        li:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
 
-        .player-level {
-            background-color: #e0e0e0;
-            padding: 2px 8px;
+        .skill-badge {
+            padding: 0.25rem 0.75rem;
             border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-        .player-rotation {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        /* Rotation Dashboard */
-        #rotation-dashboard .dashboard-list {
-            list-style-type: none;
-            padding: 0;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        #rotation-dashboard .dashboard-list li {
-            flex: 1 1 200px;
-            background: #e8f0fe; /* สีพื้นหลังอ่อน ๆ */
-            border-left: 5px solid var(--primary-color);
-            font-weight: 600;
-            padding: 10px;
-            transition: background-color 0.2s;
-        }
-        #rotation-dashboard .dashboard-list li:hover {
-            background-color: #d1e3ff;
-        }
-        .low-rotation-count {
-            color: var(--danger-color); /* เน้นสีแดงสำหรับคนเล่นน้อย */
-            font-size: 1.1em;
-            font-weight: 800;
-        }
-
-        /* ส่วนจัดคู่ใหม่ */
-        #suggest-level-pair-btn, #form-pair-btn {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-        #suggest-level-pair-btn {
-            background-color: var(--warning-color); 
-            color: black;
-        }
-        #form-pair-btn {
-            background-color: #5f6368;
-            color: white;
-            margin-bottom: 0;
-        }
-        #form-pair-btn:disabled { background-color: #ccc; cursor: not-allowed; }
-        
-        #available-pairing-list li {
-            cursor: pointer;
-            justify-content: flex-start;
-            transition: background-color 0.2s, opacity 0.2s;
-        }
-        #available-pairing-list li:hover {
-            background-color: #e8f0fe;
-        }
-        #available-pairing-list li.selected-for-pairing {
-            background-color: var(--secondary-color);
-            color: white;
-            font-weight: 600;
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        #available-pairing-list li.selected-for-pairing .player-level,
-        #available-pairing-list li.selected-for-pairing .player-rotation {
-            background-color: white;
-            color: var(--secondary-color);
-        }
-
-        .selected-player-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            background-color: var(--primary-color);
-            color: white;
-            padding: 5px 10px;
-            margin: 4px;
-            border-radius: 20px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .remove-selection-btn {
-            background: none;
-            border: none;
-            color: white;
+            color: var(--white);
+            font-size: 0.8rem;
             font-weight: bold;
-            font-size: 16px;
-            line-height: 1;
-            padding: 0;
-            cursor: pointer;
         }
+        .skill-P { background-color: var(--success); }
+        .skill-Nminus { background-color: #2c3e50; } 
+        .skill-N { background-color: var(--secondary); }
+        .skill-Nplus { background-color: #e67e22; }
+        .skill-BG { background-color: #95a5a6; }
 
-
-        /* ส่วนควบคุมสนาม */
-        .court-controls {
+        /* Check-in Card Style */
+        .check-in-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 1rem;
+        }
+        .check-in-card {
+            background-color: var(--white);
+            border: 2px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            padding: 1rem;
             text-align: center;
-            margin: 20px 0;
-            width: 100%;
-        }
-        .court-controls button {
-            padding: 10px 20px;
-            margin: 0 5px;
-            border: none;
-            border-radius: 4px;
             cursor: pointer;
-            font-weight: 600;
-        }
-        .add-court-btn { background-color: var(--secondary-color); color: white; }
-        .remove-court-btn { background-color: var(--danger-color); color: white; }
-
-        /* สนาม */
-        .courts-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            width: 100%;
-            justify-content: center;
-        }
-        .court-card {
-            background: var(--card-bg);
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: var(--shadow);
-            border: 2px solid transparent;
-            transition: border-color 0.3s, box-shadow 0.3s;
-            flex: 1 1 350px;
-            max-width: 450px;
-            position: relative;
-            overflow: hidden;
-        }
-        .court-card.occupied {
-            border-color: var(--secondary-color);
-            box-shadow: 0 6px 12px rgba(52, 168, 83, 0.2);
-        }
-        .court-card h2 { margin-top: 0; }
-        .court-display { text-align: center; }
-        .current-game-players {
-            background-color: #e8f0fe;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            min-height: 60px;
+            transition: all 0.3s ease;
+            min-height: 120px;
             display: flex;
             flex-direction: column;
             justify-content: center;
-            border: 1px solid var(--primary-color);
+            align-items: center;
         }
-        .player-pair { margin: 5px 0; font-weight: 600; }
-        .game-info { 
-            margin-bottom: 15px; 
-            font-size: 1.1em; 
+        .check-in-card:hover:not(.checked-in) {
+            border-color: var(--secondary);
+            transform: scale(1.05);
+        }
+        .check-in-card.checked-in {
+            background-color: #e8f5e9;
+            border-color: var(--success);
+            cursor: default;
+        }
+        .check-in-card.playing-now {
+            background-color: #fff3e0; 
+            border-color: var(--accent);
+        }
+        .check-in-card .player-name {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .check-in-card .player-skill {
+            font-size: 0.8rem;
+        }
+        .check-in-card .status-icon {
+            font-size: 1.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
+            background-color: var(--white);
+        }
+        .player-item input[type="checkbox"] {
+            min-width: 20px;
+            min-height: 20px;
+            margin-right: 1rem;
+        }
+        .player-item label {
+            margin-bottom: 0;
+            cursor: pointer;
+            flex-grow: 1;
+        }
+        .player-name-link {
+            color: var(--secondary);
+            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .player-name-link:hover {
+            text-decoration: underline;
+        }
+
+        /* Manual Selection Card Style */
+        .manual-selection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .manual-selection-card {
+            background-color: var(--white);
+            border: 2px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+        .manual-selection-card:hover {
+            border-color: var(--secondary);
+        }
+        .manual-selection-card.selected {
+            background-color: #e0f7fa;
+            border-color: var(--secondary);
+            transform: scale(1.05);
+        }
+        .manual-selection-card .selection-order {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background-color: var(--secondary);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.8rem;
+        }
+        .manual-selection-card .player-name {
+            font-weight: 600;
+        }
+        .manual-selection-card .player-skill {
+            font-size: 0.8rem;
+        }
+        .manual-selection-card .game-count {
+            position: absolute;
+            bottom: 5px;
+            left: 5px;
+            background-color: var(--accent);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 0.7rem;
+        }
+
+        .match-card {
+            border: 1px solid #e0e0e0;
+            border-left: 5px solid var(--secondary);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border-radius: var(--border-radius);
+            background-color: var(--white);
+        }
+        .match-card h3 { margin-top: 0; }
+        .match-teams { display: flex; justify-content: space-around; align-items: center; margin: 1.5rem 0; flex-wrap: wrap; gap: 1rem; }
+        .team { text-align: center; min-width: 120px; }
+        .team p { margin: 0.25rem 0; }
+        .vs { font-size: 1.5rem; font-weight: bold; color: #888; }
+        .match-controls { display: flex; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+        .timer { font-size: 1.8rem; font-weight: bold; color: var(--primary); text-align: center; margin: 1rem 0; }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+        .stat-card {
+            background-color: var(--white);
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+        .stat-card h4 { margin-top: 0; color: var(--secondary); }
+        .stat-card .big-number { font-size: 2.5rem; font-weight: bold; color: var(--primary); }
+        .stat-card p { margin: 0.5rem 0; }
+
+        .shuttle-counter {
             display: flex;
             justify-content: space-around;
             align-items: center;
             flex-wrap: wrap;
+            gap: 1rem;
+            padding: 1rem;
+            background-color: var(--light);
+            border-radius: 8px;
+            margin-bottom: 1rem;
         }
-        .game-info > div {
-            margin: 5px;
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+        .shuttle-counter div {
+            text-align: center;
         }
-        .game-info button {
-            margin: 0 2px;
-            padding: 3px 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            cursor: pointer;
-            background: #fff;
-        }
-        .game-info button:disabled { background-color: #f0f0f0; cursor: not-allowed; opacity: 0.6; }
-        .timer-display {
-            font-size: 2.5em;
-            font-weight: 600;
-            color: var(--danger-color);
-            margin-bottom: 15px;
-        }
-        .game-controls button, .winner-selection button {
-            padding: 10px 20px;
-            margin: 5px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-        }
-        .start-game-btn { background-color: var(--secondary-color); color: white; }
-        .end-game-btn { background-color: var(--danger-color); color: white; }
-        .winner-pair1, .winner-pair2 { background-color: var(--warning-color); color: black; }
-
-        /* อนิเมชั่นลูกแบด */
-        .shuttlecock-animation {
-            position: absolute;
-            top: 20%;
-            left: 10%;
-            font-size: 2em;
-            animation: fly 3s linear infinite;
-            z-index: 1;
-            display: none; 
-        }
-        .court-card.occupied .shuttlecock-animation {
-            display: block;
-        }
-        @keyframes fly {
-            0% { transform: translate(0, 0) rotate(0deg); }
-            25% { transform: translate(250px, 50px) rotate(90deg); }
-            50% { transform: translate(250px, 100px) rotate(180deg); }
-            75% { transform: translate(0, 50px) rotate(270deg); }
-            100% { transform: translate(0, 0) rotate(360deg); }
-        }
-
-        /* สถิติและประวัติ */
-        .stats-section, .history-section {
-            width: 100%;
-            max-width: 100%;
-        }
-        .stats-list {
-            list-style: decimal;
-            padding-left: 20px;
-        }
-        .stats-list li {
-            background: #f9f9f9;
-            margin-bottom: 5px;
-            padding: 8px 10px;
-            border-radius: 4px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .stat-count {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 14px;
-            font-weight: 600;
+        .shuttle-counter .count {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary);
         }
         
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-        th, td {
-            border: 1px solid var(--border-color);
-            padding: 8px;
-            text-align: left;
-            font-size: 14px;
-        }
-        thead {
-            background-color: #f2f2f2;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-        }
-        .modal-content {
-            background-color: var(--card-bg);
-            margin: 10% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 90%;
-            max-width: 600px; /* Increased max-width for history table */
+        /* Per-court shuttle control */
+        .court-shuttle-control {
+            display: flex;
+            flex-direction: column;
+            gap: 10px; 
+            padding: 0.75rem;
+            background-color: #f0f8ff;
             border-radius: 8px;
-            text-align: left;
+            margin-top: 0.5rem;
         }
-        .modal-content h3 { text-align: center; }
-        .modal-content button {
-            display: block;
-            width: 80%;
-            margin: 10px auto;
-            padding: 10px;
-            border: none;
-            background-color: var(--primary-color);
-            color: white;
-            border-radius: 4px;
-            cursor: pointer;
+        .shuttle-control-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
         }
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
+        .court-shuttle-control button {
+            font-size: 1rem;
+            padding: 0.4rem 0.8rem;
+            min-height: auto;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: var(--primary);
+        }
+        .court-shuttle-control .shuttle-label {
             font-weight: bold;
+            min-width: 80px;
+            text-align: right;
+            color: var(--primary);
+        }
+        .court-shuttle-control .shuttle-count-display {
+            font-weight: bold;
+            font-size: 1.2rem;
+            min-width: 30px;
+            text-align: center;
+            background-color: var(--white);
+            padding: 0 5px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+        .dashboard-card {
+            background: linear-gradient(135deg, var(--white), var(--light));
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            text-align: center;
+            transition: transform 0.3s;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+        }
+        .dashboard-card .icon {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+        .dashboard-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        .dashboard-card .label {
+            color: var(--dark);
+            font-weight: 500;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+        .quick-actions button {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        /* Dashboard Player Stats */
+        .dashboard-player-stats {
+            margin-top: 2rem;
+        }
+        .dashboard-player-stats h3 {
+            text-align: center;
+            color: var(--primary);
+            margin-bottom: 1rem;
+        }
+        .dashboard-player-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+            padding: 1rem;
+            border: 1px solid #e0e0e0;
+            border-radius: var(--border-radius);
+        }
+        .dashboard-player-card {
+            background-color: var(--white);
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            transition: box-shadow 0.3s;
             cursor: pointer;
         }
-        .close:hover { color: black; }
+        .dashboard-player-card:hover {
+            box-shadow: var(--shadow);
+        }
+        .dashboard-player-card .player-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+        .dashboard-player-card .player-skill {
+            font-size: 0.7rem;
+            margin: 0.25rem 0;
+        }
+        .dashboard-player-card .game-count {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: var(--accent);
+            margin-top: 0.5rem;
+        }
 
-        /* Responsive Design */
+        /* Edit Mode */
+        .edit-mode input, .edit-mode select {
+            background-color: #fff3cd;
+            border-color: var(--accent);
+        }
+        .edit-form {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        .search-bar {
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 1.5rem;
+        }
+        .bulk-edit-section {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #dee2e6;
+        }
+        .bulk-edit-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 0.5rem;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ced4da;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+        .bulk-edit-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem;
+            background-color: var(--light);
+            border-radius: 4px;
+        }
+
+
         @media (max-width: 768px) {
-            header h1 { font-size: 1.5em; }
-            .container { flex-direction: column; align-items: stretch; }
-            .card { flex: 1 1 auto; }
-            .pair-group { flex-direction: column; align-items: stretch; }
-            .pair-group label { min-width: auto; margin-bottom: 5px; }
-            .courts-container { flex-direction: column; }
-            .court-card { max-width: 100%; }
-            .timer-display { font-size: 2em; }
-            th, td { padding: 6px; font-size: 13px; }
-            .modal-content { margin: 5% auto; }
+            .container { padding: 0.5rem; }
+            header h1 { font-size: 1.5rem; }
+            nav button { padding: 0.8rem 0.5rem; font-size: 0.9rem; }
+            .card { padding: 1rem; }
+            .match-teams { flex-direction: column; }
+            .vs { transform: rotate(90deg); }
+            .check-in-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+            .manual-selection-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+            .dashboard-player-list { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
         }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>🏸 ระบบจัดการก๊วนแบดมินตัน 🏸</h1>
+        <div class="container">
+            <h1>🏸 ระบบจัดการก๊วนแบดมินตัน 🏸</h1>
+        </div>
     </header>
 
+    <nav>
+        <button onclick="showView('dashboard')" class="active">แดชบอร์ด</button>
+        <button onclick="showView('player-management')">จัดการผู้เล่น</button>
+        <button onclick="showView('check-in')">เช็คอิน</button>
+        <button onclick="showView('match-setup')">จัดคู่/จับสลาก</button>
+        <button onclick="showView('active-matches')">สนามที่กำลังเล่น</button>
+        <button onclick="showView('player-history')">ประวัติผู้เล่น</button>
+        <button onclick="showView('settings')">ตั้งค่า</button>
+        <button onclick="showView('manager-tools')">หน้าผู้จัด</button>
+    </nav>
+
     <main class="container">
-        <section class="card" id="rotation-dashboard">
-            <h2>📊 Rotation Dashboard (คนรอทำรอบ)</h2>
-            <p style="color: #666; font-size: 14px;">แสดงผู้เล่นที่พร้อมเล่น (Ready) เรียงจากจำนวนรอบการเล่นน้อยที่สุด (คลิกที่ชื่อเพื่อดูประวัติ)</p>
-            <ul class="dashboard-list" id="rotation-list">
-                </ul>
+        <section id="dashboard" class="view active">
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <div class="icon">👥</div>
+                    <div class="value" id="dash-total-players">0</div>
+                    <div class="label">ผู้เล่นทั้งหมด</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="icon">✅</div>
+                    <div class="value" id="dash-checked-in">0</div>
+                    <div class="label">เช็คอินแล้ว</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="icon">🏟️</div>
+                    <div class="value" id="dash-active-matches">0</div>
+                    <div class="label">กำลังแข่ง</div>
+                </div>
+                <div class="dashboard-card">
+                    <div class="icon">🏸</div>
+                    <div class="value" id="dash-shuttle-in-play">0</div>
+                    <div class="label">ลูกแบดพร้อมใช้</div>
+                </div>
+            </div>
+            
+            <div class="dashboard-player-stats">
+                <h3>สถิติผู้เล่น (เรียงตามจำนวนเกมที่เล่นน้อยที่สุด)</h3>
+                <div id="dashboard-player-list" class="dashboard-player-list"></div>
+            </div>
+
+            <div class="quick-actions">
+                <button class="success" onclick="navigateAndShow('player-management')">➕ เพิ่มผู้เล่น</button>
+                <button class="warning" onclick="navigateAndShow('match-setup')">🎲 จัดคู่เล่น</button>
+                <button onclick="navigateAndShow('active-matches')">⏱️ ดูสนาม</button>
+            </div>
         </section>
 
-        <section class="card" id="player-management">
-            <h2>จัดการผู้เล่น & เช็คชื่อ (พร้อมเล่น: <span id="ready-player-count">0</span> คน)</h2>
-            <div class="form-group">
+        <section id="player-management" class="view">
+            <div class="card">
+                <h2>เพิ่มผู้เล่นคนเดียว</h2>
                 <form id="add-player-form">
-                    <input type="text" id="player-name" placeholder="ระบุชื่อผู้เล่น" required>
-                    <select id="player-level">
-                        <option value="BG">BG</option>
-                        <option value="N-">N-</option>
-                        <option value="N" selected>N</option>
-                        <option value="N+">N+</option>
-                    </select>
-                    <button type="submit" class="add-player-btn">เพิ่มผู้เล่น</button>
+                    <div>
+                        <label for="player-name">ชื่อผู้เล่น:</label>
+                        <input type="text" id="player-name" required>
+                    </div>
+                    <div>
+                        <label for="player-skill">ระดับมือ:</label>
+                        <select id="player-skill">
+                            <option value="BG">BG (Beginner)</option>
+                            <option value="N-">N- (N-Minus)</option>
+                            <option value="N" selected>N (Normal)</option>
+                            <option value="N+">N+ (N-Plus)</option>
+                            <option value="P">P (Pro)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit">เพิ่มผู้เล่น</button>
+                    </div>
                 </form>
             </div>
-            <div id="import-section">
-                <div id="import-status-box"></div>
-                <a href="#" class="toggle-paste" onclick="togglePasteImport(); return false;">ลองวิธีคัดลอกวางแทน</a>
-                <div id="paste-import-container">
-                    <p style="font-size: 14px; color: #666;">คัดลอกข้อมูลจากตาราง (คอลัมน์ A: ชื่อ, คอลัมน์ B: ระดับ) แล้ววางลงในช่องนี้</p>
-                    <textarea id="paste-data"></textarea>
-                    <button id="paste-import-btn">นำเข้าข้อมูล</button>
-                </div>
-                <button id="clear-all-players-btn">เคลียร์รายชื่อทั้งหมด</button>
-            </div>
-            <br>
-            <h3>รายชื่อผู้เล่นทั้งหมด (ยังไม่เช็คชื่อ)</h3>
-            <ul id="player-list"></ul>
-            
-            <h3 style="color: var(--secondary-color);">ผู้เล่นที่พร้อมลงสนาม (Ready)</h3>
-            <ul id="ready-player-list"></ul>
-        </section>
-
-        <section class="card" id="pairing-section">
-            <h2>จัดคู่ผู้เล่น</h2>
-            <p style="color: #666; font-size: 14px;">คลิกเลือกผู้เล่น 4 คนจากรายชื่อด้านล่าง</p>
-            
-            <button id="suggest-level-pair-btn">
-                สุ่มจับคู่ 4 คน (มือใกล้เคียง & รอบต่ำ)
-            </button>
-
-            <input type="text" id="pairing-search" placeholder="ค้นหาชื่อผู้เล่น..." style="width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;">
-
-            <h3 style="margin-top: 5px; margin-bottom: 5px;">ผู้เล่นที่ถูกเลือก (<span id="selected-count">0</span>/4)</h3>
-            <div id="selected-players-display" style="border: 1px solid var(--primary-color); padding: 10px; border-radius: 4px; min-height: 50px; background-color: #e8f0fe;">
-                <p id="selected-placeholder" style="margin: 0; color: #666;">รอการเลือกผู้เล่น...</p>
-            </div>
-            
-            <h3 style="margin-top: 15px; margin-bottom: 5px;">ผู้เล่นที่ว่าง (<span id="available-pairing-count">0</span> คน)</h3>
-            <ul id="available-pairing-list" style="max-height: 200px; overflow-y: auto; border: 1px solid #eee; padding: 0 10px;">
-                </ul>
-            
-            <button id="form-pair-btn" disabled>จัดคู่และเลือกสนาม</button>
-        </section>
-    </main>
-
-    <section class="court-controls">
-        <button class="add-court-btn" onclick="addCourt()">+ เพิ่มสนาม</button>
-        <button class="remove-court-btn" onclick="removeCourt()">- ลบสนาม</button>
-    </section>
-
-    <section class="courts-container" id="all-courts-container">
-        </section>
-
-    <section class="card stats-section">
-        <h2>สถิติการจับคู่ยอดนิยม</h2>
-        <ol class="stats-list" id="stats-list"></ol>
-    </section>
-
-    <section class="card history-section">
-        <h2>ประวัติการแข่งขันทั้งหมด</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>เวลา</th><th>สนาม</th><th>คู่ที่ 1</th><th>คู่ที่ 2</th><th>ผู้ชนะ</th><th>ระยะเวลา</th>
-                </tr>
-            </thead>
-            <tbody id="history-tbody"></tbody>
-        </table>
-    </section>
-
-    <div id="court-modal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeModal()">&times;</span>
-            <h3>เลือกสนาม</h3>
-            <div id="modal-court-options"></div>
-        </div>
-    </div>
-    
-    <div id="player-history-modal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closePlayerHistoryModal()">&times;</span>
-            <h3 id="player-history-name">ประวัติผู้เล่น</h3>
-            <div id="player-stats-summary" style="margin-bottom: 15px;"></div>
-            <h4 style="margin-top: 20px; text-align: center; border-bottom: 1px solid #eee; padding-bottom: 5px;">ประวัติการแข่งขัน</h4>
-            <table style="width: 100%;">
-                <thead>
-                    <tr>
-                        <th>เวลา</th><th>สนาม</th><th>ทีม</th><th>ผล</th>
-                    </tr>
-                </thead>
-                <tbody id="player-match-history"></tbody>
-            </table>
-        </div>
-    </div>
-
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    
-    <script>
-    // ****************************************
-    // 🔥 ขั้นตอนที่ 1: แทนที่ Configuration BLOCK นี้ทั้งหมด (สำคัญมาก!) 🔥
-    // ****************************************
-    
-    /* *** สำคัญ: กรุณาแทนที่ BLOCK นี้ทั้งหมด ด้วย Firebase Configuration ที่ได้จาก Console ของคุณ ***
-    1. ไปที่ Firebase Console (Settings -> Project Settings) 
-    2. เลือก Web App (ไอคอน </>)
-    3. คัดลอกโค้ด JavaScript Object ที่ชื่อว่า 'firebaseConfig' มาวางทับด้านล่างนี้
-    */
-    const firebaseConfig = {
-        apiKey: "AIzaSyC2qjF0P4t_YOUR_API_KEY_HERE_s8ZtT8b0", // <--- แก้ไข
-        authDomain: "your-project-id-12345.firebaseapp.com", // <--- แก้ไข
-        projectId: "your-project-id-12345", // <--- แก้ไข
-        storageBucket: "your-project-id-12345.appspot.com", // <--- แก้ไข
-        messagingSenderId: "987654321000", // <--- แก้ไข
-        appId: "1:987654321000:web:abcdef1234567890" // <--- แก้ไข
-    };
-    
-    // Initialize Firebase and Firestore (db instance จะถูกใช้ในโค้ด)
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore(); 
-    // ****************************************
-    // END: FIREBASE INITIALIZATION BLOCK
-    // ****************************************
-
-    document.addEventListener('DOMContentLoaded', () => {
-        // --- ค่าคงที่สำหรับจัดอันดับมือ ---
-        const levelRanks = {
-            'BG': 1,
-            'N-': 2,
-            'N': 3,
-            'N+': 4
-        };
-
-        // --- ตัวแปรหลัก ---
-        let allPlayers = [];
-        let readyPlayers = [];
-        let gameHistory = [];
-        let pairingStats = new Map();
-        let playerRotationCounts = new Map(); 
-        let pendingPair = null;
-        let courts = [
-            { id: 1, name: 'สนาม 1', players: [], startTime: null, mainShuttle: 1, replacementShuttles: 0, timerInterval: null, timerMs: 0 },
-            { id: 2, name: 'สนาม 2', players: [], startTime: null, mainShuttle: 1, replacementShuttles: 0, timerInterval: null, timerMs: 0 }
-        ];
-        
-        // NEW: ตัวแปรสำหรับเก็บผู้เล่นที่ถูกเลือกใน UI ใหม่
-        let currentSelectedPairing = []; 
-
-        let nextPlayerId = 1; 
-        let nextCourtId = 3; 
-        
-        // --- DOM Elements ---
-        const addPlayerForm = document.getElementById('add-player-form');
-        const playerNameInput = document.getElementById('player-name'); 
-        const importStatusBox = document.getElementById('import-status-box');
-        const pasteImportContainer = document.getElementById('paste-import-container');
-        const pasteDataTextarea = document.getElementById('paste-data');
-        const pasteImportBtn = document.getElementById('paste-import-btn');
-        const clearAllPlayersBtn = document.getElementById('clear-all-players-btn');
-        const playerListEl = document.getElementById('player-list');
-        const readyPlayerListEl = document.getElementById('ready-player-list');
-        const readyPlayerCountEl = document.getElementById('ready-player-count');
-        const rotationListEl = document.getElementById('rotation-list'); 
-
-        const formPairBtn = document.getElementById('form-pair-btn');
-        const suggestLevelPairBtn = document.getElementById('suggest-level-pair-btn'); 
-        const historyTbodyEl = document.getElementById('history-tbody');
-        const allCourtsContainer = document.getElementById('all-courts-container');
-        const statsListEl = document.getElementById('stats-list');
-        const modal = document.getElementById('court-modal');
-        const modalOptions = document.getElementById('modal-court-options');
-        
-        // NEW ELEMENTS for Pairing
-        const pairingSearchInput = document.getElementById('pairing-search');
-        const selectedPlayersDisplay = document.getElementById('selected-players-display');
-        const selectedCountEl = document.getElementById('selected-count');
-        const availablePairingListEl = document.getElementById('available-pairing-list');
-        const availablePairingCountEl = document.getElementById('available-pairing-count');
-
-        // NEW ELEMENTS for Player History Modal
-        const playerHistoryModal = document.getElementById('player-history-modal');
-        const playerHistoryNameEl = document.getElementById('player-history-name');
-        const playerStatsSummaryEl = document.getElementById('player-stats-summary');
-        const playerMatchHistoryEl = document.getElementById('player-match-history');
-
-        // --- Initialization ---
-        function loadData() {
-            try {
-                // NOTE: โค้ดนี้ยังใช้ localStorage ในการเก็บข้อมูล
-                // หากต้องการให้ใช้ Firestore จริงจัง ต้องเขียนฟังก์ชันนี้ใหม่
-                const storedPlayers = JSON.parse(localStorage.getItem('allPlayers')) || [];
-                allPlayers = storedPlayers.filter(p => !p.isReady); 
-                readyPlayers = storedPlayers.filter(p => p.isReady); 
-                gameHistory = JSON.parse(localStorage.getItem('gameHistory')) || [];
-                
-                const storedCounts = JSON.parse(localStorage.getItem('playerRotationCounts')) || {};
-                playerRotationCounts = new Map(Object.entries(storedCounts).map(([id, count]) => [Number(id), count]));
-                
-                const allIds = storedPlayers.map(p => p.id).filter(id => typeof id === 'number');
-                nextPlayerId = allIds.length > 0 ? Math.max(...allIds) + 1 : 1;
-
-                const storedCourts = JSON.parse(localStorage.getItem('courts')) || courts;
-                courts = storedCourts.map(c => {
-                    if (c.players.length > 0) {
-                        c.players = c.players.map(p => {
-                            const foundPlayer = findPlayerById(p.id);
-                            // NOTE: Retain minimal data if player is not found (e.g. they were deleted)
-                            return foundPlayer || { id: p.id, name: p.name, level: 'N' }; 
-                        }); 
-                    }
-                    c.timerInterval = null; 
-                    return c;
-                });
-                
-                const allCourtIds = courts.map(c => c.id);
-                nextCourtId = allCourtIds.length > 0 ? Math.max(...allCourtIds) + 1 : 3;
-
-                // Rebuild pairingStats from history since it's not explicitly saved, 
-                // but needed for player history calc and popular pairs stats
-                pairingStats = new Map();
-                gameHistory.forEach(game => {
-                    const pair1Names = game.pair1.split(' / ');
-                    const pair2Names = game.pair2.split(' / ');
-                    
-                    const pair1Players = pair1Names.map(name => getAllActivePlayers().find(p => p.name === name)).filter(Boolean);
-                    const pair2Players = pair2Names.map(name => getAllActivePlayers().find(p => p.name === name)).filter(Boolean);
-
-                    if (pair1Players.length === 2) updatePairingStats(pair1Players);
-                    if (pair2Players.length === 2) updatePairingStats(pair2Players);
-                });
-
-
-            } catch (e) {
-                console.error("Error loading data from localStorage:", e);
-            }
-        }
-
-        function saveData() {
-            // NOTE: โค้ดนี้ยังใช้ localStorage ในการบันทึกข้อมูล
-            // หากต้องการให้ใช้ Firestore จริงจัง ต้องเขียนฟังก์ชันนี้ใหม่
-            const playersToSave = [
-                ...allPlayers.map(p => ({ ...p, isReady: false })),
-                ...readyPlayers.map(p => ({ ...p, isReady: true }))
-            ];
-            
-            const courtsToSave = courts.map(c => ({
-                ...c,
-                players: c.players.map(p => ({ id: p.id, name: p.name })),
-                timerInterval: null
-            }));
-            
-            localStorage.setItem('allPlayers', JSON.stringify(playersToSave));
-            localStorage.setItem('gameHistory', JSON.stringify(gameHistory));
-            localStorage.setItem('courts', JSON.stringify(courtsToSave));
-            localStorage.setItem('playerRotationCounts', JSON.stringify(Object.fromEntries(playerRotationCounts)));
-        }
-        
-        // --- Event Listeners ---
-        addPlayerForm.addEventListener('submit', handleAddPlayer);
-        pasteImportBtn.addEventListener('click', handlePasteImport);
-        clearAllPlayersBtn.addEventListener('click', handleClearAllPlayers);
-        formPairBtn.addEventListener('click', showCourtSelectionModal);
-        suggestLevelPairBtn.addEventListener('click', suggestPairByLevel); 
-        allCourtsContainer.addEventListener('click', handleCourtAction); 
-        
-        // NEW: Event listener for list clicks and search input
-        availablePairingListEl.addEventListener('click', (e) => {
-            const li = e.target.closest('li');
-            // Allow click on li OR a non-clickable span within the li
-            if (li && li.dataset.playerId && !e.target.classList.contains('player-name-clickable')) { 
-                togglePlayerSelection(parseInt(li.dataset.playerId));
-            }
-        });
-        selectedPlayersDisplay.addEventListener('click', (e) => {
-            const btn = e.target.closest('.remove-selection-btn');
-            if (btn && btn.dataset.playerId) {
-                togglePlayerSelection(parseInt(btn.dataset.playerId));
-            }
-        });
-        pairingSearchInput.addEventListener('input', () => renderAvailablePairingList(pairingSearchInput.value));
-        
-        // --- Helper Functions ---
-        function generateUniqueId() { return nextPlayerId++; } 
-        function formatDuration(ms) {
-            const totalSeconds = Math.floor(ms / 1000);
-            const minutes = Math.floor(totalSeconds / 60);
-            const seconds = totalSeconds % 60;
-            return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        }
-        function findPlayerById(id) {
-            const numericId = Number(id);
-            let player = allPlayers.find(p => p.id === numericId);
-            if (!player) {
-                player = readyPlayers.find(p => p.id === numericId);
-            }
-            // Check if player is currently on court (to get most up-to-date data)
-            if (!player) {
-                for (const court of courts) {
-                    player = court.players.find(p => p.id === numericId);
-                    if (player) return player;
-                }
-            }
-            return player;
-        }
-        function getAllActivePlayers() {
-            return allPlayers.concat(readyPlayers).concat(courts.flatMap(c => c.players));
-        }
-        function getLevelRank(level) {
-            return levelRanks[level] || 3; // Default to N (3) if level is unknown
-        }
-
-        // --- UI Logic ---
-        window.togglePasteImport = function() {
-            pasteImportContainer.style.display = pasteImportContainer.style.display === 'block' ? 'none' : 'block';
-        }
-        function showStatus(message, type = '') {
-            importStatusBox.style.display = 'block';
-            importStatusBox.textContent = message;
-            importStatusBox.className = 'import-status-box ' + type;
-        }
-        window.closeModal = function() { modal.style.display = 'none'; pendingPair = null; }
-        // NEW: Player History Modal Close Function
-        window.closePlayerHistoryModal = function() { playerHistoryModal.style.display = 'none'; }
-        
-        window.onclick = function(event) { 
-            if (event.target == modal) closeModal(); 
-            if (event.target == playerHistoryModal) closePlayerHistoryModal(); // Close history modal
-        }
-
-        // --- Player Management ---
-        function handleAddPlayer(e) {
-            e.preventDefault(); 
-            
-            const levelSelect = document.getElementById('player-level');
-            const name = playerNameInput.value.trim(); 
-            const level = levelSelect.value;
-            
-            if (name === "") { 
-                alert("กรุณาระบุชื่อผู้เล่น");
-                return;
-            }
-
-            if (getAllActivePlayers().some(p => p.name.toLowerCase() === name.toLowerCase())) {
-                alert(`มีผู้เล่นชื่อ "${name}" อยู่แล้ว`);
-                return;
-            }
-            
-            const newPlayer = { id: generateUniqueId(), name, level };
-            allPlayers.push(newPlayer);
-            
-            playerRotationCounts.set(newPlayer.id, 0); 
-            playerNameInput.value = '';
-            
-            saveData(); 
-            renderAllLists();
-            renderRotationDashboard(); 
-        }
-        
-        function handlePasteImport() {
-            const data = pasteDataTextarea.value;
-            if (!data.trim()) { showStatus('กรุณาวางข้อมูลก่อน', 'error'); return; }
-            showStatus('กำลังประมวลผลข้อมูล...', '');
-            try {
-                const lines = data.trim().split('\n');
-                let importedCount = 0;
-                const existingNames = new Set(getAllActivePlayers().map(p => p.name.toLowerCase()));
-                lines.forEach(line => {
-                    const parts = line.split(/\t|,/); 
-                    const name = parts[0] ? parts[0].trim() : '';
-                    const nameLower = name.toLowerCase();
-                    const level = parts[1] ? parts[1].trim().toUpperCase() : 'N';
-
-                    if (name && !existingNames.has(nameLower)) {
-                        const newPlayer = { id: generateUniqueId(), name, level };
-                        allPlayers.push(newPlayer);
-                        playerRotationCounts.set(newPlayer.id, 0); 
-                        existingNames.add(nameLower);
-                        importedCount++;
-                    }
-                });
-                if (importedCount > 0) {
-                    showStatus(`นำเข้าข้อมูลสำเร็จ! เพิ่มผู้เล่นจำนวน ${importedCount} คน`, 'success');
-                    pasteDataTextarea.value = '';
-                    saveData();
-                    renderAllLists();
-                } else {
-                    showStatus('ไม่พบข้อมูลที่สามารถนำเข้าได้ หรือผู้เล่นมีรายชื่อซ้ำกัน', 'error');
-                }
-            } catch (error) {
-                showStatus('เกิดข้อผิดพลาด: ' + error.message, 'error');
-            }
-        }
-        
-        function handleClearAllPlayers() {
-            if (courts.some(c => c.players.length > 0)) {
-                alert('ไม่สามารถล้างรายชื่อได้ในขณะที่มีเกมกำลังเล่นอยู่');
-                return;
-            }
-
-            if (confirm('คุณแน่ใจหรือไม่ที่จะลบรายชื่อผู้เล่นทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้ (รวมถึงประวัติและสถิติการเล่นด้วย)')) {
-                allPlayers = [];
-                readyPlayers = [];
-                gameHistory = [];
-                pairingStats = new Map();
-                playerRotationCounts = new Map(); 
-                nextPlayerId = 1; 
-                currentSelectedPairing = []; 
-                
-                courts.forEach(c => {
-                    if (c.timerInterval) {
-                        clearInterval(c.timerInterval);
-                        c.timerInterval = null;
-                    }
-                    c.players = [];
-                    c.startTime = null;
-                    c.timerMs = 0;
-                    c.mainShuttle = 1; 
-                    c.replacementShuttles = 0;
-                });
-                
-                saveData(); 
-                renderAllLists();
-                renderCourts();
-                renderHistory();
-                renderStats();
-                renderRotationDashboard();
-                renderPairingSelectionUI();
-            }
-        }
-
-        window.checkIn = function(playerId) { 
-            const player = findPlayerById(playerId);
-            if (player) {
-                if (!playerRotationCounts.has(player.id)) {
-                    playerRotationCounts.set(player.id, 0);
-                }
-            }
-            movePlayer(allPlayers, readyPlayers, playerId); 
-            saveData(); 
-            renderAllLists(); 
-            renderRotationDashboard(); 
-            renderPairingSelectionUI(); 
-        }
-        window.uncheckIn = function(playerId) { 
-            // NEW: Check if player is currently selected for pairing
-            if (currentSelectedPairing.some(p => p.id == playerId)) {
-                alert('ไม่สามารถนำผู้เล่นออกจากก๊วนได้ เพราะกำลังถูกเลือกอยู่ในส่วนจัดคู่ (กรุณากด X เพื่อนำออกก่อน)');
-                return;
-            }
-            movePlayer(readyPlayers, allPlayers, playerId); 
-            saveData(); 
-            renderAllLists(); 
-            renderRotationDashboard(); 
-            renderPairingSelectionUI(); 
-        }
-        
-        window.deletePlayer = function(playerId) {
-            if (courts.some(c => c.players.some(cp => cp.id == playerId))) {
-                 alert('ไม่สามารถลบผู้เล่นที่กำลังลงสนามได้');
-                 return;
-            }
-             // NEW: Check if player is currently selected for pairing
-            if (currentSelectedPairing.some(p => p.id == playerId)) {
-                alert('ไม่สามารถลบผู้เล่นที่กำลังถูกเลือกอยู่ในส่วนจัดคู่ได้');
-                return;
-            }
-
-            if (confirm('คุณแน่ใจหรือไม่ที่จะลบผู้เล่นคนนี้?')) {
-                const allIndex = allPlayers.findIndex(p => p.id == playerId);
-                const readyIndex = readyPlayers.findIndex(p => p.id == playerId);
-                if (allIndex !== -1) allPlayers.splice(allIndex, 1);
-                if (readyIndex !== -1) readyPlayers.splice(readyIndex, 1);
-                playerRotationCounts.delete(playerId); 
-                saveData();
-                renderAllLists();
-                renderRotationDashboard(); 
-                renderPairingSelectionUI(); 
-            }
-        }
-
-        function movePlayer(fromArray, toArray, playerId) {
-            const playerIndex = fromArray.findIndex(p => p.id == playerId);
-            if (playerIndex !== -1) {
-                const player = fromArray.splice(playerIndex, 1)[0];
-                toArray.push(player);
-                toArray.sort((a, b) => a.name.localeCompare(b.name, 'th'));
-            }
-        }
-        
-        function renderPlayerList() {
-            playerListEl.innerHTML = '';
-            readyPlayerListEl.innerHTML = '';
-
-            allPlayers.forEach(player => {
-                const li = document.createElement('li');
-                // Make name clickable
-                li.innerHTML = `<span><span class="player-name-clickable" onclick="showPlayerHistory(${player.id})">${player.name}</span> <span class="player-level">${player.level}</span></span><button class="check-in-btn" onclick="checkIn(${player.id})">เช็คชื่อ</button>`;
-                playerListEl.appendChild(li);
-            });
-
-            readyPlayers.forEach(player => {
-                const rotationCount = playerRotationCounts.get(player.id) || 0;
-                const isPlaying = courts.some(c => c.players.some(cp => cp.id === player.id));
-
-                const li = document.createElement('li');
-                li.className = 'ready-player';
-                li.innerHTML = `
-                    <span>
-                        <span class="player-name-clickable" onclick="showPlayerHistory(${player.id})">${player.name}</span> 
-                        <span class="player-level">${player.level}</span>
-                        <span class="player-rotation">${rotationCount} รอบ</span> 
-                        ${isPlaying ? '<span style="color: var(--danger-color); font-weight: 700; margin-left: 5px;">(กำลังเล่น)</span>' : ''}
-                    </span>
+            <div class="card">
+                <h2>เพิ่มผู้เล่นแบบกลุ่ม (วางข้อความ)</h2>
+                <p>คัดลอกรายชื่อจากที่อื่น (ชื่อละ 1 บรรทัด) แล้ววางในช่องด้านล่าง</p>
+                <form id="bulk-add-form">
+                    <div style="width: 100%;">
+                        <label for="bulk-names">รายชื่อ:</label>
+                        <textarea id="bulk-names" rows="5" placeholder="สมชาย&#10;สมศรี&#10;สมหญิง"></textarea>
+                    </div>
                     <div>
-                        <button class="check-out-btn" onclick="uncheckIn(${player.id})" ${isPlaying ? 'disabled' : ''}>ออกก๊วน</button>
-                        <button class="delete-btn" onclick="deletePlayer(${player.id})" ${isPlaying ? 'disabled' : ''}>ลบ</button>
-                    </div>`;
-                readyPlayerListEl.appendChild(li);
-            });
+                        <label for="bulk-skill">ระดับมือ (สำหรับทุกคน):</label>
+                        <select id="bulk-skill">
+                            <option value="BG">BG (Beginner)</option>
+                            <option value="N-">N- (N-Minus)</option>
+                            <option value="N" selected>N (Normal)</option>
+                            <option value="N+">N+ (N-Plus)</option>
+                            <option value="P">P (Pro)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="success">เพิ่มทั้งหมด</button>
+                    </div>
+                </form>
+            </div>
+            <div class="card">
+                <h2>รายชื่อผู้เล่นทั้งหมด</h2>
+                <input type="text" id="player-search" class="search-bar" placeholder="ค้นหาผู้เล่น...">
+                <ul id="player-list"></ul>
+            </div>
+            <div class="card bulk-edit-section">
+                <h3>แก้ไขระดับมือแบบกลุ่ม</h3>
+                <p>เลือกผู้เล่นที่ต้องการแล้วะ และเปลี่ยนระดับมือใหม่</p>
+                <div class="bulk-edit-list" id="bulk-edit-list"></div>
+                <form id="bulk-edit-form">
+                    <div>
+                        <label for="bulk-edit-skill">ระดับมือใหม่:</label>
+                        <select id="bulk-edit-skill">
+                            <option value="BG">BG (Beginner)</option>
+                            <option value="N-">N- (N-Minus)</option>
+                            <option value="N">N (Normal)</option>
+                            <option value="N+">N+ (N-Plus)</option>
+                            <option value="P">P (Pro)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button type="submit" class="success">อัปเดตระดับมือ</button>
+                    </div>
+                </form>
+            </div>
+        </section>
 
-            readyPlayerCountEl.textContent = readyPlayers.length;
-        }
+        <section id="check-in" class="view">
+            <div class="card">
+                <h2>เช็คอินผู้เล่น</h2>
+                <p>กดที่ชื่อผู้เล่นเพื่อเช็คอิน (ผู้เล่นที่เช็คอินแล้วจะยังคงสถานะเดิมหลังจบรอบ) ผู้เล่นที่กำลังลงสนามจะมีไอคอน 🏸</p>
+                <div id="check-in-list" class="check-in-grid"></div>
+                <div style="margin-top: 2rem; text-align: center;">
+                    <button class="danger" onclick="resetAllCheckIns()">🔄 รีเซ็ตการเช็คอินทั้งหมด</button>
+                </div>
+            </div>
+        </section>
 
-        function renderRotationDashboard() {
-            const availablePlayers = readyPlayers.filter(p => 
-                !courts.some(c => c.players.some(cp => cp.id === p.id))
-            );
-
-            const rotationData = availablePlayers.map(player => ({
-                player: player,
-                count: playerRotationCounts.get(player.id) || 0
-            }));
-
-            rotationData.sort((a, b) => {
-                if (a.count !== b.count) {
-                    return a.count - b.count;
-                }
-                return a.player.name.localeCompare(b.player.name, 'th');
-            });
-
-            rotationListEl.innerHTML = '';
-            if (rotationData.length === 0) {
-                rotationListEl.innerHTML = '<li style="border-left-color: var(--warning-color);">ไม่มีผู้เล่นว่างรอทำรอบ (อาจจะลงสนามหมดแล้ว)</li>';
-                return;
-            }
-
-            rotationData.forEach(({ player, count }) => {
-                const li = document.createElement('li');
-                // Make name clickable
-                li.innerHTML = `
-                    <span class="player-name-clickable" onclick="showPlayerHistory(${player.id})">${player.name}</span> (${player.level}) <br>
-                    <span class="low-rotation-count">${count} รอบ</span>
-                `;
-                rotationListEl.appendChild(li);
-            });
-        }
-        
-        // NEW: Player History Display Function
-        window.showPlayerHistory = function(playerId) {
-            const player = findPlayerById(playerId);
-            if (!player) return;
-
-            // 1. Calculate Stats
-            let totalGames = 0;
-            let gamesWon = 0;
-            let partnerStats = new Map(); // Map<PlayerId, GamesTogether>
-            
-            playerHistoryNameEl.textContent = `ประวัติผู้เล่น: ${player.name} (${player.level})`;
-
-            // 2. Filter and Process History
-            const playerMatches = gameHistory.filter(game => 
-                game.pair1.includes(player.name) || game.pair2.includes(player.name)
-            ).reverse(); // Show newest match first
-            
-            playerMatchHistoryEl.innerHTML = '';
-            
-            playerMatches.forEach(game => {
-                totalGames++;
-                
-                const pair1Names = game.pair1.split(' / ');
-                const pair2Names = game.pair2.split(' / ');
-                
-                const isPlayerInPair1 = pair1Names.includes(player.name);
-                const isPlayerInPair2 = pair2Names.includes(player.name);
-
-                let isWin = false;
-                let playerPairNames;
-                let opponentPairNames;
-
-                if (game.winner.includes(player.name)) {
-                    isWin = true;
-                    gamesWon++;
-                }
-
-                if (isPlayerInPair1) {
-                    playerPairNames = pair1Names;
-                    opponentPairNames = pair2Names;
-                } else if (isPlayerInPair2) {
-                    playerPairNames = pair2Names;
-                    opponentPairNames = pair1Names;
-                } else {
-                    return; 
-                }
-                
-                // Identify Partner 
-                const partnerName = playerPairNames.find(name => name !== player.name);
-                
-                if (partnerName) {
-                    const partner = getAllActivePlayers().find(p => p.name === partnerName);
-                    if (partner) {
-                        partnerStats.set(partner.id, (partnerStats.get(partner.id) || 0) + 1);
-                    }
-                }
-                
-                // Build Table Row
-                const resultText = isWin ? 
-                    '<span style="color: var(--secondary-color); font-weight: 700;">ชนะ</span>' : 
-                    '<span style="color: var(--danger-color); font-weight: 700;">แพ้</span>';
-                    
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${game.time}</td>
-                    <td>${game.courtName}</td>
-                    <td>กับ **${partnerName || 'N/A'}** vs ${opponentPairNames.join(' & ')}</td>
-                    <td>${resultText}</td>
-                `;
-                playerMatchHistoryEl.appendChild(tr);
-            });
-
-            // 3. Summarize Stats
-            const winRate = totalGames > 0 ? ((gamesWon / totalGames) * 100).toFixed(1) : '0.0';
-            
-            let partnerSummary = [];
-            
-            // Get Partner Names and Sort
-            Array.from(partnerStats.entries())
-                .sort((a, b) => b[1] - a[1]) // Sort by count descending
-                .slice(0, 3) // Top 3 partners
-                .forEach(([partnerId, count]) => {
-                    const partner = findPlayerById(partnerId);
-                    if (partner) {
-                         partnerSummary.push(`**${partner.name}** (${count} ครั้ง)`);
-                    }
-                });
-
-            const summaryHTML = `
-                <p><strong>จำนวนรอบ:</strong> ${playerRotationCounts.get(player.id) || 0} รอบ</p>
-                <p><strong>รวมเกมที่เล่น:</strong> ${totalGames} เกม</p>
-                <p><strong>ชนะ:</strong> ${gamesWon} เกม | <strong>อัตราการชนะ:</strong> <span style="font-size: 1.1em; color: ${winRate >= 50 ? 'var(--secondary-color)' : 'var(--danger-color)'}">${winRate}%</span></p>
-                <p><strong>คู่หูยอดนิยม:</strong> ${partnerSummary.length > 0 ? partnerSummary.join(', ') : 'ยังไม่มีข้อมูลคู่หู'}</p>
-            `;
-            
-            playerStatsSummaryEl.innerHTML = summaryHTML;
-            playerHistoryModal.style.display = 'block';
-        }
-
-
-        // --- Pairing Selection Logic ---
-
-        /** สลับการเลือกผู้เล่นเข้า/ออกจาก currentSelectedPairing */
-        function togglePlayerSelection(playerId) {
-            const player = findPlayerById(playerId);
-            if (!player) return;
-
-            const index = currentSelectedPairing.findIndex(p => p.id === playerId);
-            const isPlaying = courts.some(c => c.players.some(cp => cp.id === playerId));
-
-            if (isPlaying) {
-                 alert(`ผู้เล่น ${player.name} กำลังลงสนามอยู่`);
-                 return;
-            }
-
-            if (index !== -1) {
-                // Remove player
-                currentSelectedPairing.splice(index, 1);
-            } else {
-                // Add player
-                if (currentSelectedPairing.length < 4) {
-                    currentSelectedPairing.push(player);
-                } else {
-                    alert('เลือกผู้เล่นได้สูงสุด 4 คนเท่านั้น');
-                }
-            }
-            renderPairingSelectionUI();
-        }
-
-        /** Render UI: Selected Players and Available List */
-        function renderPairingSelectionUI() {
-            // 1. Render Selected Players Display
-            selectedPlayersDisplay.innerHTML = '';
-            selectedCountEl.textContent = currentSelectedPairing.length;
-
-            if (currentSelectedPairing.length === 0) {
-                const placeholder = document.getElementById('selected-placeholder') || document.createElement('p');
-                placeholder.id = 'selected-placeholder';
-                placeholder.style.margin = '0';
-                placeholder.style.color = '#666';
-                placeholder.textContent = 'รอการเลือกผู้เล่น...';
-                selectedPlayersDisplay.appendChild(placeholder);
-            } else {
-                currentSelectedPairing.forEach(player => {
-                    const tag = document.createElement('span');
-                    tag.className = 'selected-player-tag';
-                    tag.innerHTML = `${player.name} (${player.level}) 
-                        <button class="remove-selection-btn" data-player-id="${player.id}">&times;</button>`;
-                    selectedPlayersDisplay.appendChild(tag);
-                });
-            }
-
-            // 2. Control Action Button
-            formPairBtn.disabled = currentSelectedPairing.length !== 4;
-
-            // 3. Render Available List (to reflect selection status)
-            renderAvailablePairingList(pairingSearchInput.value); 
-        }
-
-        /** Render UI: Available Players List */
-        function renderAvailablePairingList(filterText = '') {
-            availablePairingListEl.innerHTML = '';
-            const filter = filterText.toLowerCase().trim();
-
-            const availablePlayers = readyPlayers.filter(p => 
-                !courts.some(c => c.players.some(cp => cp.id === p.id))
-            );
-
-            // NEW: Update the available player count
-            if (availablePairingCountEl) {
-                availablePairingCountEl.textContent = availablePlayers.length;
-            }
-
-            // Sort by rotation count (low to high)
-            availablePlayers.sort((a, b) => {
-                const countA = playerRotationCounts.get(a.id) || 0;
-                const countB = playerRotationCounts.get(b.id) || 0;
-                if (countA !== countB) return countA - countB;
-                return a.name.localeCompare(b.name, 'th');
-            });
-
-            availablePlayers.forEach(player => {
-                if (filter && !player.name.toLowerCase().includes(filter)) {
-                    return; // Skip if filtered
-                }
-
-                const rotationCount = playerRotationCounts.get(player.id) || 0;
-                const isSelected = currentSelectedPairing.some(p => p.id === player.id);
-
-                const li = document.createElement('li');
-                li.dataset.playerId = player.id;
-                li.className = isSelected ? 'selected-for-pairing' : '';
-                // Only allow selection if not selected AND total count is < 4
-                if (!isSelected && currentSelectedPairing.length >= 4) {
-                     li.style.opacity = '0.6';
-                     li.style.cursor = 'not-allowed';
-                }
-
-                li.innerHTML = `
-                    <span>
-                        ${player.name} 
-                        <span class="player-level">${player.level}</span>
-                        <span class="player-rotation">${rotationCount} รอบ</span> 
-                    </span>`;
-                availablePairingListEl.appendChild(li);
-            });
-        }
-
-
-        /** สุ่มจับคู่ 4 คน โดยอิงจากระดับมือใกล้เคียงที่สุด และรอบการเล่นน้อยที่สุด */
-        function suggestPairByLevel() {
-            const availablePlayers = readyPlayers.filter(p => 
-                !courts.some(c => c.players.some(cp => cp.id === p.id))
-            );
-
-            if (availablePlayers.length < 4) {
-                alert("มีผู้เล่นพร้อมเล่นไม่ถึง 4 คนสำหรับการจับคู่อัตโนมัติ (ต้องการ 4 คน)");
-                return;
-            }
-            
-            // Clear existing selection before suggesting
-            currentSelectedPairing = [];
-
-            // 1. Group players by Level
-            const playersByLevel = {}; 
-            ['BG', 'N-', 'N', 'N+'].forEach(level => { // Initialize for all relevant levels
-                playersByLevel[level] = [];
-            });
-            availablePlayers.forEach(p => {
-                playersByLevel[p.level]?.push(p);
-            });
-
-            // 2. Determine the best group of 4 players (cluster by level)
-            let bestCandidates = [];
-            
-            const rankedLevels = Object.keys(levelRanks).sort((a, b) => getLevelRank(a) - getLevelRank(b));
-            
-            // Find a cluster of players that totals 4 or more, prioritizing less spread
-            for (let i = 0; i < rankedLevels.length; i++) {
-                const level1 = rankedLevels[i];
-                
-                // Try to select 4 from the current level (L1)
-                if (playersByLevel[level1].length >= 4) {
-                    bestCandidates = playersByLevel[level1];
-                    break;
-                }
-                
-                // Try to select 4 from the current level (L1) and the next level (L2)
-                if (i + 1 < rankedLevels.length) {
-                    const level2 = rankedLevels[i+1];
-                    const combined = [...playersByLevel[level1], ...playersByLevel[level2]];
-                    if (combined.length >= 4) {
-                        bestCandidates = combined;
-                        break;
-                    }
-                }
-            }
-            
-            // Fallback: If no tight cluster is found, use all available players (will prioritize low rotation count)
-            if (bestCandidates.length < 4) {
-                bestCandidates = availablePlayers;
-            }
-
-            // 3. Sort the candidates by rotation count (for fairness)
-            bestCandidates.sort((a, b) => {
-                const countA = playerRotationCounts.get(a.id) || 0;
-                const countB = playerRotationCounts.get(b.id) || 0;
-                return countA - countB;
-            });
-
-            // 4. Select the top 4 players
-            let selectedPlayers = bestCandidates.slice(0, 4);
-
-            // 5. Randomly shuffle the selected 4 for pairing assignment
-            for (let i = selectedPlayers.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [selectedPlayers[i], selectedPlayers[j]] = [selectedPlayers[j], selectedPlayers[i]];
-            }
-
-            // 6. Assign to global selection variable and render UI
-            currentSelectedPairing = selectedPlayers;
-            renderPairingSelectionUI();
-        }
-
-
-        function showCourtSelectionModal() {
-            if (currentSelectedPairing.length !== 4) {
-                 alert('ข้อผิดพลาด: กรุณาเลือกผู้เล่นให้ครบ 4 คน');
-                 return;
-            }
-
-            const players = currentSelectedPairing;
-            
-            // Assign pairs (order comes from random shuffle in suggestPairByLevel or manual selection order)
-            pendingPair = {
-                pair1: [players[0], players[1]],
-                pair2: [players[2], players[3]]
-            };
-
-            const availableCourts = courts.filter(c => c.players.length === 0);
-            modalOptions.innerHTML = '';
-
-            if (availableCourts.length === 0) {
-                 modalOptions.innerHTML = '<p style="color: red;">ไม่มีสนามว่าง! กรุณารอเกมในสนามอื่นจบ</p>';
-            }
-            
-            availableCourts.forEach(court => {
-                const btn = document.createElement('button');
-                btn.textContent = `ลง ${court.name} (คู่ 1: ${players[0].name}/${players[1].name} vs คู่ 2: ${players[2].name}/${players[3].name})`;
-                btn.onclick = () => assignPairToCourt(court.id);
-                modalOptions.appendChild(btn);
-            });
-            modal.style.display = 'block';
-        }
-
-        function assignPairToCourt(courtId) {
-            if (!pendingPair) return;
-            const court = courts.find(c => c.id === courtId);
-            
-            court.players = [...pendingPair.pair1, ...pendingPair.pair2]; 
-            
-            court.startTime = null; 
-            court.timerMs = 0;
-            if (court.timerInterval) {
-                clearInterval(court.timerInterval);
-                court.timerInterval = null;
-            }
-            
-            // NEW: Clear selection after assignment
-            currentSelectedPairing = [];
-
-            closeModal();
-            saveData();
-            renderAllLists();
-            renderCourts(); 
-            renderRotationDashboard(); 
-            renderPairingSelectionUI();
-        }
-
-        window.addCourt = function() {
-            courts.push({ id: nextCourtId++, name: `สนาม ${courts.length + 1}`, players: [], startTime: null, mainShuttle: 1, replacementShuttles: 0, timerInterval: null, timerMs: 0 });
-            courts.sort((a, b) => a.id - b.id); 
-            saveData();
-            renderCourts();
-        }
-        window.removeCourt = function() {
-            if (courts.length <= 1) { alert('ต้องมีสนามอย่างน้อย 1 สนาม'); return; }
-            
-            const maxId = Math.max(...courts.map(c => c.id));
-            const courtIndex = courts.findIndex(c => c.id === maxId);
-            const courtToRemove = courts[courtIndex];
-
-            if (courtToRemove.players.length > 0) { 
-                alert(`ไม่สามารถลบ ${courtToRemove.name} ที่กำลังใช้งานอยู่ได้`); 
-                return; 
-            }
-            if (courtToRemove.timerInterval) clearInterval(courtToRemove.timerInterval);
-            
-            courts.splice(courtIndex, 1);
-            
-            const remainingIds = courts.map(c => c.id);
-            nextCourtId = remainingIds.length > 0 ? Math.max(...remainingIds) + 1 : 1;
-
-            saveData();
-            renderCourts();
-        }
-        
-        function renderCourts() {
-            courts.forEach(court => {
-                if (court.timerInterval) {
-                    clearInterval(court.timerInterval);
-                    court.timerInterval = null; 
-                }
-            });
-            
-            allCourtsContainer.innerHTML = '';
-            courts.forEach(court => {
-                const isOccupied = court.players.length >= 4; // Check for at least 4 players
-                const pair1Names = isOccupied ? `${court.players[0].name} / ${court.players[1].name}` : 'N/A';
-                const pair2Names = isOccupied ? `${court.players[2].name} / ${court.players[3].name}` : 'N/A';
-
-                const courtHTML = `
-                    <div class="court-card ${isOccupied ? 'occupied' : ''}" id="court-${court.id}">
-                        <div class="shuttlecock-animation">🏸</div>
-                        <h2>${court.name}</h2>
-                        <div class="court-display">
-                            <div class="current-game-players">
-                                ${isOccupied ? `
-                                    <div class="player-pair">คู่ที่ 1: ${pair1Names}</div>
-                                    <div class="player-pair">คู่ที่ 2: ${pair2Names}</div>
-                                ` : '<p>สนามว่าง - รอจัดคู่</p>'}
-                            </div>
-                            <div class="game-info">
-                                <div>
-                                    <span>ลูกหลัก: <span id="main-shuttle-${court.id}">${court.mainShuttle}</span></span>
-                                    <button data-court-id="${court.id}" data-action="change-shuttle" data-type="main" data-change="-1" ${!isOccupied || court.mainShuttle <= 0 ? 'disabled' : ''}>-</button>
-                                    <button data-court-id="${court.id}" data-action="change-shuttle" data-type="main" data-change="1" ${!isOccupied ? 'disabled' : ''}>+</button>
-                                </div>
-                                <div>
-                                    <span>ลูกซ่อม: <span id="replacement-shuttle-${court.id}">${court.replacementShuttles}</span></span>
-                                    <button data-court-id="${court.id}" data-action="change-shuttle" data-type="replacement" data-change="-1" ${court.replacementShuttles <= 0 || !isOccupied ? 'disabled' : ''}>-</button>
-                                    <button data-court-id="${court.id}" data-action="change-shuttle" data-type="replacement" data-change="1" ${!isOccupied ? 'disabled' : ''}>+</button>
-                                </div>
-                            </div>
-                            <div class="timer-display" id="timer-${court.id}">${formatDuration(court.timerMs)}</div>
-                            <div class="game-controls">
-                                ${isOccupied && !court.startTime ? 
-                                    `<button class="start-game-btn" data-court-id="${court.id}" data-action="start-game">เริ่มเกม</button>` : ''}
-                                ${court.startTime ?
-                                    `<button class="end-game-btn" data-court-id="${court.id}" data-action="show-end-game">จบเกม & บันทึกผล</button>` : ''}
-                            </div>
-                            <div class="winner-selection" id="winner-selection-${court.id}" style="display: none;">
-                                <p>เลือกผู้ชนะ:</p>
-                                <button class="winner-pair1" data-court-id="${court.id}" data-action="record-win" data-winner="1">${pair1Names}</button>
-                                <button class="winner-pair2" data-court-id="${court.id}" data-action="record-win" data-winner="2">${pair2Names}</button>
-                                <button class="end-game-btn" data-court-id="${court.id}" data-action="cancel-end-game" style="background-color: #6c757d; color: white; margin-top: 10px;">ยกเลิก</button>
-                            </div>
-                            ${isOccupied && !court.startTime ? 
-                                `<button class="end-game-btn" data-court-id="${court.id}" data-action="return-players" style="background-color: #fbbc04; color: black; margin-top: 10px;">นำผู้เล่นกลับ</button>` : ''}
+        <section id="match-setup" class="view">
+            <div class="card">
+                <h2>จัดคู่แข่งขัน</h2>
+                <div id="match-setup-controls" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--light);">
+                    <div style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                        <div style="flex: 1; min-width: 200px;">
+                            <label for="court-select-dropdown">เลือกสนามที่จะลง:</label>
+                            <select id="court-select-dropdown"></select>
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <button class="warning" onclick="manualSetupStart()" id="btn-manual-setup">จัดคู่เอง</button>
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <button class="success" onclick="simpleRandomMatch()" id="btn-random-setup" disabled>จับสลากสุ่มคู่ (4 คน)</button>
+                        </div>
+                        <div style="flex: 1; min-width: 200px;">
+                            <button class="secondary" onclick="queueMatchStart()" id="btn-queue-setup" disabled>จัดคิวรอเล่น (เกมต่ำสุด)</button>
                         </div>
                     </div>
-                `;
-                allCourtsContainer.innerHTML += courtHTML;
-            });
+                </div>
+                <div id="match-setup-content">
+                    <p>กรุณาไปที่หน้า "เช็คอิน" เพื่อเลือกผู้เล่นที่จะเข้าร่วมก่อน</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="active-matches" class="view">
+            <div class="card">
+                <h2>สต็อกลูกแบดพร้อมใช้</h2>
+                <div class="shuttle-counter">
+                    <div>
+                        <div class="count" id="live-shuttle-in-play">0</div>
+                        <div>ลูกแบดพร้อมใช้ (ลูกซ้อม)</div>
+                    </div>
+                </div>
+                <form id="live-shuttle-form" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="live-shuttle-action">จัดการสต็อก:</label>
+                        <select id="live-shuttle-action">
+                            <option value="add">เพิ่มลูกใหม่ (เข้าสต็อก)</option>
+                            <option value="add-practice">เพิ่มลูกซ้อม (ซ่อมเสร็จ)</option>
+                            <option value="remove">ลบลูกซ้อม (ทิ้ง)</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 80px;">
+                        <label for="live-shuttle-amount">จำนวน:</label>
+                        <input type="number" id="live-shuttle-amount" value="1" min="1">
+                    </div>
+                    <div>
+                        <button type="submit">ตกลง</button>
+                    </div>
+                </form>
+            </div>
+            <div class="card">
+                <h2>สนามที่กำลังแข่งขัน</h2>
+                <p style="color: var(--secondary); font-weight: bold;">หมายเหตุ: ระบบได้หักลูกแบดพร้อมใช้ (ลูกซ้อม) ออก 1 ลูกแล้ว เมื่อเริ่มแมตช์</p>
+                <div id="active-matches-list"></div>
+            </div>
+        </section>
+
+        <section id="player-history" class="view">
+            <div class="card">
+                <h2>ประวัติการเล่น</h2>
+                <label for="history-player-select">เลือกผู้เล่น:</label>
+                <select id="history-player-select">
+                    <option value="">-- เลือก --</option>
+                </select>
+                <div id="history-details" class="stats-grid" style="margin-top: 20px;"></div>
+            </div>
+        </section>
+
+        <section id="settings" class="view">
+            <div class="card">
+                <h2>ตั้งค่าสนาม</h2>
+                <h3>จัดการสนาม</h3>
+                <form id="add-court-form">
+                    <div>
+                        <label for="court-name">ชื่อสนาม:</label>
+                        <input type="text" id="court-name" required>
+                    </div>
+                    <div>
+                        <button type="submit">เพิ่มสนาม</button>
+                    </div>
+                </form>
+                <ul id="court-list" style="margin-top: 20px;"></ul>
+            </div>
+            <div class="card">
+                <h3>จัดการลูกแบด</h3>
+                 <div class="shuttle-counter">
+                    <div>
+                        <div class="count" id="settings-shuttle-in-play">0</div>
+                        <div>ลูกซ้อม (พร้อมใช้)</div>
+                    </div>
+                </div>
+                <form id="settings-shuttle-form" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <label for="settings-shuttle-action">การกระทำ:</label>
+                        <select id="settings-shuttle-action">
+                            <option value="add">เพิ่มลูกใหม่ (เข้าสต็อก)</option>
+                            <option value="add-practice">เพิ่มลูกซ้อม (เข้าสต็อก)</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 80px;">
+                        <label for="settings-shuttle-amount">จำนวน:</label>
+                        <input type="number" id="settings-shuttle-amount" value="1" min="1">
+                    </div>
+                    <div>
+                        <button type="submit">ตกลง</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+        
+        <section id="manager-tools" class="view">
+            <div class="card">
+                <h2>เครื่องมือผู้ดูแลระบบ</h2>
+                <p>เครื่องมือเหล่านี้ใช้สำหรับจัดการข้อมูลในระบบทั้งหมด</p>
+                
+                <h3>ล้างข้อมูลผู้เล่นทั้งหมด</h3>
+                <p style="color: var(--danger); font-weight: bold;">การกระทำนี้จะลบผู้เล่นทั้งหมดออกจากระบบ (แต่ข้อมูลประวัติการเล่นยังคงอยู่)</p>
+                <button class="danger" onclick="clearAllPlayers()">เคลียร์ผู้เล่นทั้งหมด</button>
+            </div>
+        </section>
+
+    </main>
+
+<script>
+    // --- DATA STATE ---
+    let appState = {
+        players: [],
+        courts: [],
+        matches: [],
+        history: {}, // History must be an object
+        shuttlecocks: { total: 0, inPlay: 0, repair: 0 }, // Keep structure but only use inPlay
+        nextId: { player: 1, court: 1, match: 1 }
+    };
+    let manualSelectionOrder = [];
+    let matchTimers = {}; // Store timer intervals
+    
+    // Skill to Value mapping for easier calculation
+    const SKILL_TO_VALUE = { 'BG': 1, 'N-': 2, 'N': 3, 'N+': 4, 'P': 5 };
+
+
+    // --- LOCAL STORAGE ---
+    function saveState() {
+        // Exclude active timers from storage
+        const stateToSave = { ...appState };
+        localStorage.setItem('badmintonAppState', JSON.stringify(stateToSave));
+    }
+
+    function loadState() {
+        const savedState = localStorage.getItem('badmintonAppState');
+        if (savedState) {
+            appState = JSON.parse(savedState);
             
-            courts.forEach(court => {
-                if (court.startTime) {
-                    startTimer(court.id);
+            // --- FIX: Ensure history is initialized correctly ---
+            if (typeof appState.history !== 'object' || appState.history === null || Array.isArray(appState.history)) {
+                console.warn("History data structure corrupted. Reinitializing history as an object.");
+                appState.history = {};
+            }
+            
+            // Ensure all players have necessary fields and correct history structure
+            appState.players.forEach(p => {
+                if (typeof p.isCheckedIn === 'undefined') p.isCheckedIn = false;
+                // Add isPlaying field for the new queue logic
+                if (typeof p.isPlaying === 'undefined') p.isPlaying = false; 
+                if (!appState.history[p.id]) {
+                     appState.history[p.id] = { games: [] };
+                } else if (!Array.isArray(appState.history[p.id].games)) {
+                     appState.history[p.id].games = [];
                 }
             });
-            saveData(); 
+            
+            appState.matches.forEach(m => {
+                if (typeof m.newShuttleUsed === 'undefined') m.newShuttleUsed = 0;
+                if (typeof m.practiceShuttleUsed === 'undefined') m.practiceShuttleUsed = 0;
+            });
+            // ---------------------------------------------------
+            
+            // Recalculate nextId safely
+            const maxPlayerId = appState.players.length > 0 ? Math.max(...appState.players.map(p => p.id)) : 0;
+            const maxCourtId = appState.courts.length > 0 ? Math.max(...appState.courts.map(p => p.id)) : 0;
+            
+            let maxGameId = 0;
+            Object.values(appState.history).forEach(playerHistory => {
+                if (playerHistory && Array.isArray(playerHistory.games)) {
+                    playerHistory.games.forEach(game => {
+                        if (game.id > maxGameId) maxGameId = game.id;
+                    });
+                }
+            });
+            const maxMatchId = appState.matches.length > 0 ? Math.max(...appState.matches.map(m => m.id)) : 0;
+
+            appState.nextId = {
+                player: maxPlayerId + 1,
+                court: maxCourtId + 1,
+                match: Math.max(maxMatchId, maxGameId) + 1
+            };
+
+            // Restart timers for active matches on load
+            appState.matches.forEach(match => {
+                if (match.startTime) {
+                    const card = document.querySelector(`.match-card[data-match-id="${match.id}"]`);
+                    if (card) {
+                        startTimer(match.id, card);
+                    }
+                }
+            });
+        }
+    }
+    
+    // --- UTILITIES ---
+    function formatTime(ms) {
+        if (!ms) return '00:00';
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    function startTimer(matchId, card) {
+        // Clear any existing timer for this match
+        if (matchTimers[matchId]) {
+            clearInterval(matchTimers[matchId]);
+        }
+
+        const match = appState.matches.find(m => m.id === matchId);
+        if (!match) return;
+
+        if (!match.startTime) {
+            match.startTime = Date.now();
+            saveState();
+        }
+
+        const timerEl = card ? card.querySelector(`#match-timer-${matchId}`) : document.getElementById(`match-timer-${matchId}`);
+        if (!timerEl) return;
+
+        const updateTimer = () => {
+            const elapsedTime = Date.now() - match.startTime;
+            timerEl.textContent = formatTime(elapsedTime);
+        };
+
+        updateTimer();
+        matchTimers[matchId] = setInterval(updateTimer, 1000);
+    }
+
+    function stopTimer(matchId) {
+        if (matchTimers[matchId]) {
+            clearInterval(matchTimers[matchId]);
+            delete matchTimers[matchId];
+        }
+    }
+
+    // Function to safely format skill for CSS class
+    function getSkillClass(skill) {
+        return skill.replace('+', 'plus').replace('-', 'minus');
+    }
+
+    // Function to get player game count
+    function getPlayerGameCount(playerId) {
+        const history = appState.history[playerId];
+        return (history && Array.isArray(history.games) ? history.games.length : 0);
+    }
+
+    // --- VIEW MANAGEMENT ---
+    function showView(viewId) {
+        document.querySelectorAll('.view').forEach(view => view.classList.remove('active'));
+        document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(viewId).classList.add('active');
+
+        const activeNavBtn = document.querySelector(`nav button[onclick*="${viewId}"]`);
+        if(activeNavBtn) activeNavBtn.classList.add('active');
+
+        // Render functions based on active view
+        if (viewId === 'dashboard') renderDashboard();
+        if (viewId === 'player-management') renderPlayerList();
+        if (viewId === 'check-in') renderCheckInList();
+        if (viewId === 'match-setup') renderMatchSetup();
+        if (viewId === 'active-matches') renderActiveMatches();
+        if (viewId === 'player-history') renderHistoryPlayers();
+        if (viewId === 'settings') renderSettings();
+    }
+
+    function navigateAndShow(viewId) {
+        showView(viewId);
+    }
+
+    // *** MODIFIED ***: Simplifies shuttlecock display to only show 'inPlay' (พร้อมใช้)
+    function updateShuttleCounterDisplay() {
+        const inPlay = appState.shuttlecocks.inPlay; 
+
+        // Dashboard section
+        const dashInPlayEl = document.getElementById('dash-shuttle-in-play');
+        if(dashInPlayEl) dashInPlayEl.textContent = inPlay;
+
+        // Active Matches section
+        const liveInPlayEl = document.getElementById('live-shuttle-in-play');
+        if(liveInPlayEl) liveInPlayEl.textContent = inPlay;
+
+        // Settings section
+        const settingsInPlayEl = document.getElementById('settings-shuttle-in-play');
+        if(settingsInPlayEl) settingsInPlayEl.textContent = inPlay;
+    }
+
+    // --- DASHBOARD FUNCTIONS ---
+    function renderDashboard() {
+        const totalPlayers = appState.players.length;
+        const checkedInPlayers = appState.players.filter(p => p.isCheckedIn).length;
+        const activeMatches = appState.matches.length;
+        const shuttleInPlay = appState.shuttlecocks.inPlay; // Use simplified
+
+        document.getElementById('dash-total-players').textContent = totalPlayers;
+        document.getElementById('dash-checked-in').textContent = checkedInPlayers;
+        document.getElementById('dash-active-matches').textContent = activeMatches;
+        document.getElementById('dash-shuttle-in-play').textContent = shuttleInPlay;
+
+        renderDashboardPlayerStats();
+        updateShuttleCounterDisplay();
+    }
+
+    function renderDashboardPlayerStats() {
+        const listEl = document.getElementById('dashboard-player-list');
+        listEl.innerHTML = '';
+        
+        const playerGameCounts = {};
+        appState.players.forEach(p => {
+            playerGameCounts[p.id] = getPlayerGameCount(p.id);
+        });
+
+        // Sort players by game count (ascending), then by name
+        const sortedPlayers = appState.players.slice().sort((a, b) => {
+            const countA = playerGameCounts[a.id];
+            const countB = playerGameCounts[b.id];
+            if (countA !== countB) return countA - countB;
+            return a.name.localeCompare(b.name, 'th');
+        });
+
+        sortedPlayers.forEach(player => {
+            const skillClass = getSkillClass(player.skill);
+            const card = document.createElement('div');
+            card.classList.add('dashboard-player-card');
+            card.onclick = () => showPlayerHistory(player.id);
+            card.innerHTML = `
+                <div class="player-name">${player.name}</div>
+                <div class="player-skill"><span class="skill-badge skill-${skillClass}">${player.skill}</span></div>
+                <div class="game-count">${playerGameCounts[player.id]} เกม</div>
+            `;
+            listEl.appendChild(card);
+        });
+    }
+
+
+    // --- PLAYER MANAGEMENT FUNCTIONS ---
+    function addPlayer(name, skill) {
+        const newPlayer = {
+            id: appState.nextId.player++,
+            name: name.trim(),
+            skill: skill,
+            isCheckedIn: false,
+            isPlaying: false // New field
+        };
+        appState.players.push(newPlayer);
+        appState.history[newPlayer.id] = { games: [] };
+        saveState();
+        renderPlayerList();
+    }
+
+    function addPlayersBulk(namesText, skill) {
+        const names = namesText.split('\n').map(n => n.trim()).filter(n => n.length > 0);
+        let addedCount = 0;
+        names.forEach(name => {
+            if (!appState.players.some(p => p.name === name)) {
+                addPlayer(name, skill);
+                addedCount++;
+            }
+        });
+        saveState();
+        renderPlayerList();
+        alert(`เพิ่มผู้เล่นใหม่ ${addedCount} คน (ข้ามชื่อที่ซ้ำ)`);
+    }
+
+    function deletePlayer(id) {
+        if (confirm('คุณแน่ใจหรือไม่ที่จะลบผู้เล่นคนนี้? ข้อมูลประวัติการเล่นทั้งหมดจะถูกเก็บไว้ แต่ผู้เล่นจะหายไปจากรายการ')) {
+            appState.players = appState.players.filter(p => p.id !== id);
+            appState.matches = appState.matches.filter(m => !m.team1.includes(id) && !m.team2.includes(id));
+            delete appState.history[id]; // Also remove from history object
+            saveState();
+            renderPlayerList();
+            renderActiveMatches();
+        }
+    }
+
+    function renderPlayerList(filter = '') {
+        const listEl = document.getElementById('player-list');
+        const bulkEditListEl = document.getElementById('bulk-edit-list');
+        listEl.innerHTML = '';
+        bulkEditListEl.innerHTML = '';
+
+        const filteredPlayers = appState.players.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
+
+        filteredPlayers.forEach(player => {
+            const skillClass = getSkillClass(player.skill);
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div>
+                    <a href="#" class="player-name-link" onclick="showPlayerHistory(${player.id}); return false;">
+                        ${player.name}
+                    </a>
+                    <span class="skill-badge skill-${skillClass}">${player.skill}</span>
+                </div>
+                <div class="edit-form">
+                    <select id="edit-skill-${player.id}" class="edit-mode">
+                        ${['BG', 'N-', 'N', 'N+', 'P'].map(s => 
+                            `<option value="${s}" ${s === player.skill ? 'selected' : ''}>${s}</option>`
+                        ).join('')}
+                    </select>
+                    <button class="success" onclick="updatePlayerSkill(${player.id}, document.getElementById('edit-skill-${player.id}').value)">บันทึก</button>
+                    <button class="danger" onclick="deletePlayer(${player.id})">ลบ</button>
+                </div>
+            `;
+            listEl.appendChild(li);
+
+            // Bulk Edit Item
+            const bulkItem = document.createElement('div');
+            bulkItem.classList.add('bulk-edit-item');
+            bulkItem.innerHTML = `
+                <span>${player.name} <span class="skill-badge skill-${skillClass}">${player.skill}</span></span>
+                <input type="checkbox" data-player-id="${player.id}">
+            `;
+            bulkEditListEl.appendChild(bulkItem);
+        });
+    }
+
+    function updatePlayerSkill(id, newSkill) {
+        const player = appState.players.find(p => p.id === id);
+        if (player) {
+            player.skill = newSkill;
+            saveState();
+            renderPlayerList(document.getElementById('player-search').value);
+            alert(`อัปเดตระดับมือของ ${player.name} เป็น ${newSkill} เรียบร้อย`);
+        }
+    }
+
+    function updatePlayerSkillBulk(newSkill) {
+        const checkboxes = document.querySelectorAll('#bulk-edit-list input[type="checkbox"]:checked');
+        let updatedCount = 0;
+        checkboxes.forEach(checkbox => {
+            const playerId = parseInt(checkbox.dataset.playerId);
+            const player = appState.players.find(p => p.id === playerId);
+            if (player && player.skill !== newSkill) {
+                player.skill = newSkill;
+                updatedCount++;
+            }
+        });
+
+        if (updatedCount > 0) {
+            saveState();
+            renderPlayerList(document.getElementById('player-search').value);
+            alert(`อัปเดตระดับมือผู้เล่น ${updatedCount} คนเป็น ${newSkill} เรียบร้อย`);
+        } else {
+            alert('กรุณาเลือกผู้เล่นที่ต้องการแก้ไข');
+        }
+    }
+
+    // --- MANAGER TOOLS FUNCTIONS ---
+    function clearAllPlayers() {
+        if (appState.matches.length > 0) {
+            alert('ไม่สามารถล้างข้อมูลผู้เล่นได้! กรุณาจบแมตช์ที่กำลังแข่งขันทั้งหมดก่อน');
+            return;
+        }
+        if (confirm('คุณแน่ใจหรือไม่ที่จะล้างข้อมูลผู้เล่นทั้งหมด? การกระทำนี้ไม่สามารถยกเลิกได้! (ข้อมูลประวัติการเล่นจะถูกเก็บไว้)')) {
+            appState.players = [];
+            // appState.history remains intact
+            appState.nextId.player = 1;
+            saveState();
+            renderDashboard();
+            renderPlayerList();
+            renderCheckInList();
+            renderHistoryPlayers();
+            alert('ล้างข้อมูลผู้เล่นทั้งหมดเรียบร้อยแล้ว');
+        }
+    }
+    
+    // --- CHECK-IN FUNCTIONS ---
+    function toggleCheckIn(id) {
+        const player = appState.players.find(p => p.id === id);
+        if (player) {
+            if (player.isPlaying) {
+                alert(`${player.name} กำลังลงสนามอยู่! หากต้องการเช็คเอาท์ กรุณารอให้เกมจบหรือยกเลิกเกมก่อน`);
+                return;
+            }
+            player.isCheckedIn = !player.isCheckedIn;
+            // Record check-in time if checking in (for more advanced queue in future)
+            if (player.isCheckedIn) {
+                player.checkInTime = Date.now();
+            } else {
+                delete player.checkInTime;
+            }
+            saveState();
+            renderCheckInList();
+            renderDashboard();
+        }
+    }
+
+    function resetAllCheckIns() {
+        if (appState.players.some(p => p.isPlaying)) {
+            alert('ไม่สามารถรีเซ็ตได้! มีผู้เล่นบางคนกำลังลงสนามอยู่ กรุณาให้เกมจบก่อน');
+            return;
+        }
+        if (confirm('คุณแน่ใจหรือไม่ที่จะรีเซ็ตสถานะการเช็คอินทั้งหมด?')) {
+            appState.players.forEach(p => {
+                p.isCheckedIn = false;
+                p.isPlaying = false; // Reset playing status too
+                delete p.checkInTime;
+            });
+            saveState();
+            renderCheckInList();
+            renderDashboard();
+            alert('รีเซ็ตการเช็คอินเรียบร้อย');
+        }
+    }
+
+    function renderCheckInList() {
+        const listEl = document.getElementById('check-in-list');
+        listEl.innerHTML = '';
+
+        // Recalculate playing status based on active matches (Safety check, although managed on match finish)
+        const playingIds = new Set();
+        appState.matches.forEach(m => {
+            [...m.team1, ...m.team2].forEach(id => playingIds.add(id));
+        });
+        
+        // Update isPlaying status for display consistency
+        appState.players.forEach(p => {
+            p.isPlaying = playingIds.has(p.id);
+        });
+        saveState();
+
+
+        // Sort by status (Waiting > Playing > Not Checked In), then by time, then name
+        const sortedPlayers = appState.players.slice().sort((a, b) => {
+            const statusA = a.isCheckedIn ? (a.isPlaying ? 2 : 1) : 3;
+            const statusB = b.isCheckedIn ? (b.isPlaying ? 2 : 1) : 3;
+
+            if (statusA !== statusB) return statusA - statusB; // 1 (Waiting) is highest priority
+
+            if (a.isCheckedIn && b.isCheckedIn && !a.isPlaying && !b.isPlaying) {
+                // If both are WAITING, sort by checkInTime (earliest first)
+                if (a.checkInTime && b.checkInTime) {
+                    if (a.checkInTime !== b.checkInTime) return a.checkInTime - b.checkInTime;
+                }
+            }
+
+            return a.name.localeCompare(b.name, 'th');
+        });
+
+        sortedPlayers.forEach(player => {
+            const skillClass = getSkillClass(player.skill);
+            const gameCount = getPlayerGameCount(player.id);
+            const card = document.createElement('div');
+            card.classList.add('check-in-card');
+            
+            if (player.isCheckedIn) card.classList.add('checked-in');
+            if (player.isPlaying) card.classList.add('playing-now');
+            
+            card.onclick = () => toggleCheckIn(player.id);
+
+            let statusIcon = player.isCheckedIn ? '✅' : '❌';
+            if (player.isPlaying) {
+                statusIcon = '🏸'; // Ensure the card style reflects the playing status
+                card.classList.remove('checked-in');
+            }
+
+            card.innerHTML = `
+                <div class="player-name">${player.name}</div>
+                <div class="player-skill"><span class="skill-badge skill-${skillClass}">${player.skill}</span></div>
+                <div style="font-size:0.8rem; color:#888;">(${gameCount} เกม)</div>
+                <div class="status-icon">${statusIcon}</div>
+            `;
+            listEl.appendChild(card);
+        });
+    }
+
+    // --- MATCH SETUP FUNCTIONS ---
+    function renderCourtSelectDropdown(targetId) {
+        const selectEl = document.getElementById(targetId);
+        selectEl.innerHTML = '';
+        
+        // Add a default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = '-- เลือกสนามว่าง --';
+        selectEl.appendChild(defaultOption);
+
+        const availableCourts = appState.courts.filter(c => c.status === 'free');
+        availableCourts.forEach(court => {
+            const option = document.createElement('option');
+            option.value = court.id;
+            option.textContent = court.name;
+            selectEl.appendChild(option);
+        });
+
+        // Toggle visibility of setup buttons
+        const hasAvailableCourt = availableCourts.length > 0;
+        const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+        const canSetup = hasAvailableCourt && checkedInPlayers.length >= 4;
+        
+        document.getElementById('btn-random-setup').disabled = !canSetup;
+        document.getElementById('btn-queue-setup').disabled = !canSetup;
+        document.getElementById('btn-manual-setup').disabled = !hasAvailableCourt;
+    }
+
+    function renderMatchSetup() {
+        renderCourtSelectDropdown('court-select-dropdown');
+
+        // Reset manual setup view
+        const setupContentEl = document.getElementById('match-setup-content');
+        setupContentEl.innerHTML = '<p>กรุณาไปที่หน้า "เช็คอิน" เพื่อเลือกผู้เล่นที่จะเข้าร่วมก่อน</p>';
+        manualSelectionOrder = [];
+    }
+
+    function getPlayerSkillValue(skill) {
+        return SKILL_TO_VALUE[skill] || 3; // Default to 'N' (3)
+    }
+
+    // *** MODIFIED ***: Sets default newShuttleUsed = 1 and deducts from inPlay stock
+    function createMatch(courtId, team1Ids, team2Ids) {
+        // courtId is passed as string from dropdown
+        const court = appState.courts.find(c => c.id == courtId);
+        if (!court || court.status !== 'free') {
+            alert('สนามไม่ว่างหรือไม่พบ!');
+            return;
         }
         
-        function handleCourtAction(e) {
-            const button = e.target.closest('button');
-            if (!button) return;
+        // Deduct 1 shuttle from stock
+        if (appState.shuttlecocks.inPlay >= 1) {
+            appState.shuttlecocks.inPlay -= 1;
+        } else {
+            alert('คำเตือน: ลูกแบดพร้อมใช้ในสต็อกหมด! เริ่มเกมโดยไม่มีลูก (กรุณาเติมสต็อก)');
+        }
 
-            const courtId = parseInt(button.dataset.courtId);
-            const action = button.dataset.action;
-            const court = courts.find(c => c.id === courtId);
-            if (!court) return;
 
-            switch (action) {
-                case 'start-game':
-                    if (court.players.length >= 4 && !court.startTime) {
-                        // Increment rotation count
-                        court.players.forEach(player => {
-                            const playerObj = findPlayerById(player.id);
-                            if (playerObj) { 
-                                const currentCount = playerRotationCounts.get(playerObj.id) || 0;
-                                playerRotationCounts.set(playerObj.id, currentCount + 1);
-                            }
-                        });
+        const matchId = appState.nextId.match++;
+        const newMatch = {
+            id: matchId,
+            courtId: courtId, // Stored as string
+            courtName: court.name,
+            team1: team1Ids,
+            team2: team2Ids,
+            startTime: Date.now(),
+            newShuttleUsed: 1, // <<< Default to 1 (Requested by user)
+            practiceShuttleUsed: 0
+        };
 
-                        court.startTime = new Date(); 
-                        startTimer(court.id); 
-                        saveData();
-                        renderAllLists(); 
-                        renderCourts(); 
-                        renderRotationDashboard();
-                        renderPairingSelectionUI(); 
-                    }
-                    break;
-                case 'show-end-game':
-                    document.getElementById(`winner-selection-${courtId}`).style.display = 'block';
-                    document.querySelector(`#court-${courtId} .game-controls`).style.display = 'none';
-                    break;
-                case 'cancel-end-game':
-                    document.getElementById(`winner-selection-${courtId}`).style.display = 'none';
-                    document.querySelector(`#court-${courtId} .game-controls`).style.display = 'block';
-                    break;
-                case 'record-win':
-                    const winnerPairIndex = parseInt(button.dataset.winner);
-                    endGameAndRecord(courtId, winnerPairIndex);
-                    break;
-                case 'change-shuttle':
-                    const type = button.dataset.type;
-                    const change = parseInt(button.dataset.change);
-                    
-                    if (type === 'main') {
-                        court.mainShuttle = Math.max(0, court.mainShuttle + change);
-                    } else if (type === 'replacement') {
-                        court.replacementShuttles = Math.max(0, court.replacementShuttles + change);
-                    }
-                    
-                    saveData();
-                    renderCourts(); 
-                    break;
-                case 'return-players':
-                    if (confirm('คุณแน่ใจหรือไม่ที่จะนำผู้เล่นชุดนี้ออกจากสนามโดยไม่บันทึกผล? (รอบการเล่นที่เพิ่มไปแล้วจะถูกคงไว้)')) {
-                        if (court.timerInterval) clearInterval(court.timerInterval);
-                        
-                        court.players = [];
-                        court.startTime = null; 
-                        court.timerMs = 0; 
-                        court.timerInterval = null;
-                        
-                        // NEW: Clear selection if any of these players were selected
-                        currentSelectedPairing = []; 
+        appState.matches.push(newMatch);
+        court.status = 'playing';
+        court.currentMatchId = matchId;
 
-                        saveData();
-                        renderAllLists();
-                        renderCourts();
-                        renderRotationDashboard(); 
-                        renderPairingSelectionUI(); 
-                    }
-                    break;
+        // Set players to isPlaying
+        [...team1Ids, ...team2Ids].forEach(playerId => {
+            const player = appState.players.find(p => p.id === playerId);
+            if (player) {
+                player.isPlaying = true;
+            }
+        });
+
+        saveState();
+        renderActiveMatches();
+        renderCheckInList();
+        renderDashboard();
+        showView('active-matches');
+        alert(`จัดคู่สำเร็จ! สนาม ${court.name} เริ่มการแข่งขัน (ใช้ลูกใหม่ 1 ลูก)`);
+    }
+
+    // --- MANUAL SETUP ---
+    function manualSetupStart() {
+        const courtId = document.getElementById('court-select-dropdown').value;
+        if (!courtId) {
+            alert('กรุณาเลือกสนามว่างก่อน');
+            return;
+        }
+
+        const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+        if (checkedInPlayers.length < 4) {
+             alert('ต้องมีผู้เล่นที่เช็คอินและว่างอย่างน้อย 4 คนจึงจะจัดคู่ได้');
+             return;
+        }
+
+        const setupContentEl = document.getElementById('match-setup-content');
+        setupContentEl.innerHTML = `
+            <h3>สนาม ${appState.courts.find(c => c.id == courtId).name}</h3>
+            <p>เลือกผู้เล่น 4 คนตามลำดับ (1-2 สำหรับทีม 1, 3-4 สำหรับทีม 2) <span id="selection-status" style="font-weight: bold; color: var(--secondary);">: เลือกคนที่ 1</span></p>
+            <div id="manual-selection-grid" class="manual-selection-grid"></div>
+            <div style="text-align: center; margin-top: 1.5rem;">
+                <button class="success" onclick="confirmManualMatch(${courtId})" id="btn-confirm-manual" disabled>ยืนยันคู่แข่งขัน</button>
+                <button class="danger" onclick="renderMatchSetup()">ยกเลิก</button>
+            </div>
+        `;
+
+        manualSelectionOrder = [];
+        renderManualSelectionGrid(checkedInPlayers);
+    }
+
+    function renderManualSelectionGrid(players) {
+        const gridEl = document.getElementById('manual-selection-grid');
+        const statusEl = document.getElementById('selection-status');
+        const confirmBtn = document.getElementById('btn-confirm-manual');
+        gridEl.innerHTML = '';
+
+        players.forEach(player => {
+            const skillClass = getSkillClass(player.skill);
+            const gameCount = getPlayerGameCount(player.id);
+            const isSelected = manualSelectionOrder.includes(player.id);
+            const card = document.createElement('div');
+            card.classList.add('manual-selection-card');
+            if (isSelected) card.classList.add('selected');
+            card.onclick = () => toggleManualSelection(player.id, players);
+
+            let orderBadge = '';
+            if (isSelected) {
+                const order = manualSelectionOrder.indexOf(player.id) + 1;
+                orderBadge = `<div class="selection-order">${order}</div>`;
+            }
+
+            card.innerHTML = `
+                ${orderBadge}
+                <div class="player-name">${player.name}</div>
+                <div class="player-skill"><span class="skill-badge skill-${skillClass}">${player.skill}</span></div>
+                <div class="game-count">${gameCount}</div>
+            `;
+            gridEl.appendChild(card);
+        });
+
+        statusEl.textContent = `: เลือกคนที่ ${manualSelectionOrder.length + 1}`;
+        confirmBtn.disabled = manualSelectionOrder.length !== 4;
+    }
+
+    function toggleManualSelection(playerId, players) {
+        const index = manualSelectionOrder.indexOf(playerId);
+        if (index > -1) {
+            manualSelectionOrder.splice(index, 1);
+        } else if (manualSelectionOrder.length < 4) {
+            manualSelectionOrder.push(playerId);
+        }
+        renderManualSelectionGrid(players);
+    }
+
+    function confirmManualMatch(courtId) {
+        if (manualSelectionOrder.length !== 4) {
+            alert('กรุณาเลือกผู้เล่นให้ครบ 4 คน');
+            return;
+        }
+
+        const team1Ids = [manualSelectionOrder[0], manualSelectionOrder[1]];
+        const team2Ids = [manualSelectionOrder[2], manualSelectionOrder[3]];
+
+        const team1Names = team1Ids.map(id => appState.players.find(p => p.id === id).name).join(' & ');
+        const team2Names = team2Ids.map(id => appState.players.find(p => p.id === id).name).join(' & ');
+
+        if (confirm(`คุณต้องการจัดคู่:\nทีม 1: ${team1Names}\nทีม 2: ${team2Names}\nลงสนามหรือไม่?`)) {
+            createMatch(courtId, team1Ids, team2Ids);
+        }
+    }
+
+    // --- RANDOM MATCH SETUP (Simple 4 players) ---
+    function simpleRandomMatch() {
+        const courtId = document.getElementById('court-select-dropdown').value;
+        if (!courtId) {
+            alert('กรุณาเลือกสนามว่างก่อน');
+            return;
+        }
+
+        const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+        if (checkedInPlayers.length < 4) {
+            alert('ต้องมีผู้เล่นที่เช็คอินและว่างอย่างน้อย 4 คนจึงจะจัดคู่ได้');
+            return;
+        }
+
+        // Shuffle players and pick first 4
+        const shuffledPlayers = checkedInPlayers.sort(() => 0.5 - Math.random());
+        const selectedIds = shuffledPlayers.slice(0, 4).map(p => p.id);
+        
+        // Simple assignment: 1st & 3rd vs 2nd & 4th
+        const team1Ids = [selectedIds[0], selectedIds[2]];
+        const team2Ids = [selectedIds[1], selectedIds[3]];
+
+        const team1Names = team1Ids.map(id => appState.players.find(p => p.id === id).name).join(' & ');
+        const team2Names = team2Ids.map(id => appState.players.find(p => p.id === id).name).join(' & ');
+        
+        if (confirm(`จับสลากได้คู่:\nทีม 1: ${team1Names}\nทีม 2: ${team2Names}\nลงสนามหรือไม่?`)) {
+            createMatch(courtId, team1Ids, team2Ids);
+        }
+    }
+
+
+    // --- ADVANCED QUEUE MATCH SETUP (Minimum Games) ---
+    function queueMatchStart() {
+        const courtId = document.getElementById('court-select-dropdown').value;
+        if (!courtId) {
+            alert('กรุณาเลือกสนามว่างก่อน');
+            return;
+        }
+
+        const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+        if (checkedInPlayers.length < 4) {
+            alert('ต้องมีผู้เล่นที่เช็คอินและว่างอย่างน้อย 4 คนจึงจะจัดคู่ได้');
+            return;
+        }
+
+        // Get player stats: { id, name, skillValue, gameCount }
+        const playerStats = checkedInPlayers.map(p => ({
+            id: p.id,
+            name: p.name,
+            skillValue: getPlayerSkillValue(p.skill),
+            gameCount: getPlayerGameCount(p.id)
+        }));
+
+        // Sort by gameCount (ascending) to prioritize players who played the least
+        playerStats.sort((a, b) => a.gameCount - b.gameCount);
+
+        // Select the top 4 players with the least games
+        const top4 = playerStats.slice(0, 4);
+
+        // Sort by skill for pairing
+        top4.sort((a, b) => a.skillValue - b.skillValue);
+
+        // Pairing logic (P1+P4 vs P2+P3 for skill balance among the 4 lowest-game players)
+        const team1Ids = [top4[0].id, top4[3].id];
+        const team2Ids = [top4[1].id, top4[2].id];
+
+        const team1Names = team1Ids.map(id => appState.players.find(p => p.id === id).name).join(' & ');
+        const team2Names = team2Ids.map(id => appState.players.find(p => p.id === id).name).join(' & ');
+
+        if (confirm(`จัดคิวได้คู่ (เกมต่ำสุด):\nทีม 1: ${team1Names}\nทีม 2: ${team2Names}\nลงสนามหรือไม่?`)) {
+            createMatch(courtId, team1Ids, team2Ids);
+        }
+    }
+
+
+    // --- ACTIVE MATCHES FUNCTIONS ---
+    function renderActiveMatches() {
+        const listEl = document.getElementById('active-matches-list');
+        listEl.innerHTML = '';
+        
+        if (appState.matches.length === 0) {
+            listEl.innerHTML = '<p style="text-align: center; color: #888;">ไม่มีสนามที่กำลังแข่งขันอยู่ในขณะนี้</p>';
+            return;
+        }
+
+        appState.matches.forEach(match => {
+            const team1Names = match.team1.map(id => appState.players.find(p => p.id === id).name).join(' & ');
+            const team2Names = match.team2.map(id => appState.players.find(p => p.id === id).name).join(' & ');
+
+            const team1Skills = match.team1.map(id => appState.players.find(p => p.id === id).skill);
+            const team2Skills = match.team2.map(id => appState.players.find(p => p.id === id).skill);
+
+            const card = document.createElement('div');
+            card.classList.add('match-card');
+            card.dataset.matchId = match.id;
+            
+            card.innerHTML = `
+                <h3>สนาม ${match.courtName}</h3>
+                <div class="timer" id="match-timer-${match.id}">00:00</div>
+                <div class="match-teams">
+                    <div class="team">
+                        <h4>ทีม 1</h4>
+                        <p>${team1Names}</p>
+                        <p>${team1Skills.map(s => `<span class="skill-badge skill-${getSkillClass(s)}">${s}</span>`).join(' ')}</p>
+                    </div>
+                    <div class="vs">VS</div>
+                    <div class="team">
+                        <h4>ทีม 2</h4>
+                        <p>${team2Names}</p>
+                        <p>${team2Skills.map(s => `<span class="skill-badge skill-${getSkillClass(s)}">${s}</span>`).join(' ')}</p>
+                    </div>
+                </div>
+                
+                <div class="court-shuttle-control">
+                    <div class="shuttle-control-item">
+                        <span class="shuttle-label">ลูกใหม่:</span>
+                        <button onclick="updateMatchShuttleUsed(${match.id}, 'new', -1)">-</button>
+                        <span class="shuttle-count-display" id="match-shuttle-new-${match.id}">${match.newShuttleUsed}</span>
+                        <button onclick="updateMatchShuttleUsed(${match.id}, 'new', 1)">+</button>
+                    </div>
+                    <div class="shuttle-control-item">
+                        <span class="shuttle-label">ลูกซ้อม:</span>
+                        <button onclick="updateMatchShuttleUsed(${match.id}, 'practice', -1)">-</button>
+                        <span class="shuttle-count-display" id="match-shuttle-practice-${match.id}">${match.practiceShuttleUsed}</span>
+                        <button onclick="updateMatchShuttleUsed(${match.id}, 'practice', 1)">+</button>
+                    </div>
+                </div>
+
+                <h4 style="margin-top: 1.5rem; text-align: center;">ใครชนะ? (จบเกมทันที)</h4>
+                <div class="match-controls">
+                    <button class="success" onclick="recordMatchResult(${match.id}, 1)">ทีม 1 ชนะ</button>
+                    <button class="draw" onclick="recordMatchResult(${match.id}, 0)">เสมอ</button>
+                    <button class="success" onclick="recordMatchResult(${match.id}, 2)">ทีม 2 ชนะ</button>
+                </div>
+                <div class="match-controls" style="margin-top: 1rem;">
+                    <button class="danger" onclick="cancelMatch(${match.id})">ยกเลิกแมตช์</button>
+                </div>
+            `;
+            listEl.appendChild(card);
+            startTimer(match.id, card);
+        });
+        updateShuttleCounterDisplay();
+        renderDashboard();
+    }
+
+    // *** MODIFIED ***: Only updates match-specific counters for history, DOES NOT affect global stock (เพราะหักไปแล้วตอนเริ่มแมตช์)
+    function updateMatchShuttleUsed(matchId, type, amount) {
+        const match = appState.matches.find(m => m.id === matchId);
+        if (!match) return;
+
+        if (type === 'new') {
+            if (match.newShuttleUsed + amount >= 0) {
+                match.newShuttleUsed += amount;
+                document.getElementById(`match-shuttle-new-${matchId}`).textContent = match.newShuttleUsed;
+            } else {
+                 alert('จำนวนลูกแบดใหม่ต้องไม่ติดลบ');
+                 return;
+            }
+        } else if (type === 'practice') {
+             if (match.practiceShuttleUsed + amount >= 0) {
+                match.practiceShuttleUsed += amount;
+                document.getElementById(`match-shuttle-practice-${matchId}`).textContent = match.practiceShuttleUsed;
+            } else {
+                 alert('จำนวนลูกซ้อมต้องไม่ติดลบ');
+                 return;
             }
         }
         
-        function startTimer(courtId) {
-            const court = courts.find(c => c.id === courtId);
-            if (!court || !court.startTime || court.timerInterval) return; 
+        saveState();
+        // ไม่ต้องอัปเดต updateShuttleCounterDisplay() เพราะสต็อกรวมไม่เปลี่ยนแปลงขณะนับในสนาม
+    }
 
-            const timerElement = document.getElementById(`timer-${courtId}`);
-            if (!timerElement) return; 
-
-            court.timerInterval = setInterval(() => {
-                const now = new Date();
-                court.timerMs = now - court.startTime;
-                timerElement.textContent = formatDuration(court.timerMs);
-            }, 1000);
-        }
-
-        // --- History & Stats Logic ---
-        function endGameAndRecord(courtId, winnerPairIndex) {
-            const court = courts.find(c => c.id === courtId);
-            if (!court || court.players.length < 4 || !court.startTime) return;
-
-            clearInterval(court.timerInterval);
-
-            const endTime = new Date();
-            const durationMs = court.timerMs; 
-            const durationString = formatDuration(durationMs);
-
-            const playersInGame = court.players;
-            const pair1 = playersInGame.slice(0, 2);
-            const pair2 = playersInGame.slice(2, 4);
-            const winningPair = winnerPairIndex === 1 ? pair1 : pair2;
-            const totalShuttles = court.mainShuttle + court.replacementShuttles;
-
-            // 1. อัปเดตประวัติ
-            gameHistory.unshift({
-                time: endTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                courtName: court.name,
-                pair1: pair1.map(p => p.name).join(' / '),
-                pair2: pair2.map(p => p.name).join(' / '),
-                winner: winningPair.map(p => p.name).join(' / '),
-                shuttles: totalShuttles,
-                duration: durationString,
-            });
-
-            // 2. อัปเดตสถิติ (สำหรับคู่ที่เล่นด้วยกัน)
-            updatePairingStats(pair1); 
-            updatePairingStats(pair2);
-
-            // 3. รีเซ็ตสนาม
-            court.players = [];
-            court.startTime = null;
-            court.timerMs = 0;
-            court.mainShuttle = 1;
-            court.replacementShuttles = 0;
-            court.timerInterval = null; 
-            
-            // NEW: Clear selection if any of these players were selected
-            currentSelectedPairing = []; 
-
-            // 4. เรนเดอร์ใหม่
-            saveData();
-            renderAllLists();
-            renderCourts();
-            renderHistory();
-            renderStats(); 
-            renderRotationDashboard(); 
-            renderPairingSelectionUI();
-        }
-
-        function updatePairingStats(pair) {
-            const id1 = pair[0].id, id2 = pair[1].id;
-            const key = id1 < id2 ? `${id1}-${id2}` : `${id2}-${id1}`;
-            pairingStats.set(key, (pairingStats.get(key) || 0) + 1);
-        }
+    // *** MODIFIED ***: Removes global stock logic (cost was paid on match start)
+    function updateShuttlecocksAfterMatch(match) {
+        // We assume the 1 default shuttle cost was deducted when the match started.
+        // All usage recorded in match.newShuttleUsed/practiceShuttleUsed is for history/reporting only.
         
-        function renderStats() {
-            const sortedStats = Array.from(pairingStats.entries())
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10); 
+        saveState();
+        updateShuttleCounterDisplay(); 
+    }
+
+
+    // --- MATCH RESULT AND ENDING FUNCTIONS ---
+    
+    /**
+     * สิ้นสุดการแข่งขัน: หยุดจับเวลา, ลบแมตช์ออกจากรายการ, คืนสถานะผู้เล่น, และอัปเดตสถานะสนาม
+     * @param {number} matchId - ID ของแมตช์ที่ต้องการจบ
+     */
+    function endMatch(matchId) {
+        const matchIndex = appState.matches.findIndex(m => m.id === matchId);
+        if (matchIndex === -1) return;
+
+        const match = appState.matches[matchIndex];
+        
+        stopTimer(matchId);
+
+        // 1. คืนสถานะผู้เล่น: ตั้งค่า isPlaying เป็น false
+        const allPlayers = [...match.team1, ...match.team2];
+        allPlayers.forEach(playerId => {
+            const player = appState.players.find(p => p.id === playerId);
+            if (player) {
+                player.isPlaying = false;
+            }
+        });
+
+        // 2. คืนสถานะสนาม: ตั้งค่า status เป็น 'free'
+        // FIX: ใช้ == แทน === เพราะ match.courtId เป็น String แต่ c.id เป็น Number
+        const court = appState.courts.find(c => c.id == match.courtId);
+        if (court) {
+            court.status = 'free';
+            delete court.currentMatchId;
+        }
+
+        // 3. ลบแมตช์ออกจากรายการ
+        appState.matches.splice(matchIndex, 1);
+        
+        saveState();
+        renderActiveMatches();
+        renderCheckInList(); // อัปเดตสถานะผู้เล่นในหน้าเช็คอิน
+        renderDashboard();   // อัปเดตจำนวนสนามที่กำลังเล่น
+        
+        // FIX: เพิ่มการอัปเดตสถานะสนามในหน้า Settings และ Match Setup
+        renderCourtList();
+        renderMatchSetup();
+    }
+    
+    /**
+     * บันทึกผลการแข่งขันและจบเกมทันทีตามที่ผู้ใช้ต้องการ
+     * @param {number} matchId - ID ของแมตช์
+     * @param {number} winningTeam - 1 สำหรับทีม 1, 2 สำหรับทีม 2, 0 สำหรับเสมอ
+     */
+    function recordMatchResult(matchId, winningTeam) {
+        const match = appState.matches.find(m => m.id === matchId);
+        if (!match) return;
+
+        // 1. สร้างและบันทึกข้อมูลประวัติเกม
+        const gameResult = {
+            id: appState.nextId.match++, // ใช้ ID ใหม่สำหรับประวัติเกม
+            matchId: matchId,
+            courtId: match.courtId,
+            startTime: match.startTime,
+            endTime: Date.now(),
+            duration: Date.now() - match.startTime,
+            team1: match.team1,
+            team2: match.team2,
+            winner: winningTeam,
+            newShuttleUsed: match.newShuttleUsed,
+            practiceShuttleUsed: match.practiceShuttleUsed
+        };
+
+        const allPlayers = [...match.team1, ...match.team2];
+        allPlayers.forEach(playerId => {
+            if (appState.history[playerId] && Array.isArray(appState.history[playerId].games)) {
+                 appState.history[playerId].games.push(gameResult);
+            }
+            // ถ้าผู้เล่นยังไม่มีประวัติ (กรณีข้อมูลเสีย) ให้สร้างใหม่
+            else {
+                 appState.history[playerId] = { games: [gameResult] };
+            }
+        });
+        
+        // 2. อัปเดตจำนวนลูกแบดที่ใช้งาน (ไม่มีผลต่อสต็อกรวมตาม logic ใหม่)
+        updateShuttlecocksAfterMatch(match);
+        
+        // 3. จบการแข่งขันทันที (ลบออกจากสนาม, คืนสถานะผู้เล่น)
+        endMatch(matchId);
+        
+        saveState();
+        alert(`บันทึกผล: สนาม ${match.courtName} - ทีม ${winningTeam === 1 ? '1 ชนะ' : winningTeam === 2 ? '2 ชนะ' : 'เสมอ'}`);
+    }
+
+    /**
+     * ยกเลิกแมตช์โดยไม่บันทึกผล
+     * @param {number} matchId - ID ของแมตช์ที่ต้องการยกเลิก
+     */
+    function cancelMatch(matchId) {
+        if (confirm('คุณแน่ใจหรือไม่ที่จะยกเลิกแมตช์นี้? จะไม่มีการบันทึกผลและไม่มีการนับลูกแบด')) {
+            endMatch(matchId); // endMatch ทำหน้าที่คืนสถานะผู้เล่นและสนามเหมือนกัน
+            alert('ยกเลิกแมตช์เรียบร้อย');
+        }
+    }
+
+
+    // --- PLAYER HISTORY FUNCTIONS ---
+    function renderHistoryPlayers() {
+        const selectEl = document.getElementById('history-player-select');
+        const currentSelectedId = selectEl.value;
+        selectEl.innerHTML = '<option value="">-- เลือก --</option>';
+
+        appState.players.slice().sort((a, b) => a.name.localeCompare(b.name, 'th')).forEach(player => {
+            const option = document.createElement('option');
+            option.value = player.id;
+            option.textContent = player.name;
+            if (player.id == currentSelectedId) option.selected = true;
+            selectEl.appendChild(option);
+        });
+
+        if (currentSelectedId) {
+            showPlayerHistory(parseInt(currentSelectedId));
+        } else {
+            document.getElementById('history-details').innerHTML = '<p style="text-align: center; color: #888;">กรุณาเลือกผู้เล่นเพื่อดูประวัติ</p>';
+        }
+    }
+
+    function showPlayerHistory(playerId) {
+        const player = appState.players.find(p => p.id === playerId);
+        const history = appState.history[playerId];
+        const detailsEl = document.getElementById('history-details');
+        
+        if (!player || !history) {
+            detailsEl.innerHTML = `<div class="stat-card">ไม่พบข้อมูลประวัติสำหรับผู้เล่น ${player.name}</div>`;
+            return;
+        }
+
+        const gamesPlayed = history.games.length;
+        const wins = history.games.filter(g => {
+            const isTeam1 = g.team1.includes(playerId);
+            const isTeam2 = g.team2.includes(playerId);
             
-            statsListEl.innerHTML = sortedStats.length === 0 ? '<li>ยังไม่มีข้อมูลสถิติ</li>' : '';
-            
-            const allPlayersForStats = getAllActivePlayers();
-            sortedStats.forEach(([key, count]) => {
-                const [id1, id2] = key.split('-').map(Number);
-                const player1 = allPlayersForStats.find(p => p.id == id1);
-                const player2 = allPlayersForStats.find(p => p.id == id2);
-                if (player1 && player2) {
-                    const li = document.createElement('li');
-                    li.innerHTML = `<span>${player1.name} & ${player2.name}</span><span class="stat-count">${count} ครั้ง</span>`;
-                    statsListEl.appendChild(li);
+            if (isTeam1 && g.winner === 1) return true;
+            if (isTeam2 && g.winner === 2) return true;
+            return false;
+        }).length;
+        
+        const draws = history.games.filter(g => g.winner === 0).length;
+        const losses = gamesPlayed - wins - draws;
+
+        const totalDuration = history.games.reduce((sum, g) => sum + g.duration, 0);
+        const avgDuration = gamesPlayed > 0 ? totalDuration / gamesPlayed : 0;
+
+        detailsEl.innerHTML = `
+            <div class="stat-card">
+                <h4>${player.name} (${player.skill})</h4>
+                <div class="big-number">${gamesPlayed}</div>
+                <p>จำนวนเกมที่เล่น</p>
+            </div>
+            <div class="stat-card">
+                <h4>ชนะ/แพ้/เสมอ</h4>
+                <div class="big-number" style="color: var(--success);">${wins} / <span style="color: var(--danger);">${losses}</span> / <span style="color: var(--accent);">${draws}</span></div>
+                <p>อัตราส่วนการแข่งขัน</p>
+            </div>
+            <div class="stat-card">
+                <h4>อัตราการชนะ</h4>
+                <div class="big-number">${gamesPlayed > 0 ? ((wins / gamesPlayed) * 100).toFixed(1) : 0}%</div>
+                <p>จากทั้งหมด ${gamesPlayed} เกม</p>
+            </div>
+            <div class="stat-card">
+                <h4>เวลาเล่นเฉลี่ย</h4>
+                <div class="big-number">${formatTime(avgDuration)}</div>
+                <p>ต่อเกม</p>
+            </div>
+        `;
+        
+        // Ensure the correct player is selected in the dropdown
+        document.getElementById('history-player-select').value = playerId;
+    }
+
+    // --- SHUTTLECOCK FUNCTIONS ---
+    // *** MODIFIED ***: Simplified actions to only manage inPlay (ลูกซ้อมพร้อมใช้)
+    function updateGlobalShuttlecocks(action, amount) {
+        amount = parseInt(amount);
+        if (isNaN(amount) || amount <= 0) {
+            alert('กรุณาใส่จำนวนที่ถูกต้อง');
+            return;
+        }
+
+        switch (action) {
+            case 'add': // เพิ่มลูกใหม่ (เข้าสต็อกลูกซ้อม)
+            case 'add-practice': // เพิ่มลูกซ้อม (เข้าสต็อกลูกซ้อม)
+                appState.shuttlecocks.inPlay += amount;
+                appState.shuttlecocks.total += amount; // keep total increasing for future reports
+                break;
+            case 'remove': // ลบลูกซ้อม (ทิ้ง) - ใช้ได้เฉพาะในหน้าสนามที่กำลังเล่น
+                if (appState.shuttlecocks.inPlay < amount) {
+                    alert('ลูกซ้อม (พร้อมใช้) ในสต็อกไม่พอ');
+                    return;
                 }
-            });
-        }
-        
-        function renderHistory() {
-            historyTbodyEl.innerHTML = gameHistory.length === 0 ?
-                '<tr><td colspan="6" style="text-align:center;">ยังไม่มีประวัติ</td></tr>' : '';
-            gameHistory.forEach(game => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${game.time}</td><td>${game.courtName}</td><td>${game.pair1}</td><td>${game.pair2}</td><td>${game.winner}</td><td>${game.duration}</td>`;
-                historyTbodyEl.appendChild(tr);
-            });
-        }
-        
-        function renderAllLists() {
-            renderPlayerList();
-            // Removed: populatePairingDropdowns
+                appState.shuttlecocks.inPlay -= amount;
+                // ไม่ลด total เพราะ total คือจำนวนที่เราเคยมี (ลูกทิ้งออกจาก stock เท่านั้น)
+                break;
         }
 
-        // --- Initial Render ---
-        loadData(); 
-        renderAllLists();
-        renderHistory(); 
-        renderStats(); 
-        renderCourts();
-        renderRotationDashboard();
-        renderPairingSelectionUI(); 
+        // ป้องกันค่าติดลบที่ไม่ควรเกิดขึ้น
+        if (appState.shuttlecocks.inPlay < 0) appState.shuttlecocks.inPlay = 0;
+
+        saveState();
+        updateShuttleCounterDisplay();
+        alert(`จัดการสต็อกลูกแบดเสร็จสิ้น: ${amount} ลูก`);
+    }
+
+    // --- COURT (SETTINGS) FUNCTIONS ---
+    function addCourt(name) {
+        const newCourt = {
+            id: appState.nextId.court++,
+            name: name.trim(),
+            status: 'free', // 'free' or 'playing'
+            currentMatchId: null
+        };
+        appState.courts.push(newCourt);
+        saveState();
+        renderCourtList();
+        renderMatchSetup(); // Update dropdown
+    }
+
+    function deleteCourt(id) {
+        const court = appState.courts.find(c => c.id === id);
+        if (court.status === 'playing') {
+            alert(`ไม่สามารถลบสนาม ${court.name} ได้เนื่องจากกำลังมีแมตช์แข่งขันอยู่`);
+            return;
+        }
+        if (confirm(`คุณแน่ใจหรือไม่ที่จะลบสนาม ${court.name}?`)) {
+            appState.courts = appState.courts.filter(c => c.id !== id);
+            saveState();
+            renderCourtList();
+            renderMatchSetup(); // Update dropdown
+            alert(`ลบสนาม ${court.name} เรียบร้อย`);
+        }
+    }
+
+    function renderCourtList() {
+        const listEl = document.getElementById('court-list');
+        listEl.innerHTML = '';
+        appState.courts.forEach(court => {
+            const li = document.createElement('li');
+            li.style.backgroundColor = court.status === 'playing' ? '#ffe0b2' : 'var(--light)';
+            li.innerHTML = `
+                <span>
+                    ${court.name} 
+                    <span style="font-size: 0.8rem; color: ${court.status === 'playing' ? 'var(--danger)' : 'var(--success)'}; font-weight: bold;">
+                        (${court.status === 'playing' ? 'กำลังเล่น' : 'ว่าง'})
+                    </span>
+                </span>
+                <button class="danger" onclick="deleteCourt(${court.id})">ลบ</button>
+            `;
+            listEl.appendChild(li);
+        });
+    }
+
+    function renderSettings() {
+        renderCourtList();
+        updateShuttleCounterDisplay();
+    }
+
+
+    // --- EVENT LISTENERS ---
+    document.getElementById('add-player-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const name = document.getElementById('player-name').value;
+        const skill = document.getElementById('player-skill').value;
+        if (name) addPlayer(name, skill);
+        document.getElementById('player-name').value = '';
     });
-    </script>
+
+    document.getElementById('bulk-add-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const namesText = document.getElementById('bulk-names').value;
+        const skill = document.getElementById('bulk-skill').value;
+        if (namesText) addPlayersBulk(namesText, skill);
+        document.getElementById('bulk-names').value = '';
+    });
+
+    document.getElementById('player-search').addEventListener('input', function(e) {
+        renderPlayerList(e.target.value);
+    });
+
+    document.getElementById('bulk-edit-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const newSkill = document.getElementById('bulk-edit-skill').value;
+        updatePlayerSkillBulk(newSkill);
+    });
+
+    document.getElementById('add-court-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const name = document.getElementById('court-name').value;
+        if (name) addCourt(name);
+        document.getElementById('court-name').value = '';
+    });
+    
+    // *** MODIFIED ***: Event listener for live-shuttle-form (Active Matches)
+    document.getElementById('live-shuttle-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const action = document.getElementById('live-shuttle-action').value;
+        const amount = document.getElementById('live-shuttle-amount').value;
+        updateGlobalShuttlecocks(action, amount);
+        document.getElementById('live-shuttle-amount').value = '1';
+    });
+
+    // *** MODIFIED ***: Event listener for settings-shuttle-form (Settings)
+    document.getElementById('settings-shuttle-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const action = document.getElementById('settings-shuttle-action').value;
+        const amount = document.getElementById('settings-shuttle-amount').value;
+        // In settings, the actions are limited to 'add' and 'add-practice'
+        updateGlobalShuttlecocks(action, amount);
+        document.getElementById('settings-shuttle-amount').value = '1';
+    });
+    
+    document.getElementById('history-player-select').addEventListener('change', function(e) {
+         const playerId = parseInt(e.target.value);
+         if (!isNaN(playerId)) {
+             showPlayerHistory(playerId);
+         } else {
+             document.getElementById('history-details').innerHTML = '<p style="text-align: center; color: #888;">กรุณาเลือกผู้เล่นเพื่อดูประวัติ</p>';
+         }
+    });
+
+
+    // --- INITIALIZATION ---
+    window.onload = function() {
+        loadState();
+        showView('dashboard');
+    };
+</script>
 </body>
 </html>
