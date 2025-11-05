@@ -1115,7 +1115,11 @@
                         <button class="success" onclick="App.queueRandomStart()" id="btn-queue-random" style="width: 100%; min-height: 42px;" disabled>
                             🎲 คิวแบบสุ่ม
                         </button>
-                        <button class="secondary" onclick="App.switchToQueueTab()" id="btn-view-queue" style="width: 100%; min-height: 42px;" disabled>
+                        
+                        <button class="success" onclick="App.queueManualStart()" id="btn-queue-manual" style="width: 100%; min-height: 42px;" disabled>
+                            🧩 คิวจัดเอง
+                        </button>
+<button class="secondary" onclick="App.switchToQueueTab()" id="btn-view-queue" style="width: 100%; min-height: 42px;" disabled>
                             📋 ดูรายชื่อคิว
                         </button>
                     </div>
@@ -1311,7 +1315,7 @@
         }
 
         // Allow Thai, English, numbers, and basic punctuation only
-        if (!/^[\p{L}\p{N}\s\-\.]+$/u.test(name)) {
+        if (!/^[\p{L}\p{M}\p{N}\s\-\.]+$/u.test(name)) {
             return { valid: false, error: 'มีตัวอักษรที่ไม่อนุญาต' };
         }
 
@@ -2366,6 +2370,7 @@
             const btnQueueSetup = document.getElementById('btn-queue-setup');
             const btnQueueRandom = document.getElementById('btn-queue-random');
             const btnViewQueue = document.getElementById('btn-view-queue');
+            const btnQueueManual = document.getElementById('btn-queue-manual');
             const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
             
             if (btnQueueSetup) {
@@ -2374,7 +2379,11 @@
             if (btnQueueRandom) {
                 btnQueueRandom.disabled = checkedInPlayers.length < 4;
             }
-            if (btnViewQueue) {
+            
+            if (btnQueueManual) {
+                btnQueueManual.disabled = checkedInPlayers.length < 4;
+            }
+if (btnViewQueue) {
                 btnViewQueue.disabled = count === 0;
             }
         },
@@ -2813,6 +2822,56 @@
                 this.switchToQueueTab();
             }
         },
+
+        /**
+         * Manual queue builder (choose exact pairs then add to queue)
+         */
+        queueManualStart: function() {
+            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+            if (checkedInPlayers.length < MIN_PLAYERS_FOR_MATCH) {
+                showError(`ต้องมีผู้เล่นที่เช็คอิน ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
+                return;
+            }
+
+            const setupContentEl = document.getElementById('match-setup-content');
+            setupContentEl.innerHTML = `
+                <h3>🧩 จัดคิวเอง (เลือกผู้เล่น 4 คน)</h3>
+                <p>แตะเลือกผู้เล่น 4 คนตามลำดับ (1-2 ทีม 1, 3-4 ทีม 2) <span id="selection-status" style="font-weight: bold; color: var(--secondary);">: เลือกคนที่ 1</span></p>
+                <div id="manual-selection-grid" class="check-in-grid"></div>
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <button class="success" onclick="App.confirmManualQueue()" id="btn-confirm-manual" disabled>เพิ่มเข้าคิว</button>
+                    <button class="danger" onclick="App.renderMatchSetup()">ยกเลิก</button>
+                </div>
+            `;
+
+            uiState.manualSelectionOrder = [];
+            this.renderManualSelectionGrid(checkedInPlayers);
+            const queueTab = document.getElementById('queue-setup-tab');
+            if (queueTab) queueTab.style.display = 'block';
+        },
+
+        /**
+         * Confirm manual queue and push to queue list
+         */
+        confirmManualQueue: function() {
+            if (uiState.manualSelectionOrder.length !== 4) {
+                showError('กรุณาเลือกผู้เล่นให้ครบ 4 คน');
+                return;
+            }
+            const team1Ids = [uiState.manualSelectionOrder[0], uiState.manualSelectionOrder[1]];
+            const team2Ids = [uiState.manualSelectionOrder[2], uiState.manualSelectionOrder[3]];
+
+            const team1Names = team1Ids.map(id => PlayerUtils.getById(id)?.name || '?').join(' & ');
+            const team2Names = team2Ids.map(id => PlayerUtils.getById(id)?.name || '?').join(' & ');
+
+            if (confirm(`เพิ่มคิวรอเล่น (จัดเอง):\n\nทีม 1: ${escapeHtml(team1Names)}\nทีม 2: ${escapeHtml(team2Names)}\n\nต้องการเพิ่มเข้าคิวหรือไม่?`)) {
+                this.addToQueue(team1Ids, team2Ids);
+                uiState.manualSelectionOrder = [];
+                this.switchToQueueTab();
+                this.renderMatchSetup();
+            }
+        },
+
 
         /**
          * Create match and start timer
@@ -3382,5 +3441,642 @@
         }, 2000);
     });
 </script>
+
+<!-- ==== Queue Editors v13 (full: searchable dropdowns + skill emoji + dnd + no-dup + red highlight + reset/auto + stats) ==== -->
+<!-- Choices.js for searchable selects -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css">
+<script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+<!-- Chart.js for stats -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+  /* Controls bar above queue list */
+  .queue-controls {
+    display:flex; gap:.5rem; flex-wrap:wrap;
+    padding:.5rem 0; margin:.5rem 0 1rem 0;
+  }
+  .qc-btn {
+    border:1px solid #c2c8cf; background:#f9fafb; color:#333;
+    padding:8px 12px; border-radius:10px; cursor:pointer; font-weight:600; font-size:.9rem;
+  }
+  .qc-btn:hover { background:#edf2f7; }
+  .qc-btn.danger { border-color:#fda4a4; background:#fee2e2; color:#991b1b; }
+  .qc-btn.primary { border-color:#6cb6ff; background:#eef6ff; color:#004c8c; }
+  .qc-btn.success { border-color:#86efac; background:#dcfce7; color:#065f46; }
+
+  /* v12 styles (editor, dnd, dup highlight) */
+  .queue-inline-editor{margin-top:.75rem;padding:.75rem;background:#f9fafb;border:1px solid #d0d7de;border-radius:10px;color:#222;display:none}
+  .queue-inline-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+  .queue-inline-group{display:flex;flex-direction:column;gap:.35rem}
+  .queue-inline-label{font-size:.8rem;color:#444}
+  .queue-inline-select{width:100%;padding:6px 8px;font-size:.9rem;border:1px solid #b6c0ca;border-radius:8px;background:#fff;color:#111;cursor:pointer}
+  .queue-inline-select option{color:#111;background:#fff}
+  .queue-inline-title{font-weight:700;font-size:.9rem;color:#0f6cbd;display:flex;align-items:center;justify-content:space-between;margin:0 0 .5rem 0}
+  .queue-tools{display:flex;gap:.5rem;flex-wrap:wrap}
+  .queue-tool-btn{border:1px solid #c2c8cf;background:#f9fafb;color:#333;padding:6px 10px;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:500}
+  .queue-tool-btn:hover{background:#edf2f7}
+  .queue-card-toggle{border:1px solid #6cb6ff;background:#f0f8ff;color:#004c8c;padding:4px 10px;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:600}
+  .queue-drag-handle{border:1px dashed #b6c0ca;background:#fff;color:#555;padding:4px 10px;border-radius:8px;cursor:grab;font-size:.8rem;margin-left:.25rem}
+  .queue-card.dragging{opacity:.6}
+  .queue-card.drop-target{outline:2px dashed #22c55e; outline-offset:4px}
+  .dup-badge{display:inline-flex;align-items:center;gap:6px;background:#fee2e2;color:#991b1b;border:1px solid #fecaca;border-radius:999px;padding:2px 8px;font-size:.75rem;margin-left:.5rem}
+  .dup-player { color: #b91c1c !important; font-weight: 700; }
+  .queue-player-line { display:inline; }
+
+  /* Stats modal */
+  .stats-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:9999}
+  .stats-modal{background:#fff;color:#111;max-width:900px;width:92vw;border-radius:14px;padding:16px;border:1px solid #d0d7de;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+  .stats-modal h3{margin:0 0 .5rem 0}
+  .stats-modal .row{display:flex;gap:1rem;flex-wrap:wrap}
+  .stats-modal .actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.5rem}
+  .sm-btn{border:1px solid #c2c8cf;background:#f9fafb;color:#333;padding:8px 12px;border-radius:8px;cursor:pointer;font-weight:600}
+  .sm-btn:hover{background:#edf2f7}
+  @media (max-width:640px){ .queue-inline-row{ grid-template-columns:1fr; } }
+</style>
+
+<script>
+(function(){
+  // ===== Emoji by skill =====
+  const skillEmoji = { "N":"🟢", "N+":"🔵", "BG":"🟣", "B":"🟤", "A":"🟠", "S":"🟡" };
+  const skillRank = { "N":1, "N+":2, "BG":3, "B":4, "A":5, "S":6 };
+
+  // ===== Open editor state =====
+  const OPEN_KEY = "queue_editor_open_ids";
+  function loadOpenSet(){ try{ return new Set(JSON.parse(localStorage.getItem(OPEN_KEY)||"[]")); }catch(e){ return new Set(); } }
+  function saveOpenSet(set){ try{ localStorage.setItem(OPEN_KEY, JSON.stringify(Array.from(set))); }catch(e){} }
+  const openSet = loadOpenSet();
+
+  // ===== Duplicate helpers =====
+  function getUsedAcross(except){
+    const used = new Set();
+    (appState.matchQueues||[]).forEach(q => {
+      (q.team1||[]).forEach((id, idx)=>{
+        if (except && except.queueId===q.id && except.teamNo===1 && except.slotIndex===idx) return;
+        used.add(id);
+      });
+      (q.team2||[]).forEach((id, idx)=>{
+        if (except && except.queueId===q.id && except.teamNo===2 && except.slotIndex===idx) return;
+        used.add(id);
+      });
+    });
+    return used;
+  }
+  function getDuplicateIdSet(){
+    const count = new Map();
+    (appState.matchQueues||[]).forEach(q => {
+      [...(q.team1||[]), ...(q.team2||[])].forEach(id => count.set(id, (count.get(id)||0)+1));
+    });
+    const dups = new Set(); for (const [id,c] of count.entries()){ if (c>1) dups.add(id); }
+    return dups;
+  }
+
+  // ===== Build dropdown options with search labels (emoji + skill) and no-dup rule =====
+  function playerLabel(p){
+    const em = skillEmoji[p?.skill] || "";
+    const nm = escapeHtml(p?.name || "???");
+    const sk = escapeHtml(p?.skill || "?");
+    return `${em} ${nm} (${sk})`;
+  }
+  function buildOptions(queue, teamNo, slotIndex){
+    const currentId = (teamNo === 1 ? queue.team1[slotIndex] : queue.team2[slotIndex]);
+    const excludeWithin = new Set([...queue.team1, ...queue.team2].filter(id => id !== currentId));
+    const usedAcross = getUsedAcross({queueId: queue.id, teamNo, slotIndex});
+    const candidates = (appState.players||[])
+      .filter(p => p.isCheckedIn && !p.isPlaying && !excludeWithin.has(p.id) && !usedAcross.has(p.id))
+      .sort((a,b) => a.name.localeCompare(b.name, 'th'));
+
+    const cur = PlayerUtils.getById(currentId);
+    const curLabel = cur ? playerLabel(cur) : '???';
+
+    let opts = `<option value="${currentId}" selected>• ${curLabel} — ปัจจุบัน</option>`;
+    if (candidates.length){
+      opts += `<option value="" disabled>────── เลือกแทน (ไม่ซ้ำคิวอื่น) ──────</option>`;
+      for (const p of candidates){
+        opts += `<option value="${p.id}">${playerLabel(p)}</option>`;
+      }
+    } else {
+      opts += `<option value="" disabled>ไม่มีผู้เล่นว่าง (ไม่ซ้ำคิวอื่น)</option>`;
+    }
+    return opts;
+  }
+
+  // ===== Controls bar (Reset / Auto-Match / Stats) =====
+  function ensureControlsBar(){
+    const listEl = document.getElementById('queue-list');
+    if (!listEl) return;
+    if (document.querySelector('.queue-controls')) return;
+    const bar = document.createElement('div');
+    bar.className = 'queue-controls';
+    bar.innerHTML = `
+      <button class="qc-btn danger" id="qc-reset">🔁 รีเซ็ตคิวทั้งหมด</button>
+      <button class="qc-btn success" id="qc-auto">⚡ จัดคิวอัตโนมัติ</button>
+      <button class="qc-btn primary" id="qc-stats">📊 สถิติผู้เล่น</button>
+    `;
+    listEl.parentNode.insertBefore(bar, listEl);
+    // Hook
+    bar.querySelector('#qc-reset').addEventListener('click', onResetQueues);
+    bar.querySelector('#qc-auto').addEventListener('click', onAutoMatch);
+    bar.querySelector('#qc-stats').addEventListener('click', openStats);
+  }
+
+  function onResetQueues(){
+    if (!confirm('ยืนยันล้างคิวทั้งหมด?')) return;
+    appState.matchQueues = [];
+    saveState();
+    App.renderQueueList();
+    showSuccess('ล้างคิวทั้งหมดแล้ว');
+  }
+
+  function onAutoMatch(){
+    // Candidates: checked-in, not playing, and not used in any queue
+    const usedAcross = getUsedAcross();
+    const candidates = (appState.players||[])
+      .filter(p => p.isCheckedIn && !p.isPlaying && !usedAcross.has(p.id))
+      .slice();
+    if (candidates.length < 4){
+      showWarning('ผู้เล่นว่างไม่พอสำหรับจัดคิวอัตโนมัติ');
+      return;
+    }
+    // Shuffle
+    for (let i=candidates.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1)); const t=candidates[i]; candidates[i]=candidates[j]; candidates[j]=t;
+    }
+    // Group by 4 and try to balance skills
+    function skillScore(s){ return skillRank[s] || 1; }
+    const newQueues = [];
+    let idCounter = Math.max(0, ...(appState.matchQueues||[]).map(q=>q.id||0)) + 1;
+    for (let i=0;i+3<candidates.length;i+=4){
+      const group = candidates.slice(i,i+4);
+      // sort by skill to split strong & weak
+      group.sort((a,b)=> (skillScore(b.skill)-skillScore(a.skill)));
+      // simple balance: strongest+weakest vs 2nd+3rd
+      const team1 = [group[0].id, group[3].id];
+      const team2 = [group[1].id, group[2].id];
+      newQueues.push({ id: idCounter++, team1, team2, createdAt: Date.now() });
+    }
+    if (!newQueues.length){
+      showWarning('ไม่สามารถจัดคิวอัตโนมัติได้');
+      return;
+    }
+    // Append
+    appState.matchQueues = [...(appState.matchQueues||[]), ...newQueues];
+    saveState();
+    App.renderQueueList();
+    showSuccess(`สร้างคิวอัตโนมัติ ${newQueues.length} คิว`);
+  }
+
+  // ===== Per-card UI =====
+  function ensureCardControls(cardEl, queue){
+    const header = cardEl.querySelector('.queue-card-header') || cardEl.firstElementChild || cardEl;
+    if (!header.querySelector(`.queue-card-toggle[data-qid="${queue.id}"]`)){
+      const btn = document.createElement('button');
+      btn.className = 'queue-card-toggle';
+      btn.dataset.qid = queue.id;
+      btn.textContent = '🖋️ แก้ไขรายชื่อ';
+      header.appendChild(btn);
+    }
+    if (!header.querySelector(`.queue-drag-handle[data-qid="${queue.id}"]`)){
+      const dragBtn = document.createElement('button');
+      dragBtn.className = 'queue-drag-handle';
+      dragBtn.dataset.qid = queue.id;
+      dragBtn.textContent = '↕ จัดเรียง';
+      header.appendChild(dragBtn);
+    }
+    if (!header.querySelector(`.dup-badge[data-qid="${queue.id}"]`)){
+      const dup = document.createElement('span');
+      dup.className = 'dup-badge';
+      dup.dataset.qid = queue.id;
+      dup.textContent = 'ชื่อซ้ำกับคิวอื่น';
+      dup.style.display = 'none';
+      header.appendChild(dup);
+    }
+    if (!cardEl.getAttribute('draggable')) cardEl.setAttribute('draggable', 'true');
+
+    let editor = cardEl.querySelector(`.queue-inline-editor[data-qid="${queue.id}"]`);
+    if (!editor){
+      editor = document.createElement('div');
+      editor.className = 'queue-inline-editor';
+      editor.dataset.qid = queue.id;
+      editor.innerHTML = `
+        <div class="queue-inline-title">
+          <span>แก้ไขรายชื่ออย่างรวดเร็ว</span>
+          <div class="queue-tools">
+            <button class="queue-tool-btn" data-action="swap-in" data-qid="${queue.id}">⇄ สลับในทีม</button>
+            <button class="queue-tool-btn" data-action="swap-cross" data-qid="${queue.id}">⇄ สลับข้ามทีม</button>
+          </div>
+        </div>
+        <div class="queue-inline-row">
+          <div class="queue-inline-group">
+            <div class="queue-inline-label">ทีม 1 - ผู้เล่น 1</div>
+            <select class="queue-inline-select" data-qid="${queue.id}" data-team="1" data-slot="0">${buildOptions(queue,1,0)}</select>
+          </div>
+          <div class="queue-inline-group">
+            <div class="queue-inline-label">ทีม 1 - ผู้เล่น 2</div>
+            <select class="queue-inline-select" data-qid="${queue.id}" data-team="1" data-slot="1">${buildOptions(queue,1,1)}</select>
+          </div>
+          <div class="queue-inline-group">
+            <div class="queue-inline-label">ทีม 2 - ผู้เล่น 1</div>
+            <select class="queue-inline-select" data-qid="${queue.id}" data-team="2" data-slot="0">${buildOptions(queue,2,0)}</select>
+          </div>
+          <div class="queue-inline-group">
+            <div class="queue-inline-label">ทีม 2 - ผู้เล่น 2</div>
+            <select class="queue-inline-select" data-qid="${queue.id}" data-team="2" data-slot="1">${buildOptions(queue,2,1)}</select>
+          </div>
+        </div>
+      `;
+      cardEl.appendChild(editor);
+    }
+    editor.style.display = openSet.has(String(queue.id)) ? 'block' : 'none';
+
+    // Initialize Choices on these selects
+    initChoices(editor.querySelectorAll('.queue-inline-select'));
+  }
+
+  // ===== Choices init (searchable) =====
+  function initChoices(nodeList){
+    if (!window.Choices) return; // CDN not loaded yet
+    nodeList.forEach(sel => {
+      if (sel._choicesInstance) return;
+      const ch = new Choices(sel, {
+        searchEnabled: true,
+        shouldSort: false,
+        itemSelectText: '',
+        removeItemButton: false,
+        placeholder: false,
+        searchPlaceholderValue: 'พิมพ์เพื่อค้นหา...',
+        position: 'bottom'
+      });
+      sel._choicesInstance = ch;
+    });
+  }
+
+  // ===== Duplicate marking & red highlight =====
+  function markDuplicates(){
+    const countById = new Map();
+    (appState.matchQueues||[]).forEach(q => {
+      [...(q.team1||[]), ...(q.team2||[])].forEach(id => {
+        countById.set(id, (countById.get(id) || 0) + 1);
+      });
+    });
+    (appState.matchQueues||[]).forEach(q => {
+      const hasDup = [...q.team1, ...q.team2].some(id => (countById.get(id) || 0) > 1);
+      const badge = document.querySelector(`.dup-badge[data-qid="${q.id}"]`);
+      if (badge) badge.style.display = hasDup ? 'inline-flex' : 'none';
+    });
+  }
+  function buildNamesHTML(ids, dupSet){
+    return ids.map((pid, idx) => {
+      const p = PlayerUtils.getById(pid);
+      const nm = escapeHtml(p?.name || '???');
+      const em = skillEmoji[p?.skill] || '';
+      const cls = dupSet.has(pid) ? 'dup-player' : '';
+      const span = `<span class="queue-player-line ${cls}">${em} ${nm}</span>`;
+      return idx === 0 ? span : ` <span>&amp;</span> ` + span;
+    }).join('');
+  }
+  function applyDuplicateHighlight(){
+    const listEl = document.getElementById('queue-list');
+    if (!listEl) return;
+    const cards = Array.from(listEl.children).filter(el => el.nodeType===1);
+    const dupSet = getDuplicateIdSet();
+
+    for (let i=0; i<(appState.matchQueues||[]).length && i<cards.length; i++){
+      const q = appState.matchQueues[i];
+      const card = cards[i];
+      const teamPlayerEls = card.querySelectorAll('.queue-team .queue-team-players');
+      if (teamPlayerEls && teamPlayerEls.length >= 2){
+        teamPlayerEls[0].innerHTML = buildNamesHTML(q.team1, dupSet);
+        teamPlayerEls[1].innerHTML = buildNamesHTML(q.team2, dupSet);
+        continue;
+      }
+      const teamSections = card.querySelectorAll('.queue-team');
+      if (teamSections && teamSections.length >= 2){
+        const ensureLine = (teamEl) => {
+          let line = teamEl.querySelector('.queue-team-players');
+          if (!line){
+            line = document.createElement('div');
+            line.className = 'queue-team-players';
+            teamEl.appendChild(line);
+          }
+          return line;
+        };
+        ensureLine(teamSections[0]).innerHTML = buildNamesHTML(q.team1, dupSet);
+        ensureLine(teamSections[1]).innerHTML = buildNamesHTML(q.team2, dupSet);
+      }
+    }
+  }
+
+  // ===== Drag & Drop reorder =====
+  let dragState = { srcIndex: null };
+  function installDrag(listEl){
+    if (listEl.__queueDnDInstalled) return;
+    listEl.addEventListener('dragstart', (e)=>{
+      const card = e.target.closest('.queue-card');
+      if (!card) return;
+      dragState.srcIndex = +card.dataset.queueIndex;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      try{ e.dataTransfer.setData('text/plain','queue-card'); }catch(_){}
+    });
+    listEl.addEventListener('dragend', (e)=>{
+      const card = e.target.closest('.queue-card');
+      if (card) card.classList.remove('dragging');
+      Array.from(listEl.children).forEach(el=> el.classList && el.classList.remove('drop-target'));
+      dragState.srcIndex = null;
+    });
+    listEl.addEventListener('dragover', (e)=>{
+      const overCard = e.target.closest('.queue-card');
+      if (!overCard) return;
+      e.preventDefault();
+      Array.from(listEl.children).forEach(el=> el.classList && el.classList.remove('drop-target'));
+      overCard.classList.add('drop-target');
+    });
+    listEl.addEventListener('drop', (e)=>{
+      const tgtCard = e.target.closest('.queue-card');
+      if (!tgtCard) return;
+      e.preventDefault();
+      const dstIndex = +tgtCard.dataset.queueIndex;
+      const srcIndex = dragState.srcIndex;
+      Array.from(listEl.children).forEach(el=> el.classList && el.classList.remove('drop-target'));
+      if (srcIndex==null || srcIndex===dstIndex) return;
+
+      const arr = (appState.matchQueues||[]).slice();
+      const [moved] = arr.splice(srcIndex,1);
+      arr.splice(dstIndex,0,moved);
+      appState.matchQueues = arr;
+      saveState();
+      App.renderQueueList();
+      showSuccess('ย้ายคิวเรียบร้อย');
+    });
+    listEl.__queueDnDInstalled = true;
+  }
+
+  // ===== Stats modal =====
+  function ensureStatsModal(){
+    if (document.querySelector('.stats-backdrop')) return;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'stats-backdrop';
+    backdrop.innerHTML = `
+      <div class="stats-modal">
+        <h3>สถิติผู้เล่น</h3>
+        <div class="row">
+          <canvas id="statsChart" height="280"></canvas>
+        </div>
+        <div class="actions">
+          <button class="sm-btn" id="sm-close">ปิด</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(backdrop);
+    backdrop.addEventListener('click', (e)=>{
+      if (e.target.classList.contains('stats-backdrop')) closeStats();
+    });
+    backdrop.querySelector('#sm-close').addEventListener('click', closeStats);
+  }
+  function openStats(){
+    ensureStatsModal();
+    const el = document.querySelector('.stats-backdrop');
+    el.style.display = 'flex';
+    renderStatsChart();
+  }
+  function closeStats(){
+    const el = document.querySelector('.stats-backdrop');
+    if (el) el.style.display = 'none';
+  }
+  function renderStatsChart(){
+    const ctx = document.getElementById('statsChart');
+    if (!ctx) return;
+    const hist = (appState.matchHistory||[]);
+    // Try to normalize: support shapes {playerId, playerName, matches} or entries per match {playerId, playerName}
+    const map = new Map();
+    hist.forEach(h => {
+      const name = h.playerName || h.name || (PlayerUtils.getById(h.playerId)?.name) || 'ไม่ทราบชื่อ';
+      const m = (typeof h.matches === 'number') ? h.matches : 1;
+      map.set(name, (map.get(name)||0) + m);
+    });
+    const labels = Array.from(map.keys());
+    const data = Array.from(map.values());
+
+    // Sort descending for better readability
+    const zipped = labels.map((l,i)=>({l, v:data[i]})).sort((a,b)=>b.v-a.v);
+    const sortedLabels = zipped.map(z=>z.l);
+    const sortedData = zipped.map(z=>z.v);
+
+    // Destroy previous if exists
+    if (window.__statsChart) { window.__statsChart.destroy(); }
+
+    window.__statsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: sortedLabels,
+        datasets: [{
+          label: 'จำนวนแมตช์',
+          data: sortedData
+        }]
+      },
+      options: {
+        indexAxis: 'y', // horizontal bars
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { beginAtZero: true, ticks: { precision: 0 } },
+          y: { ticks: { autoSkip: false } }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { enabled: true }
+        }
+      }
+    });
+  }
+
+  // ===== Event delegation =====
+  if (!window.__queueV13HandlersInstalled){
+    document.addEventListener('click', function(ev){
+      const btn = ev.target.closest('.queue-card-toggle');
+      if (btn){
+        const card = btn.closest('.queue-card') || btn.closest('*');
+        const qid = String(btn.dataset.qid);
+        const editor = (card && card.querySelector(`.queue-inline-editor[data-qid="${qid}"]`)) ||
+                       document.querySelector(`.queue-inline-editor[data-qid="${qid}"]`);
+        if (!editor) return;
+        const willShow = (editor.style.display === 'none' || editor.style.display === '');
+        editor.style.display = willShow ? 'block' : 'none';
+        if (willShow) openSet.add(qid); else openSet.delete(qid);
+        saveOpenSet(openSet);
+        return;
+      }
+      const sw = ev.target.closest('.queue-tool-btn');
+      if (sw){
+        const qid = +sw.dataset.qid;
+        const q = (appState.matchQueues||[]).find(x => x.id === qid);
+        if (!q){ showError('ไม่พบคิวที่ระบุ'); return; }
+        const action = sw.dataset.action;
+        if (action==='swap-in'){
+          if (q.team1.length>=2){ const t=q.team1[0]; q.team1[0]=q.team1[1]; q.team1[1]=t; }
+          if (q.team2.length>=2){ const t2=q.team2[0]; q.team2[0]=q.team2[1]; q.team2[1]=t2; }
+          saveState(); App.renderQueueList(); showSuccess('สลับในทีมเรียบร้อย');
+        }else if(action==='swap-cross'){
+          if (q.team1.length>=2 && q.team2.length>=2){
+            const t0=q.team1[0]; q.team1[0]=q.team2[0]; q.team2[0]=t0;
+            const t1=q.team1[1]; q.team1[1]=q.team2[1]; q.team2[1]=t1;
+            saveState(); App.renderQueueList(); showSuccess('สลับข้ามทีมเรียบร้อย');
+          } else { showWarning('จำนวนผู้เล่นไม่ครบสำหรับการสลับข้ามทีม'); }
+        }
+        return;
+      }
+    });
+
+    document.addEventListener('change', function(ev){
+      const sel = ev.target.closest('.queue-inline-select');
+      if (!sel) return;
+      const qid = +sel.dataset.qid, teamNo = +sel.dataset.team, slot = +sel.dataset.slot;
+      const q = (appState.matchQueues||[]).find(x => x.id === qid); if (!q){ showError('ไม่พบคิวที่ระบุ'); return; }
+      const currentId = (teamNo===1 ? q.team1[slot] : q.team2[slot]);
+      const val = sel.value; if (!val) return;
+      const newId = parseInt(val,10); if (Number.isNaN(newId)) return;
+
+      const usedAcross = getUsedAcross({queueId: q.id, teamNo, slotIndex: slot});
+      if (usedAcross.has(newId)){
+        showError('ผู้เล่นคนนี้อยู่ในคิวอื่นแล้ว');
+        // Revert selection (also Choices UI if present)
+        if (sel._choicesInstance){
+          sel._choicesInstance.setChoiceByValue(String(currentId));
+        } else {
+          sel.value = String(currentId);
+        }
+        return;
+      }
+      if (teamNo===1) q.team1[slot] = newId; else q.team2[slot] = newId;
+      saveState(); App.renderQueueList(); showSuccess('อัปเดตรายชื่อในคิวแล้ว');
+    });
+
+    window.__queueV13HandlersInstalled = true;
+  }
+
+  // ===== Enhance on render =====
+  function enhance(){
+    const listEl = document.getElementById('queue-list');
+    if (!listEl) return;
+    ensureControlsBar();
+    const cards = Array.from(listEl.children).filter(el => el.nodeType===1);
+    for (let i=0; i<(appState.matchQueues||[]).length && i<cards.length; i++){
+      const card = cards[i];
+      ensureCardControls(card, appState.matchQueues[i]);
+      card.dataset.queueIndex = i;
+      card.classList.add('queue-card');
+    }
+    installDrag(listEl);
+    markDuplicates();
+    applyDuplicateHighlight();
+  }
+
+  // ===== Hook into App.renderQueueList =====
+  const __origRender = App.renderQueueList.bind(App);
+  App.renderQueueList = function(){
+    __origRender();
+    try{ enhance(); }catch(e){ console.error('enhance v13 error', e); }
+  };
+
+  // First pass (in case currently on queue tab)
+  setTimeout(()=>{ try{ enhance(); }catch(e){} }, 0);
+
+  // Expose for debug (optional)
+  window.__queueEnhanceV13 = { onAutoMatch, onResetQueues, openStats };
+})();
+</script>
+<!-- ==== /Queue Editors v13 ==== -->
+
+
+<!-- ==== Consume queue on play (wrap App.callQueueToPlay) ==== -->
+<script>
+(function(){
+  if (!window.__consumeOnPlayInstalled){
+    const __origCall = App.callQueueToPlay ? App.callQueueToPlay.bind(App) : null;
+    App.callQueueToPlay = function(queueId){
+      // 1) Run original behavior first (assign to court / mark playing, etc.)
+      try {
+        if (typeof __origCall === 'function') __origCall(queueId);
+      } catch(e){
+        console.error('Original callQueueToPlay error:', e);
+      }
+
+      // 2) Remove the queue from waiting list if it still exists
+      try {
+        const arr = appState.matchQueues || [];
+        const idx = arr.findIndex(q => q && q.id === queueId);
+        if (idx >= 0) {
+          arr.splice(idx, 1);
+          appState.matchQueues = arr;
+          saveState();
+          showSuccess('เรียกลงเล่นแล้ว – ลบคิวออกจากรายการรอ');
+        }
+      } catch(e){
+        console.error('consume-on-play removal error:', e);
+      }
+
+      // 3) Re-render the queue list (and let enhancers re-attach)
+      try {
+        if (typeof App.renderQueueList === 'function') App.renderQueueList();
+      } catch(e){
+        console.error('render after consume error:', e);
+      }
+    };
+    window.__consumeOnPlayInstalled = true;
+  }
+})();
+</script>
+
+
+<!-- ==== Auto-log match history on play (v15) ==== -->
+<script>
+(function(){
+  if (!window.__autoLogOnPlayInstalled){
+    const __prevCall = App.callQueueToPlay ? App.callQueueToPlay.bind(App) : null;
+    App.callQueueToPlay = function(queueId){
+      // Snapshot queue before it's removed by previous wrapper
+      let snapshot = null;
+      try{
+        const q = (appState.matchQueues || []).find(x => x && x.id === queueId);
+        if (q){
+          snapshot = JSON.parse(JSON.stringify(q));
+        }
+      }catch(e){ console.warn('snapshot error', e); }
+
+      // Run previous wrapped behavior (assign court + remove from waiting)
+      if (typeof __prevCall === 'function'){
+        try{ __prevCall(queueId); }catch(e){ console.error('prev callQueueToPlay error', e); }
+      }
+
+      // Append to matchHistory per player for stats
+      try{
+        if (snapshot){
+          if (!Array.isArray(appState.matchHistory)) appState.matchHistory = [];
+          const allIds = [...(snapshot.team1 || []), ...(snapshot.team2 || [])];
+          allIds.forEach(id => {
+            const p = PlayerUtils.getById(id);
+            appState.matchHistory.push({
+              playerId: id,
+              playerName: p ? p.name : ('#'+id),
+              matches: 1,
+              timestamp: Date.now(),
+              queueId: snapshot.id,
+              source: 'callQueueToPlay'
+            });
+          });
+          saveState();
+          // If stats modal is open, try to refresh chart
+          if (document.querySelector('.stats-backdrop') && document.querySelector('.stats-backdrop').style.display === 'flex'){
+            if (window.__statsChart){ try{ window.__statsChart.destroy(); }catch(e){} }
+            if (typeof renderStatsChart === 'function'){ renderStatsChart(); }
+          }
+        }
+      }catch(e){ console.error('auto-log history error', e); }
+    };
+    window.__autoLogOnPlayInstalled = true;
+  }
+})();
+</script>
+
 </body>
 </html>
