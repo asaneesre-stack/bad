@@ -1228,7 +1228,9 @@
 
                 <h3>ล้างข้อมูลผู้เล่นทั้งหมด</h3>
                 <p style="color: var(--danger); font-weight: bold;">การกระทำนี้จะลบผู้เล่นทั้งหมดออกจากระบบ (แต่ข้อมูลประวัติการเล่นยังคงอยู่)</p>
-                <button class="danger" onclick="App.clearAllPlayers()">เคลียร์ผู้เล่นทั้งหมด</button>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="danger" onclick="App.clearAllPlayers()">เคลียร์ผู้เล่นทั้งหมด</button>
+<button class="warning" onclick="App.clearAllHistory()">🧹 ล้างประวัติผู้เล่นทั้งหมด</button>
+</div>
             </div>
         </section>
     </main>
@@ -1770,6 +1772,7 @@
             listEl.innerHTML = '';
 
             const playerGameCounts = {};
+window.App = App; // ✅ ทำให้ App เข้าถึงได้จากปุ่ม onclick
             appState.players.forEach(p => {
                 playerGameCounts[p.id] = PlayerUtils.getGameCount(p.id);
             });
@@ -2067,6 +2070,26 @@
                 showSuccess('ลบข้อมูลผู้เล่นทั้งหมดสำเร็จ');
             }
         },
+
+        // ✅ ล้างเฉพาะประวัติผู้เล่น แต่คงรายชื่อไว้
+        clearAllHistory: function() {
+          if (!appState || !appState.history) {
+            alert("ระบบยังไม่พร้อม กรุณารีเฟรชหน้า");
+            return;
+          }
+          if (!confirm("คุณแน่ใจว่าต้องการล้างประวัติการเล่นทั้งหมด?\nข้อมูลสถิติและแมตช์จะหายถาวร แต่รายชื่อจะยังอยู่")) return;
+          for (const id in appState.history) {
+            if (Array.isArray(appState.history[id]?.games)) {
+              appState.history[id].games = [];
+            }
+          }
+          appState.matches = [];
+          if (typeof saveState === "function") saveState();
+          if (typeof this.renderDashboard === "function") this.renderDashboard();
+          if (typeof this.renderPlayerList === "function") this.renderPlayerList();
+          if (typeof showSuccess === "function") showSuccess("ล้างประวัติผู้เล่นทั้งหมดแล้ว ✅");
+        },
+    
 
         /**
          * Check-in functions
@@ -4076,6 +4099,45 @@ if (btnViewQueue) {
     window.__autoLogOnPlayInstalled = true;
   }
 })();
+</script>
+
+
+
+
+
+<script>
+window.addEventListener("load", function() {
+  if (!window.App) {
+    console.warn("App ยังไม่ถูกประกาศใน window");
+    return;
+  }
+
+  // ✅ ฟังก์ชันล้างประวัติผู้เล่นทั้งหมด
+  window.App.clearAllHistory = function() {
+    if (!window.appState) {
+      alert("ระบบยังไม่พร้อม กรุณารีเฟรชหน้า");
+      return;
+    }
+    if (!confirm("คุณแน่ใจว่าต้องการลบประวัติการเล่นทั้งหมด?
+ข้อมูลสถิติและแมตช์จะหายถาวร แต่รายชื่อจะยังอยู่")) return;
+
+    try {
+      for (const playerId in appState.history) {
+        if (appState.history[playerId] && Array.isArray(appState.history[playerId].games)) {
+          appState.history[playerId].games = [];
+        }
+      }
+      appState.matches = [];
+      if (typeof saveState === "function") saveState();
+      if (typeof App.renderDashboard === "function") App.renderDashboard();
+      if (typeof App.renderPlayerList === "function") App.renderPlayerList();
+      if (typeof showSuccess === "function") showSuccess("ล้างประวัติผู้เล่นทั้งหมดแล้ว ✅");
+    } catch (e) {
+      console.error(e);
+      alert("เกิดข้อผิดพลาดในการล้างประวัติ");
+    }
+  };
+});
 </script>
 
 </body>
