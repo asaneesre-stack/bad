@@ -4140,5 +4140,75 @@ window.addEventListener("load", function() {
 });
 </script>
 
+
+<!-- ======= Game Count Mirror Sync (from Check-In) ======= -->
+<script>
+(function(){
+  console.log('[SYNC] Mirror from Check-In initialized');
+
+  function norm(s){ return (s||'').toString().trim(); }
+
+  function getCheckInCounts(){
+    const data = {};
+    document.querySelectorAll('.check-in-card, .checkin .check-in-card, #check-in-list .check-in-card').forEach(card=>{
+      const nameEl = card.querySelector('.player-name, .player');
+      const countEl = card.querySelector('.status-count, .player-skill, small');
+      if (!nameEl) return;
+      const name = norm(nameEl.textContent).replace(/\(\s*\d+\s*เกม\)$/,'').trim();
+      if (!name) return;
+      // Extract count number
+      let count = 0;
+      if (countEl) {
+        const t = norm(countEl.textContent);
+        const m = t.match(/(\d+)\s*เกม/);
+        if (m) count = parseInt(m[1]);
+        else if (!isNaN(parseInt(t))) count = parseInt(t);
+      }
+      // fallback scan in whole card
+      if (!count) {
+        const m2 = norm(card.textContent).match(/(\d+)\s*เกม/);
+        if (m2) count = parseInt(m2[1]);
+      }
+      data[name] = count;
+    });
+    return data;
+  }
+
+  function updateQueueCounts(){
+    const counts = getCheckInCounts();
+    if (!Object.keys(counts).length) return;
+
+    document.querySelectorAll('.queue-player-line, .queue-player-name, .queue-player, .queue-card .queue-team-players span, .queue-card .queue-team-players div').forEach(el=>{
+      const txt = norm(el.textContent).replace(/\(\s*\d+\s*เกม\)$/,'').trim();
+      if (!txt) return;
+      for (const [name,count] of Object.entries(counts)){
+        if (txt.includes(name)){
+          el.textContent = `${txt} (${count} เกม)`;
+          break;
+        }
+      }
+    });
+  }
+
+  const runSync = ()=>{
+    updateQueueCounts();
+  };
+
+  // Observe DOM changes to auto-update
+  const obsTargets = ['#queue-list', '.queue-section', 'main'];
+  obsTargets.forEach(sel=>{
+    const el = document.querySelector(sel);
+    if (el){
+      const mo = new MutationObserver(()=> setTimeout(runSync,150));
+      mo.observe(el,{childList:true,subtree:true});
+    }
+  });
+
+  // periodic fallback
+  setInterval(runSync, 3000);
+  document.addEventListener('DOMContentLoaded', ()=>setTimeout(runSync,1000));
+})();
+</script>
+
 </body>
 </html>
