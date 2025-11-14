@@ -2412,6 +2412,26 @@ if (btnViewQueue) {
         },
 
         renderQueueList: function() {
+// --- LOCAL GAME COUNT CACHE (A: Render-queue only) ---
+const __localGameCount = {};
+try {
+    if (appState && Array.isArray(appState.players)) {
+        for (let pi = 0; pi < appState.players.length; pi++) {
+            const pp = appState.players[pi];
+            try {
+                // call original getter once per player
+                __localGameCount[pp.id] = (typeof PlayerUtils !== 'undefined' && typeof PlayerUtils.getGameCount === 'function') ? PlayerUtils.getGameCount(pp.id) : 0;
+            } catch(e) {
+                __localGameCount[pp.id] = 0;
+            }
+        }
+    }
+} catch(e){
+    // fail-safe
+}
+function __getLocalCount(id){ return __localGameCount[id] !== undefined ? __localGameCount[id] : 0; }
+// --- end local cache ---
+
             const listEl = document.getElementById('queue-list');
             listEl.innerHTML = '';
 
