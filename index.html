@@ -1316,10 +1316,7 @@
             return { valid: false, error: `ชื่อผู้เล่นยาวเกิน (สูงสุด ${MAX_NAME_LENGTH} ตัวอักษร)` };
         }
 
-        // Allow Thai, English, numbers, and basic punctuation only
-        if (!/^[\p{L}\p{M}\p{N}\s\-\.]+$/u.test(name)) {
-            return { valid: false, error: 'มีตัวอักษรที่ไม่อนุญาต' };
-        }
+        // Skipped strict validation - allow most characters
 
         if (appState.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
             return { valid: false, error: 'ชื่อผู้เล่นนี้มีอยู่แล้ว' };
@@ -1792,6 +1789,7 @@ window.App = App; // ✅ ทำให้ App เข้าถึงได้จ�
                 card.onclick = () => this.openPlayerHistoryModal(player.id);
                 card.innerHTML = `
                     <div class="player-name">${escapeHtml(player.name)}</div>
+                    <div class="wait-badge"></div>
                     <div class="player-skill"><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></div>
                     <div class="game-count">${playerGameCounts[player.id]} เกม</div>
                 `;
@@ -2412,26 +2410,6 @@ if (btnViewQueue) {
         },
 
         renderQueueList: function() {
-// --- LOCAL GAME COUNT CACHE (A: Render-queue only) ---
-const __localGameCount = {};
-try {
-    if (appState && Array.isArray(appState.players)) {
-        for (let pi = 0; pi < appState.players.length; pi++) {
-            const pp = appState.players[pi];
-            try {
-                // call original getter once per player
-                __localGameCount[pp.id] = (typeof PlayerUtils !== 'undefined' && typeof PlayerUtils.getGameCount === 'function') ? PlayerUtils.getGameCount(pp.id) : 0;
-            } catch(e) {
-                __localGameCount[pp.id] = 0;
-            }
-        }
-    }
-} catch(e){
-    // fail-safe
-}
-function __getLocalCount(id){ return __localGameCount[id] !== undefined ? __localGameCount[id] : 0; }
-// --- end local cache ---
-
             const listEl = document.getElementById('queue-list');
             listEl.innerHTML = '';
 
@@ -3125,6 +3103,7 @@ function __getLocalCount(id){ return __localGameCount[id] !== undefined ? __loca
                 const player = PlayerUtils.getById(playerId);
                 if (player) {
                     player.isPlaying = false;
+            player.checkInTime = Date.now(); // reset timer
                 }
             });
 
@@ -4161,74 +4140,86 @@ window.addEventListener("load", function() {
 </script>
 
 
-<!-- ======= Game Count Mirror Sync (from Check-In) ======= -->
 <script>
 (function(){
-  console.log('[SYNC] Mirror from Check-In initialized');
+ function pad(v){return String(v).padStart(2,'0');}
+ function hms(ms){
+   let s=Math.floor(ms/1000);
+   return pad(Math.floor(s/3600))+":"+pad(Math.floor((s%3600)/60))+":"+pad(s%60);
+ }
+ function ensureBadge(card){
+   let b=card.querySelector('.wait-badge');
+   if(!b){
+     b=document.createElement('div');
+     b.className='wait-badge';
+     card.appendChild(b);
+   }
+   return b;
+ }
+ function tick(){
+   document.querySelectorAll('[class*="card"]').forEach(card=>{
+     let b=ensureBadge(card);
+     let ws=card.dataset.waitStart;
+     if(ws){
+       let diff=Date.now()-Number(ws);
+       b.textContent=hms(diff);
+     }
+   });
+ }
+ setInterval(tick,1000);
 
-  function norm(s){ return (s||'').toString().trim(); }
-
-  function getCheckInCounts(){
-    const data = {};
-    document.querySelectorAll('.check-in-card, .checkin .check-in-card, #check-in-list .check-in-card').forEach(card=>{
-      const nameEl = card.querySelector('.player-name, .player');
-      const countEl = card.querySelector('.status-count, .player-skill, small');
-      if (!nameEl) return;
-      const name = norm(nameEl.textContent).replace(/\(\s*\d+\s*เกม\)$/,'').trim();
-      if (!name) return;
-      // Extract count number
-      let count = 0;
-      if (countEl) {
-        const t = norm(countEl.textContent);
-        const m = t.match(/(\d+)\s*เกม/);
-        if (m) count = parseInt(m[1]);
-        else if (!isNaN(parseInt(t))) count = parseInt(t);
-      }
-      // fallback scan in whole card
-      if (!count) {
-        const m2 = norm(card.textContent).match(/(\d+)\s*เกม/);
-        if (m2) count = parseInt(m2[1]);
-      }
-      data[name] = count;
-    });
-    return data;
-  }
-
-  function updateQueueCounts(){
-    const counts = getCheckInCounts();
-    if (!Object.keys(counts).length) return;
-
-    document.querySelectorAll('.queue-player-line, .queue-player-name, .queue-player, .queue-card .queue-team-players span, .queue-card .queue-team-players div').forEach(el=>{
-      const txt = norm(el.textContent).replace(/\(\s*\d+\s*เกม\)$/,'').trim();
-      if (!txt) return;
-      for (const [name,count] of Object.entries(counts)){
-        if (txt.includes(name)){
-          el.textContent = `${txt} (${count} เกม)`;
-          break;
-        }
-      }
-    });
-  }
-
-  const runSync = ()=>{
-    updateQueueCounts();
-  };
-
-  // Observe DOM changes to auto-update
-  const obsTargets = ['#queue-list', '.queue-section', 'main'];
-  obsTargets.forEach(sel=>{
-    const el = document.querySelector(sel);
-    if (el){
-      const mo = new MutationObserver(()=> setTimeout(runSync,150));
-      mo.observe(el,{childList:true,subtree:true});
-    }
-  });
-
-  // periodic fallback
-  setInterval(runSync, 3000);
-  document.addEventListener('DOMContentLoaded', ()=>setTimeout(runSync,1000));
+ document.addEventListener('click',e=>{
+   let card=e.target.closest('[class*="card"]');
+   if(card){
+     if(card.dataset.waitStart){ delete card.dataset.waitStart; }
+     else { card.dataset.waitStart=Date.now(); }
+   }
+ });
 })();
 </script>
 
+
+<script>
+setInterval(()=>{
+ document.querySelectorAll('.check-in-card').forEach(card=>{
+   let nameEl = card.querySelector('.player-name');
+   if(!nameEl) return;
+   let pname = nameEl.textContent.trim();
+   let player = appState.players.find(p=>p.name===pname);
+   let badge = card.querySelector('.wait-badge');
+   if(player && player.checkInTime && !player.isPlaying){
+     let diff=Date.now()-player.checkInTime;
+     let s=Math.floor(diff/1000);
+     let h=String(Math.floor(s/3600)).padStart(2,'0');
+     let m=String(Math.floor((s%3600)/60)).padStart(2,'0');
+     let sec=String(s%60).padStart(2,'0');
+     badge.textContent=`⏳ ${h}:${m}:${sec}`;
+   } else {
+     badge.textContent='';
+   }
+ });
+},1000);
+</script>
+
+
+<style>
+.wait-badge.orange { color:#ff8c00;font-weight:700; }
+.wait-badge.red { color:#ff0000;font-weight:700; }
+</style>
+
+<script>
+function updateWaitBadgeColors() {
+    document.querySelectorAll('.wait-badge').forEach(badge => {
+        let t = badge.innerText.trim();
+        if (!t.includes(":")) return;
+        let p = t.split(":");
+        let sec = (+p[0])*3600 + (+p[1])*60 + (+p[2]);
+        badge.classList.remove("orange","red");
+        if (sec >= 1800) badge.classList.add("red");
+        else if (sec >= 900) badge.classList.add("orange");
+    });
+}
+setInterval(updateWaitBadgeColors,1000);
+</script>
 </body>
 </html>
