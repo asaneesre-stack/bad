@@ -1058,6 +1058,10 @@
             <div class="card">
                 <h2>เช็คอินผู้เล่น</h2>
                 <p>กดที่ชื่อผู้เล่นเพื่อเช็คอิน (ผู้เล่นที่เช็คอินแล้วจะยังคงสถานะนั้นหลังจบเกม 🏸 ผู้เล่นที่กำลังลงเล่นจะมีไอคอน 🏸)</p>
+                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
+                    <button class="success" onclick="App.checkInAll()" style="min-height:40px;font-size:0.9rem;">✅ เช็คอินทั้งหมด</button>
+                    <button class="secondary" onclick="App.uncheckInAll()" style="min-height:40px;font-size:0.9rem;">❌ ยกเลิกเช็คอินทั้งหมด</button>
+                </div>
                 <div id="check-in-list" class="check-in-grid"></div>
                 <div style="margin-top: 2rem; text-align: center;">
                     <button class="danger" onclick="App.resetAllCheckIns()">🔄 รีเซ็ตการเช็คอินทั้งหมด</button>
@@ -1247,6 +1251,24 @@
         </div>
     </div>
 
+    <!-- EDIT MATCH PLAYERS MODAL -->
+    <div id="edit-match-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="edit-match-modal-title">✏️ แก้ไขรายชื่อผู้เล่นในเกม</h2>
+                <button class="close-modal" onclick="document.getElementById('edit-match-modal').classList.remove('active')">✕</button>
+            </div>
+            <p style="color:#e67e22;font-size:0.88rem;background:#fff8e1;border-radius:8px;padding:0.75rem;margin-bottom:1rem;">
+                ⚠️ เปลี่ยนเฉพาะชื่อที่ไม่ตรงกับผู้เล่นจริงในสนาม — จำนวนเกมจะอัปเดตตามชื่อที่แก้ไข
+            </p>
+            <div id="edit-match-slots"></div>
+            <div style="display:flex;gap:0.75rem;margin-top:1.5rem;justify-content:center;flex-wrap:wrap;">
+                <button class="success" onclick="App.confirmEditMatchPlayers()" id="btn-confirm-edit-match">✅ บันทึกการแก้ไข</button>
+                <button class="secondary" onclick="document.getElementById('edit-match-modal').classList.remove('active')">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
 <script>
     /**
      * ========================================================
@@ -1297,9 +1319,9 @@
      */
     function sanitizeInput(input) {
         const trimmed = String(input || '').trim();
-        // Remove null bytes and other control characters
-        const cleaned = trimmed.replace(/[\x00-\x1F\x7F]/g, '');
-        return escapeHtml(cleaned);
+        // Remove null bytes and control characters only — do NOT HTML-escape
+        // Names are stored raw and escaped only at render time via escapeHtml()
+        return trimmed.replace(/[\x00-\x1F\x7F]/g, '');
     }
 
     /**
@@ -1316,11 +1338,8 @@
             return { valid: false, error: `ชื่อผู้เล่นยาวเกิน (สูงสุด ${MAX_NAME_LENGTH} ตัวอักษร)` };
         }
 
-        // Skipped strict validation - allow most characters
-
-        // Compare against stored names (which may be HTML-escaped) using a normalized comparison
-        const escapedName = escapeHtml(name);
-        if (appState.players.some(p => p.name.toLowerCase() === escapedName.toLowerCase())) {
+        // Compare against stored raw names (case-insensitive)
+        if (appState.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
             return { valid: false, error: 'ชื่อผู้เล่นนี้มีอยู่แล้ว' };
         }
 
@@ -2115,6 +2134,39 @@
             this.renderDashboard();
         },
 
+        checkInAll: function() {
+            const notCheckedIn = appState.players.filter(p => !p.isCheckedIn && !p.isPlaying);
+            if (notCheckedIn.length === 0) {
+                showWarning('ทุกคนเช็คอินหมดแล้ว');
+                return;
+            }
+            notCheckedIn.forEach(p => {
+                p.isCheckedIn = true;
+                p.checkInTime = Date.now();
+            });
+            saveState();
+            this.renderCheckInList();
+            this.renderDashboard();
+            showSuccess(`เช็คอิน ${notCheckedIn.length} คนสำเร็จ`);
+        },
+
+        uncheckInAll: function() {
+            const canUncheck = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+            if (canUncheck.length === 0) {
+                showWarning('ไม่มีผู้เล่นที่เช็คอินอยู่');
+                return;
+            }
+            if (!confirm(`ยกเลิกเช็คอิน ${canUncheck.length} คน (ที่ไม่ได้กำลังเล่นอยู่)?`)) return;
+            canUncheck.forEach(p => {
+                p.isCheckedIn = false;
+                delete p.checkInTime;
+            });
+            saveState();
+            this.renderCheckInList();
+            this.renderDashboard();
+            showSuccess(`ยกเลิกเช็คอิน ${canUncheck.length} คนสำเร็จ`);
+        },
+
         resetAllCheckIns: function() {
             if (appState.players.some(p => p.isPlaying)) {
                 showError('ไม่สามารถรีเซ็ตได้ มีผู้เล่นบางคนกำลังแข่ง');
@@ -2169,15 +2221,25 @@
                 const card = document.createElement('div');
                 card.classList.add('check-in-card');
                 card.dataset.playerId = player.id;
-                if (player.isPlaying) card.classList.add('playing-now');
+
+                if (player.isPlaying) {
+                    card.classList.add('playing-now');
+                    card.style.borderColor = 'var(--accent)';
+                    card.style.borderWidth = '3px';
+                } else if (player.isCheckedIn) {
+                    card.classList.add('checked-in');
+                    card.style.borderColor = 'var(--success)';
+                    card.style.borderWidth = '3px';
+                } else {
+                    card.style.borderColor = '#e0e0e0';
+                    card.style.borderWidth = '2px';
+                    card.style.opacity = '0.7';
+                }
 
                 card.onclick = () => this.toggleCheckIn(player.id);
 
                 let statusIcon = player.isCheckedIn ? '✅' : '❌';
-                if (player.isPlaying) {
-                    statusIcon = '🏸';
-                    card.classList.remove('checked-in');
-                }
+                if (player.isPlaying) statusIcon = '🏸';
 
                 card.innerHTML = `
                     <div class="player-name">${escapeHtml(player.name)}</div>
@@ -2437,8 +2499,17 @@ if (btnViewQueue) {
             }
 
             appState.matchQueues.forEach((queue, index) => {
-                const team1Names = queue.team1.map(id => escapeHtml(PlayerUtils.getById(id)?.name || '???')).join(' & ');
-                const team2Names = queue.team2.map(id => escapeHtml(PlayerUtils.getById(id)?.name || '???')).join(' & ');
+                const buildPlayerLine = (id) => {
+                    const p = PlayerUtils.getById(id);
+                    const name = escapeHtml(p?.name || '???');
+                    const em = (window.__queueEnhanceV13 ? '' : '');
+                    const games = PlayerUtils.getGameCount(id);
+                    const pill = `<span style="display:inline-block;background:#e8f4fd;color:#1a6fa8;font-size:0.68rem;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:5px;vertical-align:middle;white-space:nowrap;">${games}→<strong>${games+1}</strong></span>`;
+                    return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;"><span style="font-weight:600;">${name}</span>${pill}</div>`;
+                };
+
+                const team1Html = queue.team1.map(buildPlayerLine).join('');
+                const team2Html = queue.team2.map(buildPlayerLine).join('');
 
                 const team1Skills = queue.team1.map(id => PlayerUtils.getById(id)?.skill || '?');
                 const team2Skills = queue.team2.map(id => PlayerUtils.getById(id)?.skill || '?');
@@ -2462,13 +2533,13 @@ if (btnViewQueue) {
                     <div class="queue-card-teams">
                         <div class="queue-team">
                             <h4>ทีม 1</h4>
-                            <div class="queue-team-players">${team1Names}</div>
+                            <div class="queue-team-players">${team1Html}</div>
                             <div class="queue-team-skills">${team1Skills.map(s => `<span class="skill-badge skill-${getSkillClass(s)}">${escapeHtml(s)}</span>`).join(' ')}</div>
                         </div>
                         <div class="queue-vs">VS</div>
                         <div class="queue-team">
                             <h4>ทีม 2</h4>
-                            <div class="queue-team-players">${team2Names}</div>
+                            <div class="queue-team-players">${team2Html}</div>
                             <div class="queue-team-skills">${team2Skills.map(s => `<span class="skill-badge skill-${getSkillClass(s)}">${escapeHtml(s)}</span>`).join(' ')}</div>
                         </div>
                     </div>
@@ -2673,9 +2744,12 @@ if (btnViewQueue) {
                 return;
             }
 
-            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+            const inQueueIds = new Set(
+                (appState.matchQueues || []).flatMap(q => [...q.team1, ...q.team2])
+            );
+            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying && !inQueueIds.has(p.id));
             if (checkedInPlayers.length < MIN_PLAYERS_FOR_MATCH) {
-                showError(`ต้องมีผู้เล่นที่เช็คอินแล้วและว่างอยู่ ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
+                showError(`ต้องมีผู้เล่นที่เช็คอินแล้ว ว่าง และไม่ได้อยู่ในคิว ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
                 return;
             }
 
@@ -2832,9 +2906,12 @@ if (btnViewQueue) {
         },
 
         queueMatchStart: function() {
-            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+            const inQueueIds = new Set(
+                (appState.matchQueues || []).flatMap(q => [...q.team1, ...q.team2])
+            );
+            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying && !inQueueIds.has(p.id));
             if (checkedInPlayers.length < MIN_PLAYERS_FOR_MATCH) {
-                showError(`ต้องมีผู้เล่นที่เช็คอิน ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
+                showError(`ต้องมีผู้เล่นที่เช็คอินและไม่ได้อยู่ในคิว ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
                 return;
             }
 
@@ -2866,9 +2943,12 @@ if (btnViewQueue) {
          * Create random queue
          */
         queueRandomStart: function() {
-            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
+            const inQueueIds = new Set(
+                (appState.matchQueues || []).flatMap(q => [...q.team1, ...q.team2])
+            );
+            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying && !inQueueIds.has(p.id));
             if (checkedInPlayers.length < MIN_PLAYERS_FOR_MATCH) {
-                showError(`ต้องมีผู้เล่นที่เช็คอิน ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
+                showError(`ต้องมีผู้เล่นที่เช็คอินและไม่ได้อยู่ในคิว ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
                 return;
             }
 
@@ -2898,6 +2978,9 @@ if (btnViewQueue) {
          * Manual queue builder (choose exact pairs then add to queue)
          */
         queueManualStart: function() {
+            const inQueueIds = new Set(
+                (appState.matchQueues || []).flatMap(q => [...q.team1, ...q.team2])
+            );
             const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying);
             if (checkedInPlayers.length < MIN_PLAYERS_FOR_MATCH) {
                 showError(`ต้องมีผู้เล่นที่เช็คอิน ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
@@ -3012,11 +3095,16 @@ if (btnViewQueue) {
             }
 
             appState.matches.forEach(match => {
-                const team1Names = match.team1.map(id => PlayerUtils.getById(id)?.name || '???').join(' & ');
-                const team2Names = match.team2.map(id => PlayerUtils.getById(id)?.name || '???').join(' & ');
-
-                const team1Skills = match.team1.map(id => PlayerUtils.getById(id)?.skill || '?');
-                const team2Skills = match.team2.map(id => PlayerUtils.getById(id)?.skill || '?');
+                const renderTeamPlayers = (ids, skills) => ids.map((id, i) => {
+                    const name = escapeHtml(PlayerUtils.getById(id)?.name || '???');
+                    const skill = skills[i];
+                    const games = PlayerUtils.getGameCount(id);
+                    return `<div style="margin:4px 0;">
+                        <span onclick="App.openPlayerHistoryModal(${id})" style="cursor:pointer;font-weight:600;border-bottom:1px dashed var(--secondary);color:var(--primary);" title="ดูประวัติ ${name}">${name}</span>
+                        <span class="skill-badge skill-${getSkillClass(skill)}" style="margin-left:4px;">${escapeHtml(skill)}</span>
+                        <span style="font-size:0.75rem;color:#888;margin-left:4px;">${games} เกม</span>
+                    </div>`;
+                }).join('');
 
                 const card = document.createElement('div');
                 card.classList.add('match-card');
@@ -3028,15 +3116,20 @@ if (btnViewQueue) {
                     <div class="match-teams">
                         <div class="team">
                             <h4>ทีม 1</h4>
-                            <p>${escapeHtml(team1Names)}</p>
-                            <p>${team1Skills.map(s => `<span class="skill-badge skill-${getSkillClass(s)}">${escapeHtml(s)}</span>`).join(' ')}</p>
+                            ${renderTeamPlayers(match.team1, match.team1.map(id => PlayerUtils.getById(id)?.skill || '?'))}
                         </div>
                         <div class="vs">VS</div>
                         <div class="team">
                             <h4>ทีม 2</h4>
-                            <p>${escapeHtml(team2Names)}</p>
-                            <p>${team2Skills.map(s => `<span class="skill-badge skill-${getSkillClass(s)}">${escapeHtml(s)}</span>`).join(' ')}</p>
+                            ${renderTeamPlayers(match.team2, match.team2.map(id => PlayerUtils.getById(id)?.skill || '?'))}
                         </div>
+                    </div>
+
+                    <div style="text-align:center;margin:0.5rem 0 1rem 0;">
+                        <button class="warning" onclick="App.openEditMatchPlayersModal(${match.id})"
+                            style="font-size:0.85rem;padding:0.5rem 1.2rem;min-height:36px;">
+                            ✏️ แก้ไขรายชื่อผู้เล่น
+                        </button>
                     </div>
 
                     <div class="court-shuttle-control">
@@ -3184,25 +3277,148 @@ if (btnViewQueue) {
             }
         },
 
+        openEditMatchPlayersModal: function(matchId) {
+            const match = appState.matches.find(m => m.id === matchId);
+            if (!match) return;
+
+            document.getElementById('edit-match-modal-title').textContent =
+                `✏️ แก้ไขรายชื่อผู้เล่น — สนาม ${match.courtName}`;
+
+            // All checked-in players not playing in OTHER matches (can swap within this match)
+            const thisMatchIds = new Set([...match.team1, ...match.team2]);
+            const playingElsewhere = new Set(
+                appState.matches
+                    .filter(m => m.id !== matchId)
+                    .flatMap(m => [...m.team1, ...m.team2])
+            );
+            const candidates = appState.players.filter(p =>
+                p.isCheckedIn && (!p.isPlaying || thisMatchIds.has(p.id)) && !playingElsewhere.has(p.id)
+            );
+
+            const slotsEl = document.getElementById('edit-match-slots');
+            const teams = [
+                { label: 'ทีม 1', ids: match.team1, teamNo: 1 },
+                { label: 'ทีม 2', ids: match.team2, teamNo: 2 }
+            ];
+
+            slotsEl.innerHTML = teams.map(({ label, ids, teamNo }) => `
+                <div style="margin-bottom:1.25rem;">
+                    <h4 style="color:var(--primary);margin:0 0 0.75rem 0;">${label}</h4>
+                    ${ids.map((pid, slot) => {
+                        const p = PlayerUtils.getById(pid);
+                        const opts = candidates.map(c =>
+                            `<option value="${c.id}" ${c.id === pid ? 'selected' : ''}>${escapeHtml(c.name)} (${escapeHtml(c.skill)}) — ${PlayerUtils.getGameCount(c.id)} เกม</option>`
+                        ).join('');
+                        return `
+                        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;background:var(--light);padding:0.6rem 0.75rem;border-radius:8px;">
+                            <span style="font-size:0.8rem;color:#888;min-width:60px;">ผู้เล่น ${slot + 1}</span>
+                            <select data-match-id="${matchId}" data-team="${teamNo}" data-slot="${slot}"
+                                style="flex:1;padding:0.5rem;border-radius:6px;border:1px solid #ced4da;font-size:0.9rem;">
+                                ${opts}
+                            </select>
+                        </div>`;
+                    }).join('')}
+                </div>
+            `).join('<hr style="border:none;border-top:1px solid #eee;margin:0.5rem 0 1rem 0;">');
+
+            // Store matchId for confirm step
+            document.getElementById('edit-match-modal').dataset.matchId = matchId;
+            document.getElementById('edit-match-modal').classList.add('active');
+        },
+
+        confirmEditMatchPlayers: function() {
+            const modal = document.getElementById('edit-match-modal');
+            const matchId = parseInt(modal.dataset.matchId);
+            const match = appState.matches.find(m => m.id === matchId);
+            if (!match) return;
+
+            const selects = modal.querySelectorAll('select[data-match-id]');
+            const newTeam1 = [null, null];
+            const newTeam2 = [null, null];
+
+            selects.forEach(sel => {
+                const team = parseInt(sel.dataset.team);
+                const slot = parseInt(sel.dataset.slot);
+                const val = parseInt(sel.value);
+                if (team === 1) newTeam1[slot] = val;
+                else newTeam2[slot] = val;
+            });
+
+            // Validate no duplicates across teams
+            const allNew = [...newTeam1, ...newTeam2];
+            if (new Set(allNew).size !== 4) {
+                showError('ผู้เล่นซ้ำกัน กรุณาเลือกใหม่');
+                return;
+            }
+
+            const oldTeam1 = [...match.team1];
+            const oldTeam2 = [...match.team2];
+            const oldAll = new Set([...oldTeam1, ...oldTeam2]);
+            const newAll = new Set(allNew);
+
+            // Players removed from match
+            const removed = [...oldAll].filter(id => !newAll.has(id));
+            // Players added to match
+            const added = [...newAll].filter(id => !oldAll.has(id));
+
+            // Update isPlaying flags
+            removed.forEach(id => {
+                const p = PlayerUtils.getById(id);
+                if (p) p.isPlaying = false;
+            });
+            added.forEach(id => {
+                const p = PlayerUtils.getById(id);
+                if (p) p.isPlaying = true;
+            });
+
+            // Update match teams
+            match.team1 = newTeam1;
+            match.team2 = newTeam2;
+
+            saveState();
+            modal.classList.remove('active');
+            this.renderActiveMatches();
+            this.renderCheckInList();
+            this.renderDashboard();
+
+            const addedNames = added.map(id => PlayerUtils.getById(id)?.name || '?').join(', ');
+            const removedNames = removed.map(id => PlayerUtils.getById(id)?.name || '?').join(', ');
+            const msg = removed.length > 0
+                ? `แก้ไขแล้ว: นำ ${escapeHtml(removedNames)} ออก / เพิ่ม ${escapeHtml(addedNames)}`
+                : 'อัปเดตรายชื่อผู้เล่นสำเร็จ';
+            showSuccess(msg);
+        },
+
         /**
          * Player history modal
          */
         openPlayerHistoryModal: function(playerId) {
             const player = PlayerUtils.getById(playerId);
-            const history = appState.history[playerId];
-
-            if (!player || !history || history.games.length === 0) {
-                showError('ไม่พบประวัติการเล่น');
+            if (!player) {
+                showError('ไม่พบข้อมูลผู้เล่น');
                 return;
             }
 
-            document.getElementById('modal-player-name').textContent = `ประวัติการเล่นผู้เล่น ${escapeHtml(player.name)}`;
+            const history = appState.history[playerId] || { games: [] };
 
-            const statsHtml = this.getPlayerStatsHtml(playerId, player, history);
-            document.getElementById('modal-player-stats').innerHTML = statsHtml;
+            document.getElementById('modal-player-name').textContent = `ประวัติการเล่น: ${player.name}`;
 
-            const timelineHtml = this.getPlayerTimelineHtml(playerId, history);
-            document.getElementById('modal-game-records').innerHTML = timelineHtml;
+            if (history.games.length === 0) {
+                document.getElementById('modal-player-stats').innerHTML = `
+                    <div style="text-align:center;padding:1.5rem 0;color:#888;">
+                        <div style="font-size:2.5rem;margin-bottom:0.5rem;">🏸</div>
+                        <div style="font-weight:600;">${escapeHtml(player.name)}</div>
+                        <div style="margin-top:0.5rem;font-size:0.9rem;">ยังไม่มีประวัติการเล่น</div>
+                        <div style="margin-top:0.25rem;font-size:0.8rem;">ระดับมือ: <span class="skill-badge skill-${getSkillClass(player.skill)}">${escapeHtml(player.skill)}</span></div>
+                    </div>`;
+                document.getElementById('modal-game-records').innerHTML = '';
+            } else {
+                const statsHtml = this.getPlayerStatsHtml(playerId, player, history);
+                document.getElementById('modal-player-stats').innerHTML = statsHtml;
+
+                const timelineHtml = this.getPlayerTimelineHtml(playerId, history);
+                document.getElementById('modal-game-records').innerHTML = timelineHtml;
+            }
 
             document.getElementById('player-history-modal').classList.add('active');
         },
@@ -3488,9 +3704,10 @@ if (btnViewQueue) {
 
     // Modal close
     document.getElementById('player-history-modal')?.addEventListener('click', function(e) {
-        if (e.target === this) {
-            App.closePlayerHistoryModal();
-        }
+        if (e.target === this) App.closePlayerHistoryModal();
+    });
+    document.getElementById('edit-match-modal')?.addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('active');
     });
 
     // ============================================================
@@ -3500,6 +3717,14 @@ if (btnViewQueue) {
     window.addEventListener('load', function() {
         loadState();
         App.showView('dashboard');
+
+        // #4: Auto-refresh dashboard every 30 seconds
+        setInterval(() => {
+            const dashView = document.getElementById('dashboard');
+            if (dashView && dashView.classList.contains('active')) {
+                App.renderDashboard();
+            }
+        }, 30000);
     });
 
     window.addEventListener('beforeunload', function() {
@@ -3515,6 +3740,23 @@ if (btnViewQueue) {
             saveState();
         }, 2000);
     });
+
+    // #5: Highlight match timer red when game exceeds 30 minutes
+    setInterval(() => {
+        appState.matches.forEach(match => {
+            const timerEl = document.getElementById(`match-timer-${match.id}`);
+            if (!timerEl || !match.startTime) return;
+            const elapsed = Date.now() - match.startTime;
+            const minutes = elapsed / 60000;
+            timerEl.style.color = minutes >= 30 ? 'var(--danger)' :
+                                   minutes >= 20 ? 'var(--accent)' :
+                                   'var(--primary)';
+            if (minutes >= 30 && !timerEl.dataset.warnedLong) {
+                timerEl.dataset.warnedLong = '1';
+                showWarning(`⏰ สนาม ${escapeHtml(match.courtName)} เล่นมานานกว่า 30 นาทีแล้ว!`);
+            }
+        });
+    }, 10000);
 </script>
 
 <!-- ==== Queue Editors v13 (full: searchable dropdowns + skill emoji + dnd + no-dup + red highlight + reset/auto + stats) ==== -->
@@ -3800,13 +4042,27 @@ if (btnViewQueue) {
     });
   }
   function buildNamesHTML(ids, dupSet){
-    return ids.map((pid, idx) => {
+    return ids.map((pid) => {
       const p = PlayerUtils.getById(pid);
       const nm = escapeHtml(p?.name || '???');
       const em = skillEmoji[p?.skill] || '';
       const cls = dupSet.has(pid) ? 'dup-player' : '';
-      const span = `<span class="queue-player-line ${cls}">${em} ${nm}</span>`;
-      return idx === 0 ? span : ` <span>&amp;</span> ` + span;
+      const games = (typeof PlayerUtils.getGameCount === 'function') ? PlayerUtils.getGameCount(pid) : 0;
+      const pill = `<span style="
+        display:inline-block;
+        background:#e8f4fd;
+        color:#1a6fa8;
+        font-size:0.68rem;
+        font-weight:700;
+        border-radius:999px;
+        padding:1px 7px;
+        margin-left:5px;
+        vertical-align:middle;
+        white-space:nowrap;
+      ">${games}→<strong>${games+1}</strong></span>`;
+      return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;">
+        <span class="queue-player-line ${cls}" style="font-weight:600;">${em} ${nm}</span>${pill}
+      </div>`;
     }).join('');
   }
   function applyDuplicateHighlight(){
