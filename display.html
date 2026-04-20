@@ -79,6 +79,14 @@
       animation: shuttle 3s ease-in-out infinite;
     }
 
+    .header-logo-img {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
     @keyframes shuttle {
       0%, 100% { transform: rotate(-10deg); }
       50% { transform: rotate(10deg); }
@@ -431,11 +439,23 @@
     .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
     .empty-state .text { font-size: 0.9rem; }
 
-    /* Marquee ticker for waiting players on mobile */
+    /* Marquee ticker for waiting players */
     .ticker-wrap {
-      display: none;
       overflow: hidden;
       white-space: nowrap;
+      margin-top: 0.5rem;
+    }
+
+    .ticker-inner {
+      display: inline-block;
+      animation: ticker-scroll 20s linear infinite;
+    }
+
+    .ticker-inner:hover { animation-play-state: paused; }
+
+    @keyframes ticker-scroll {
+      0%   { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
     }
 
     @media (max-width: 700px) {
@@ -453,7 +473,7 @@
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <div class="header-logo">🏸</div>
+      <img src="apple-touch-icon.png" alt="B&B Badminton" class="header-logo-img">
       <div>
         <div class="header-title">ระบบจัดการสนามแบดมินตัน</div>
         <div id="sync-status" class="header-subtitle">⏳ กำลังเชื่อมต่อ...</div>
@@ -471,6 +491,10 @@
       <div class="stat-pill">
         <div class="val" id="stat-checkin">0</div>
         <div class="lbl">เช็คอิน</div>
+      </div>
+      <div class="stat-pill">
+        <div class="val" id="stat-games-today">0</div>
+        <div class="lbl">เกมวันนี้</div>
       </div>
       <div>
         <div class="clock" id="clock-time">--:--:--</div>
@@ -504,7 +528,9 @@
       <!-- Waiting -->
       <div class="waiting-section">
         <div class="waiting-title">รอจัดคู่</div>
-        <div id="waiting-chips" class="waiting-chips"></div>
+        <div class="ticker-wrap" id="ticker-wrap">
+          <div class="ticker-inner" id="ticker-inner"></div>
+        </div>
         <div id="waiting-empty" style="display:none;font-size:0.82rem;color:var(--muted);font-style:italic;">ไม่มีผู้เล่นรอ</div>
       </div>
     </div>
@@ -534,6 +560,15 @@
       ['players','courts','matches','matchQueues'].forEach(f => {
         if (data[f] && !Array.isArray(data[f])) data[f] = Object.values(data[f]);
       });
+      // Fix history[playerId].games arrays (Firebase stores arrays as objects)
+      if (data.history && typeof data.history === 'object' && !Array.isArray(data.history)) {
+        Object.keys(data.history).forEach(pid => {
+          const h = data.history[pid];
+          if (h && h.games && !Array.isArray(h.games)) {
+            data.history[pid].games = Object.values(h.games);
+          }
+        });
+      }
       return data;
     }
 
@@ -593,14 +628,29 @@
       const matches = state.matches || [];
       const queues  = state.matchQueues || [];
       const players = state.players || [];
+      const history = state.history || {};
+
+      // Count unique games played today from history[playerId].games[]
+      // Each game is stored once per player — use a Set to deduplicate by game id
+      const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+      const todayTs = todayStart.getTime();
+      const seenGameIds = new Set();
+      Object.values(history).forEach(playerHist => {
+        if (!playerHist || !Array.isArray(playerHist.games)) return;
+        playerHist.games.forEach(g => {
+          if (g.endTime && g.endTime >= todayTs) seenGameIds.add(g.id);
+        });
+      });
+      const gamesToday = seenGameIds.size + matches.length; // finished + currently playing
 
       // Stats
       const checkedIn = players.filter(p => p.isCheckedIn).length;
-      document.getElementById('stat-courts').textContent  = matches.length;
-      document.getElementById('stat-queue').textContent   = queues.length;
-      document.getElementById('stat-checkin').textContent = checkedIn;
-      document.getElementById('courts-badge').textContent = matches.length + ' สนาม';
-      document.getElementById('queue-badge').textContent  = queues.length + ' คิว';
+      document.getElementById('stat-courts').textContent     = matches.length;
+      document.getElementById('stat-queue').textContent      = queues.length;
+      document.getElementById('stat-checkin').textContent    = checkedIn;
+      document.getElementById('stat-games-today').textContent = gamesToday;
+      document.getElementById('courts-badge').textContent    = matches.length + ' สนาม';
+      document.getElementById('queue-badge').textContent     = queues.length + ' คิว';
 
       renderCourts(matches);
       renderQueue(queues, players);
@@ -625,9 +675,10 @@
           const name  = p ? esc(p.name) : '???';
           const skill = p ? p.skill : '?';
           const dot = `<div class="skill-dot" style="background:${skillColor(skill)};"></div>`;
+          const nameEl = `<span class="player-name-txt">${name}</span>`;
           return `<div class="player-row ${right?'right':''}">
-            ${right ? name : dot}
-            ${right ? dot  : name}
+            ${right ? nameEl : dot}
+            ${right ? dot    : nameEl}
           </div>`;
         }).join('');
 
@@ -694,20 +745,34 @@
       const inQ = new Set(queues.flatMap(q => [...q.team1, ...q.team2]));
       const waiting = players.filter(p => p.isCheckedIn && !p.isPlaying && !inQ.has(p.id));
 
-      const chipsEl = document.getElementById('waiting-chips');
+      const tickerWrap = document.getElementById('ticker-wrap');
+      const tickerInner = document.getElementById('ticker-inner');
       const emptyEl = document.getElementById('waiting-empty');
 
       if (waiting.length === 0) {
-        chipsEl.innerHTML = '';
+        tickerWrap.style.display = 'none';
         emptyEl.style.display = 'block';
       } else {
         emptyEl.style.display = 'none';
-        chipsEl.innerHTML = waiting.map(p =>
-          `<div class="waiting-chip">
+        tickerWrap.style.display = 'block';
+
+        // Build chip HTML (duplicated for seamless loop)
+        const chipHTML = waiting.map(p =>
+          `<span class="waiting-chip" style="margin-right:0.75rem;">
             <span class="waiting-chip-name">${esc(p.name)}</span>
             <span class="skill-badge-sm" style="background:${skillColor(p.skill)}">${esc(p.skill)}</span>
-          </div>`
+          </span>`
         ).join('');
+
+        // If few players, no need to scroll — just show static
+        if (waiting.length <= 4) {
+          tickerInner.style.animation = 'none';
+          tickerInner.innerHTML = chipHTML;
+        } else {
+          tickerInner.style.animation = '';
+          // Duplicate for seamless infinite scroll
+          tickerInner.innerHTML = chipHTML + chipHTML;
+        }
       }
     }
 
