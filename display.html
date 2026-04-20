@@ -913,9 +913,20 @@
 
     .alert-overlay.show { display: flex; }
 
+    /* Level 2 alert — court ready (green theme) */
+    .alert-overlay.level2 {
+      background: rgba(39,174,96,0.12);
+      animation: flashBgGreen 0.5s ease-in-out 4;
+    }
+
     @keyframes flashBg {
       0%, 100% { background: rgba(243,156,18,0.08); }
       50%       { background: rgba(243,156,18,0.25); }
+    }
+
+    @keyframes flashBgGreen {
+      0%, 100% { background: rgba(39,174,96,0.08); }
+      50%       { background: rgba(39,174,96,0.30); }
     }
 
     .alert-box {
@@ -928,6 +939,12 @@
       animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
       max-width: 340px;
       width: 90%;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .alert-overlay.level2 .alert-box {
+      border-color: var(--green);
+      box-shadow: 0 0 60px rgba(39,174,96,0.5);
     }
 
     .alert-icon { font-size: 3.5rem; margin-bottom: 0.5rem; }
@@ -937,6 +954,10 @@
       font-weight: 800;
       color: var(--gold);
       margin-bottom: 0.25rem;
+    }
+
+    .alert-overlay.level2 .alert-title {
+      color: var(--green);
     }
 
     .alert-name {
@@ -956,6 +977,11 @@
       font-weight: 800;
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
+    }
+
+    .alert-overlay.level2 .alert-close {
+      background: var(--green);
+      color: #fff;
     }
 
     .sound-unlock-btn {
@@ -1030,8 +1056,8 @@
   <!-- Alert Overlay -->
   <div class="alert-overlay" id="alert-overlay">
     <div class="alert-box">
-      <div class="alert-icon">🏸</div>
-      <div class="alert-title">ถึงคิวของคุณแล้ว!</div>
+      <div class="alert-icon" id="alert-icon">🏸</div>
+      <div class="alert-title" id="alert-title">ถึงคิวของคุณแล้ว!</div>
       <div class="alert-name" id="alert-name"></div>
       <button class="alert-close" onclick="closeAlert()">รับทราบ</button>
     </div>
@@ -1391,38 +1417,70 @@
     }
 
     function checkQueueAlerts() {
-      const queues = state.matchQueues || [];
-      if (queues.length === 0) { alertShown.clear(); return; }
-
       watchedIds.forEach(pid => {
         const pos = getQueuePosition(pid);
-        if (pos === 1) {
-          const alertKey = `${pid}-next`;
-          if (!alertShown.has(alertKey)) {
-            alertShown.add(alertKey);
-            const p = getPlayer(pid);
-            triggerAlert(p ? p.name : '???');
+        const key1 = `${pid}-next`;
+        const key2 = `${pid}-court`;
+
+        if (pos >= 2) {
+          // In queue but not #1 yet — full reset so next cycle fires fresh
+          alertShown.delete(key1);
+          alertShown.delete(key2);
+
+        } else if (pos === 1) {
+          // Level 1: reached front of queue
+          // If court alert already fired (key2 set), they rejoined queue after playing — full reset first
+          if (alertShown.has(key2)) {
+            alertShown.delete(key1);
+            alertShown.delete(key2);
           }
+          if (!alertShown.has(key1)) {
+            alertShown.add(key1);
+            const p = getPlayer(pid);
+            triggerAlert(p ? p.name : '???', 1);
+          }
+
         } else {
-          // Reset alert so it can fire again next time they reach #1
-          alertShown.delete(`${pid}-next`);
+          // pos === 0: not in queue
+          if (alertShown.has(key1) && !alertShown.has(key2)) {
+            // Was at #1 then removed = sent to court — Level 2 alert
+            alertShown.add(key2);
+            const p = getPlayer(pid);
+            triggerAlert(p ? p.name : '???', 2);
+          }
+          // If key2 already set or key1 never set — wait for re-queue
         }
       });
     }
 
-    function triggerAlert(name) {
-      document.getElementById('alert-name').textContent = name + ' — เตรียมพร้อม!';
-      document.getElementById('alert-overlay').classList.add('show');
-      // Vibrate if supported
-      try { navigator.vibrate && navigator.vibrate([300, 100, 300, 100, 500]); } catch(e){}
-      // Play beep sound
+    function triggerAlert(name, level) {
+      const overlay = document.getElementById('alert-overlay');
+      overlay.classList.remove('level2');
+
+      if (level === 2) {
+        // Court ready — green theme
+        overlay.classList.add('level2');
+        document.getElementById('alert-icon').textContent  = '✅';
+        document.getElementById('alert-title').textContent = 'สนามว่างแล้ว! ลงสนามได้เลย!';
+        document.getElementById('alert-name').textContent  = name;
+        try { navigator.vibrate && navigator.vibrate([200, 80, 200, 80, 200, 80, 600]); } catch(e){}
+      } else {
+        // Level 1 — prepare alert (gold theme)
+        document.getElementById('alert-icon').textContent  = '🏸';
+        document.getElementById('alert-title').textContent = 'ถึงคิวของคุณแล้ว!';
+        document.getElementById('alert-name').textContent  = name + ' — เตรียมพร้อม!';
+        try { navigator.vibrate && navigator.vibrate([300, 100, 300, 100, 500]); } catch(e){}
+      }
+
+      overlay.classList.add('show');
       playBeep();
       // Auto-close after 8s
       setTimeout(closeAlert, 8000);
     }
 
     function closeAlert() {
-      document.getElementById('alert-overlay').classList.remove('show');
+      const overlay = document.getElementById('alert-overlay');
+      overlay.classList.remove('show', 'level2');
     }
 
     // iOS-safe beep using Web Audio API
