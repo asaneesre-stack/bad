@@ -1,25 +1,22 @@
 {
-  "name": "ระบบจัดการสนามแบดมินตัน",
-  "short_name": "สนามแบด🏸",
-  "description": "ระบบจัดการสนามแบดมินตัน เช็คอิน จัดคู่ และติดตามการแข่งขัน",
-  "start_url": "./index.html",
-  "display": "standalone",
+  "name": "B&B Badminton — สนามแบดมินตัน",
+  "short_name": "B&B Badminton",
+  "description": "ระบบจัดการสนามแบดมินตัน",
+  "start_url": "./display.html",
+  "display": "fullscreen",
   "orientation": "any",
-  "background_color": "#1a2b47",
-  "theme_color": "#00a8cc",
-  "lang": "th",
+  "background_color": "#080d1a",
+  "theme_color": "#080d1a",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "apple-touch-icon.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
-      "src": "icon-512.png",
+      "src": "apple-touch-icon.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }

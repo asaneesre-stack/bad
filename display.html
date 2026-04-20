@@ -6,6 +6,11 @@
   <title>🏸 สนามแบดมินตัน — หน้าจอสาธารณะ</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Teko:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#080d1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="B&B Badminton">
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
   <style>
@@ -385,6 +390,14 @@
       letter-spacing: 0.05em;
       text-transform: uppercase;
       align-self: flex-start;
+    }
+
+    /* Queue wait estimate */
+    .queue-wait {
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-top: 4px;
+      letter-spacing: 0.03em;
     }
 
     /* Waiting section */
@@ -1096,6 +1109,41 @@
   </div>
 
   <script>
+    // ── PWA: Service Worker & Push Notifications ────────────────────
+    let _swRegistration = null;
+    let _pushGranted = false;
+
+    async function initPWA() {
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        _swRegistration = await navigator.serviceWorker.register('sw.js');
+      } catch(e) { console.warn('SW register failed', e); }
+    }
+    initPWA();
+
+    async function requestPushPermission() {
+      if (!('Notification' in window)) return false;
+      if (Notification.permission === 'granted') { _pushGranted = true; return true; }
+      if (Notification.permission === 'denied') return false;
+      const result = await Notification.requestPermission();
+      _pushGranted = result === 'granted';
+      return _pushGranted;
+    }
+
+    function sendPushNotification(title, body, tag) {
+      if (!_pushGranted || !_swRegistration) return;
+      try {
+        _swRegistration.showNotification(title, {
+          body,
+          tag,
+          icon: 'apple-touch-icon.png',
+          badge: 'apple-touch-icon.png',
+          vibrate: [200, 80, 200],
+          requireInteraction: true,
+        });
+      } catch(e) {}
+    }
+
     // ── Firebase ──────────────────────────────────────────────────
     const firebaseConfig = {
       apiKey: "AIzaSyCwdZT7tzwXyapCfg3wbjRuhiEDeXapghA",
@@ -1179,6 +1227,57 @@
     function esc(t) {
       if (!t) return '';
       return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // คำนวณเวลาเฉลี่ยต่อเกม (วินาที) จากประวัติวันนี้ หรือใช้ค่า default 20 นาที
+    function avgGameDurationSec() {
+      const history = state.history || {};
+      const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+      const todayTs = todayStart.getTime();
+      const durations = [];
+      const seen = new Set();
+      Object.values(history).forEach(ph => {
+        if (!ph || !Array.isArray(ph.games)) return;
+        ph.games.forEach(g => {
+          if (!g.id || seen.has(g.id)) return;
+          seen.add(g.id);
+          if (g.endTime && g.startTime && g.endTime >= todayTs) {
+            const d = (g.endTime - g.startTime) / 1000;
+            if (d > 60 && d < 7200) durations.push(d); // กรอง outlier
+          }
+        });
+      });
+      if (durations.length === 0) return 20 * 60; // default 20 นาที
+      return Math.round(durations.reduce((a,b)=>a+b,0) / durations.length);
+    }
+
+    // แสดงเวลารอประมาณ สำหรับคิวที่ i (0-indexed) โดยดูจากสนามที่กำลังเล่นอยู่
+    function estimateWaitMin(queueIndex) {
+      const matches = state.matches || [];
+      const avgSec = avgGameDurationSec();
+      const courts = matches.length || 1;
+
+      if (matches.length === 0) {
+        // ไม่มีสนามเล่นอยู่ — คิดว่าต้องรออีก avgSec * (queueIndex+1) / courts
+        const totalSec = avgSec * Math.ceil((queueIndex + 1) / courts);
+        return Math.max(1, Math.round(totalSec / 60));
+      }
+
+      // เวลาที่เหลือโดยเฉลี่ยของสนามแต่ละสนาม
+      let remainingSecs = matches.map(m => {
+        const playedSec = elapsed(m.startTime);
+        return Math.max(avgSec - playedSec, 30);
+      });
+
+      // เรียง — สนามที่จะว่างเร็วสุดก่อน
+      remainingSecs.sort((a, b) => a - b);
+
+      const round = Math.ceil((queueIndex + 1) / courts);
+      const slotIdx = queueIndex % courts;
+
+      const baseWait = remainingSecs[Math.min(slotIdx, remainingSecs.length - 1)] || avgSec;
+      const totalSec = baseWait + (round - 1) * avgSec;
+      return Math.max(1, Math.round(totalSec / 60));
     }
 
     // ── Render ────────────────────────────────────────────────────
@@ -1276,12 +1375,24 @@
         return;
       }
 
+      const courts = (state.matches||[]).length;
+
       el.innerHTML = queues.map((q, i) => {
         const isNext = i === 0;
         const names = ids => ids.map(id => {
           const p = getPlayer(id);
           return `<div class="queue-player queue-player-clickable" data-pid="${id}" style="cursor:pointer;display:inline;-webkit-tap-highlight-color:rgba(0,168,204,0.2);">${p ? esc(p.name) : '???'}</div>`;
         }).join('<span class="sep">&</span>');
+
+        // ประมาณเวลารอ — แสดงเสมอ
+        const waitMin = estimateWaitMin(i);
+        const waitLabel = isNext
+          ? (courts > 0 ? '⚡ พร้อมลงเลย!' : `⏳ ~${waitMin} นาที`)
+          : `⏳ ~${waitMin} นาที`;
+        const waitColor = isNext && courts > 0
+          ? '#27ae60'
+          : (waitMin <= 5 ? '#f39c12' : '#6b7280');
+        const waitHtml = `<div class="queue-wait" style="color:${waitColor}">${waitLabel}</div>`;
 
         return `<div class="queue-card ${isNext?'next':''}">
           <div class="queue-num" style="color:${isNext?'#f39c12':'#444'}">${i+1}</div>
@@ -1292,6 +1403,7 @@
             <div class="queue-team-row">
               <span class="queue-team-label">ทีม 2</span>${names(q.team2)}
             </div>
+            ${waitHtml}
           </div>
           ${isNext ? '<div class="next-badge">NEXT</div>' : ''}
         </div>`;
@@ -1473,7 +1585,15 @@
       }
 
       overlay.classList.add('show');
-      playBeep();
+      level === 2 ? playBeep2() : playBeep1();
+
+      // Push notification (ใช้งานได้แม้ปิดหน้าจอ ถ้าให้สิทธิ์แล้ว)
+      if (level === 2) {
+        sendPushNotification('✅ สนามว่างแล้ว!', name + ' — ลงสนามได้เลย!', 'court-' + name);
+      } else {
+        sendPushNotification('🏸 ถึงคิวของคุณแล้ว!', name + ' — เตรียมพร้อม!', 'queue-' + name);
+      }
+
       // Auto-close after 8s
       setTimeout(closeAlert, 8000);
     }
@@ -1512,6 +1632,9 @@
           osc.stop(ctx.currentTime + 0.2);
           _audioUnlocked = true;
 
+          // Request push permission at same time
+          requestPushPermission();
+
           // Update button UI
           const btn = document.getElementById('sound-unlock-btn');
           if (btn) { btn.textContent = '🔔 เสียงพร้อม'; btn.classList.add('unlocked'); btn.onclick = null; }
@@ -1519,29 +1642,46 @@
       } catch(e) {}
     }
 
-    function playBeep() {
+    // Level 1 — 2 beeps สั้น (เตรียมพร้อม)
+    function playBeep1() {
       try {
         const ctx = getAudioCtx();
         const doPlay = () => {
-          const times = [0, 0.25, 0.5];
-          times.forEach(t => {
-            const osc  = ctx.createOscillator();
+          [0, 0.28].forEach(t => {
+            const osc = ctx.createOscillator();
             const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.frequency.value = 880;
-            osc.type = 'sine';
-            gain.gain.setValueAtTime(0.5, ctx.currentTime + t);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.22);
-            osc.start(ctx.currentTime + t);
-            osc.stop(ctx.currentTime + t + 0.22);
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = 880; osc.type = 'sine';
+            gain.gain.setValueAtTime(0.45, ctx.currentTime + t);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.2);
+            osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + 0.2);
           });
         };
-        if (ctx.state === 'suspended') {
-          ctx.resume().then(doPlay);
-        } else {
-          doPlay();
-        }
+        ctx.state === 'suspended' ? ctx.resume().then(doPlay) : doPlay();
+      } catch(e) {}
+    }
+
+    // Level 2 — 3 โน้ตขึ้น (สนามว่าง! ลงได้เลย)
+    function playBeep2() {
+      try {
+        const ctx = getAudioCtx();
+        const doPlay = () => {
+          const notes = [
+            { freq: 660,  t: 0,    dur: 0.18 },
+            { freq: 880,  t: 0.22, dur: 0.18 },
+            { freq: 1100, t: 0.44, dur: 0.35 },
+          ];
+          notes.forEach(({ freq, t, dur }) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = freq; osc.type = 'triangle';
+            gain.gain.setValueAtTime(0.6, ctx.currentTime + t);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + dur);
+            osc.start(ctx.currentTime + t); osc.stop(ctx.currentTime + t + dur);
+          });
+        };
+        ctx.state === 'suspended' ? ctx.resume().then(doPlay) : doPlay();
       } catch(e) {}
     }
 
