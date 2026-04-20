@@ -842,6 +842,7 @@
       flex-wrap: wrap;
       gap: 0.4rem;
       flex: 1;
+      position: relative;
     }
 
     .watch-chip {
@@ -1281,26 +1282,79 @@
       const chipsEl = document.getElementById('watch-chips');
       const checkedIn = players.filter(p => p.isCheckedIn);
 
-      if (checkedIn.length === 0) {
-        chipsEl.innerHTML = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
-        return;
-      }
+      // Show: watched chips first, then a small "+ เพิ่ม" button to open picker
+      const watchedPlayers = checkedIn.filter(p => watchedIds.has(p.id));
 
-      chipsEl.innerHTML = checkedIn.map(p => {
-        const isWatching = watchedIds.has(p.id);
-        const inQueue = (state.matchQueues||[]).some(q =>
-          [...q.team1,...q.team2].map(Number).includes(p.id)
-        );
+      let html = '';
+
+      // Watched chips (with position + remove on tap)
+      html += watchedPlayers.map(p => {
         const queuePos = getQueuePosition(p.id);
         const isNext = queuePos === 1;
-        const extraClass = isNext && isWatching ? 'alert' : isWatching ? 'watching' : '';
-        const posLabel = queuePos > 0 ? ` #${queuePos}` : '';
-
+        const extraClass = isNext ? 'alert' : 'watching';
+        const posLabel = queuePos > 0 ? ` <span style="opacity:0.7;font-size:0.7em;">#${queuePos}</span>` : '';
         return `<div class="watch-chip ${extraClass}" data-watch-pid="${p.id}"
-          style="-webkit-tap-highlight-color:transparent;">
-          ${isWatching ? '👁 ' : ''}${esc(p.name)}${posLabel}
+          style="-webkit-tap-highlight-color:transparent;" title="กดเพื่อเลิกติดตาม">
+          👁 ${esc(p.name)}${posLabel} <span style="margin-left:3px;opacity:0.5;font-size:0.8em;">✕</span>
         </div>`;
       }).join('');
+
+      // "+ เลือกชื่อ" button — opens picker dropdown
+      html += `<div class="watch-chip" id="watch-add-btn" data-action="open-picker"
+        style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.6;">
+        + เลือกชื่อ
+      </div>`;
+
+      // Picker dropdown (hidden by default)
+      const unwatched = checkedIn.filter(p => !watchedIds.has(p.id));
+      if (unwatched.length > 0) {
+        html += `<div id="watch-picker" style="display:none;position:absolute;top:calc(100% + 4px);left:0;
+          background:#0f1829;border:1px solid rgba(0,168,204,0.3);border-radius:12px;
+          padding:0.5rem;z-index:200;display:none;flex-wrap:wrap;gap:0.35rem;max-width:90vw;
+          box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+          <div style="width:100%;font-size:0.65rem;color:#666;padding:0 4px 4px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">เลือกชื่อที่ต้องการติดตาม</div>
+          ${unwatched.map(p =>
+            `<div class="watch-chip" data-watch-pid="${p.id}"
+              style="-webkit-tap-highlight-color:transparent;">
+              ${esc(p.name)}
+            </div>`
+          ).join('')}
+        </div>`;
+      }
+
+      if (watchedPlayers.length === 0 && unwatched.length === 0) {
+        html = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
+      }
+
+      chipsEl.innerHTML = html;
+
+      // Attach picker toggle
+      const addBtn = document.getElementById('watch-add-btn');
+      const picker = document.getElementById('watch-picker');
+      if (addBtn && picker) {
+        function openPicker(e) {
+          e.stopPropagation();
+          e.preventDefault();
+          picker.style.display = picker.style.display === 'flex' ? 'none' : 'flex';
+        }
+        addBtn.addEventListener('touchend', openPicker, { passive: false });
+        addBtn.addEventListener('click', openPicker);
+        // Close picker when clicking outside
+        setTimeout(() => {
+          document.addEventListener('touchend', function closePicker(e) {
+            if (!picker.contains(e.target) && e.target !== addBtn) {
+              picker.style.display = 'none';
+              document.removeEventListener('touchend', closePicker);
+            }
+          });
+          document.addEventListener('click', function closePicker2(e) {
+            if (!picker.contains(e.target) && e.target !== addBtn) {
+              picker.style.display = 'none';
+              document.removeEventListener('click', closePicker2);
+            }
+          });
+        }, 50);
+      }
     }
 
     function getQueuePosition(pid) {
