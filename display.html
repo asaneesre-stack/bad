@@ -13,6 +13,7 @@
   <meta name="apple-mobile-web-app-title" content="B&B Badminton">
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-messaging-compat.min.js"></script>
   <style>
     :root {
       --bg: #080d1a;
@@ -1109,29 +1110,54 @@
   </div>
 
   <script>
-    // ── PWA: Service Worker & Push Notifications ────────────────────
-    let _swRegistration = null;
-    let _pushGranted = false;
+    // ── PWA: Service Worker & FCM Push Notifications ────────────────
+    const VAPID_KEY = 'BD-vk66KUrPc81hb11ejGGcN1LCaoeeNOMntAdJ-m8ycyhlFr8gmDWLLiiiEqtuqwG-PIriQ82JLBiYgGCr0Mmc';
 
+    let _swRegistration = null;
+    let _pushGranted    = false;
+    let _fcmToken       = null;
+
+    // watchedId → FCM token stored in Firebase so SW can look it up
     async function initPWA() {
       if (!('serviceWorker' in navigator)) return;
       try {
         _swRegistration = await navigator.serviceWorker.register('sw.js');
-      } catch(e) { console.warn('SW register failed', e); }
+        console.log('[SW] registered');
+      } catch(e) { console.warn('[SW] register failed', e); }
     }
     initPWA();
 
     async function requestPushPermission() {
       if (!('Notification' in window)) return false;
       if (Notification.permission === 'granted') { _pushGranted = true; return true; }
-      if (Notification.permission === 'denied') return false;
+      if (Notification.permission === 'denied')  return false;
       const result = await Notification.requestPermission();
       _pushGranted = result === 'granted';
       return _pushGranted;
     }
 
+    // Get FCM token and save to Firebase under pushTokens/<pid>
+    async function registerFCMToken(pid) {
+      if (!_swRegistration || !_pushGranted) return;
+      try {
+        const messaging = firebase.messaging();
+        const token = await messaging.getToken({
+          vapidKey: VAPID_KEY,
+          serviceWorkerRegistration: _swRegistration,
+        });
+        if (token) {
+          _fcmToken = token;
+          // Save token to Firebase keyed by player id
+          await db.ref('pushTokens/' + pid).set({ token, ts: Date.now() });
+          console.log('[FCM] token saved for pid', pid, token.slice(0,20) + '...');
+        }
+      } catch(e) { console.warn('[FCM] getToken failed', e); }
+    }
+
+    // Send via SW showNotification (works when page is open)
+    // When page is closed, FCM delivers directly via SW push event
     function sendPushNotification(title, body, tag) {
-      if (!_pushGranted || !_swRegistration) return;
+      if (!_swRegistration) return;
       try {
         _swRegistration.showNotification(title, {
           body,
@@ -1140,6 +1166,7 @@
           badge: 'apple-touch-icon.png',
           vibrate: [200, 80, 200],
           requireInteraction: true,
+          data: { url: './display.html' },
         });
       } catch(e) {}
     }
@@ -1632,8 +1659,12 @@
           osc.stop(ctx.currentTime + 0.2);
           _audioUnlocked = true;
 
-          // Request push permission at same time
-          requestPushPermission();
+          // Request push permission + register FCM token for all watched players
+          requestPushPermission().then(granted => {
+            if (!granted) return;
+            // Register FCM token for each watched player id
+            watchedIds.forEach(pid => registerFCMToken(pid));
+          });
 
           // Update button UI
           const btn = document.getElementById('sound-unlock-btn');
@@ -1720,8 +1751,13 @@
       if (watchedIds.has(pid)) {
         watchedIds.delete(pid);
         alertShown.delete(`${pid}-next`);
+        alertShown.delete(`${pid}-court`);
+        // Remove FCM token from Firebase
+        db.ref('pushTokens/' + pid).remove().catch(()=>{});
       } else {
         watchedIds.add(pid);
+        // Register FCM token if push already granted
+        if (_pushGranted) registerFCMToken(pid);
       }
       renderWatchBar();
       highlightMyQueues();

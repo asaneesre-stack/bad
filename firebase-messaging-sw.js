@@ -1,10 +1,8 @@
-// sw.js — Service Worker สำหรับ B&B Badminton
-// รองรับ FCM Push Notification แม้พับจอ / ปิดแอป (iOS 16.4+ ต้อง Add to Home Screen)
-
+// firebase-messaging-sw.js
+// iOS Safari ต้องการไฟล์นี้แยกต่างหากสำหรับ FCM background push
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
-// ── Firebase init ─────────────────────────────────────────────────
 firebase.initializeApp({
   apiKey:            "AIzaSyCwdZT7tzwXyapCfg3wbjRuhiEDeXapghA",
   authDomain:        "b-bad-d088b.firebaseapp.com",
@@ -17,7 +15,6 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// ── Background push handler (FCM) ─────────────────────────────────
 messaging.onBackgroundMessage(payload => {
   const { title, body, tag } = payload.notification || {};
   return self.registration.showNotification(title || '🏸 B&B Badminton', {
@@ -31,11 +28,6 @@ messaging.onBackgroundMessage(payload => {
   });
 });
 
-// ── Install / Activate ────────────────────────────────────────────
-self.addEventListener('install',  () => self.skipWaiting());
-self.addEventListener('activate', e  => e.waitUntil(clients.claim()));
-
-// ── Notification click → เปิดหน้าแอป ────────────────────────────
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const url = event.notification.data?.url || './display.html';
