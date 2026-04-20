@@ -4,6 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบจัดการสนามแบดมินตัน</title>
+
+    <!-- PWA: ติดตั้งเป็น App บน iPhone (Safari) และ Android -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00a8cc">
+
+    <!-- iOS / Safari specific -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="สนามแบด🏸">
+    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <style>
         :root {
             --primary: #1a2b47;
@@ -933,6 +943,7 @@
         <button onclick="App.showView('active-matches')">สนามที่กำลังเล่น</button>
         <button onclick="App.showView('settings')">ตั้งค่า</button>
         <button onclick="App.showView('manager-tools')">หน้าผู้จัด</button>
+        <button onclick="App.openPublicDisplay()" style="background:linear-gradient(135deg,#1a2b47,#00a8cc);color:white;border-radius:8px;">📺 หน้าจอสาธารณะ</button>
     </nav>
 
     <main class="container">
@@ -4572,5 +4583,233 @@ function updateWaitBadgeColors() {
 }
 setInterval(updateWaitBadgeColors,1000);
 </script>
+
+<!-- ===== PUBLIC DISPLAY OVERLAY ===== -->
+<div id="public-display-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:#0a0f1e;font-family:'Segoe UI',sans-serif;overflow:hidden;">
+
+  <!-- Animated background -->
+  <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 20% 50%,rgba(0,168,204,0.12) 0%,transparent 60%),radial-gradient(ellipse at 80% 20%,rgba(26,43,71,0.8) 0%,transparent 50%);pointer-events:none;"></div>
+
+  <!-- Header -->
+  <div style="position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;border-bottom:1px solid rgba(0,168,204,0.2);background:rgba(0,0,0,0.3);backdrop-filter:blur(10px);">
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <span style="font-size:2rem;">🏸</span>
+      <div>
+        <div style="font-size:1.4rem;font-weight:800;color:#fff;letter-spacing:0.05em;">ระบบจัดการสนามแบดมินตัน</div>
+        <div id="pd-time" style="font-size:0.85rem;color:#00a8cc;font-weight:500;"></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <div style="text-align:right;">
+        <div style="font-size:0.75rem;color:#888;">ผู้เล่นเช็คอิน</div>
+        <div id="pd-checkin-count" style="font-size:1.8rem;font-weight:800;color:#00a8cc;line-height:1;">0</div>
+      </div>
+      <button onclick="App.closePublicDisplay()"
+        style="background:rgba(231,76,60,0.2);border:1px solid rgba(231,76,60,0.4);color:#e74c3c;padding:0.5rem 1rem;border-radius:8px;cursor:pointer;font-size:0.85rem;font-weight:600;min-height:unset;">
+        ✕ ปิด
+      </button>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div style="position:relative;z-index:2;display:grid;grid-template-columns:1fr 1fr;gap:0;height:calc(100vh - 70px);overflow:hidden;">
+
+    <!-- LEFT: Active Courts -->
+    <div style="padding:1.5rem;overflow-y:auto;border-right:1px solid rgba(0,168,204,0.15);">
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+        <div style="width:4px;height:28px;background:linear-gradient(180deg,#00a8cc,#1a2b47);border-radius:2px;"></div>
+        <h2 style="margin:0;font-size:1.3rem;font-weight:800;color:#fff;letter-spacing:0.03em;">🏟️ สนามที่กำลังแข่ง</h2>
+        <span id="pd-active-count" style="background:rgba(0,168,204,0.2);color:#00a8cc;padding:0.2rem 0.6rem;border-radius:20px;font-size:0.8rem;font-weight:700;"></span>
+      </div>
+      <div id="pd-courts-list" style="display:grid;gap:1rem;"></div>
+      <div id="pd-no-courts" style="display:none;text-align:center;padding:3rem 1rem;color:#555;">
+        <div style="font-size:3rem;margin-bottom:0.5rem;">🏸</div>
+        <div style="font-size:1rem;">ยังไม่มีสนามที่กำลังแข่ง</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Queue -->
+    <div style="padding:1.5rem;overflow-y:auto;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1.25rem;">
+        <div style="width:4px;height:28px;background:linear-gradient(180deg,#f39c12,#e67e22);border-radius:2px;"></div>
+        <h2 style="margin:0;font-size:1.3rem;font-weight:800;color:#fff;letter-spacing:0.03em;">⏳ คิวรอเล่น</h2>
+        <span id="pd-queue-count" style="background:rgba(243,156,18,0.2);color:#f39c12;padding:0.2rem 0.6rem;border-radius:20px;font-size:0.8rem;font-weight:700;"></span>
+      </div>
+      <div id="pd-queue-list" style="display:flex;flex-direction:column;gap:0.75rem;flex:1;"></div>
+      <div id="pd-no-queue" style="display:none;text-align:center;padding:3rem 1rem;color:#555;">
+        <div style="font-size:2.5rem;margin-bottom:0.5rem;">✅</div>
+        <div style="font-size:1rem;">ไม่มีคิวรอ</div>
+      </div>
+
+      <!-- Waiting players -->
+      <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid rgba(255,255,255,0.07);">
+        <div style="font-size:0.85rem;font-weight:700;color:#888;margin-bottom:0.75rem;letter-spacing:0.05em;text-transform:uppercase;">รอจัดคู่</div>
+        <div id="pd-waiting-list" style="display:flex;flex-wrap:wrap;gap:0.4rem;"></div>
+        <div id="pd-no-waiting" style="display:none;font-size:0.85rem;color:#555;font-style:italic;">ไม่มีผู้เล่นรอ</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== PUBLIC DISPLAY =====
+(function(){
+
+  let _pdTimer = null;
+  let _pdClock = null;
+  let _pdMatchTimers = {};
+
+  App.openPublicDisplay = function() {
+    document.getElementById('public-display-overlay').style.display = 'block';
+    renderPD();
+    _pdTimer = setInterval(renderPD, 3000);
+    _pdClock = setInterval(updatePDClock, 1000);
+    updatePDClock();
+    // Try fullscreen
+    try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); } catch(e){}
+  };
+
+  App.closePublicDisplay = function() {
+    document.getElementById('public-display-overlay').style.display = 'none';
+    clearInterval(_pdTimer);
+    clearInterval(_pdClock);
+    Object.values(_pdMatchTimers).forEach(clearInterval);
+    _pdMatchTimers = {};
+    try { document.exitFullscreen && document.exitFullscreen(); } catch(e){}
+  };
+
+  function updatePDClock() {
+    const el = document.getElementById('pd-time');
+    if (!el) return;
+    const now = new Date();
+    el.textContent = now.toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) +
+      ' น. — ' + now.toLocaleDateString('th-TH', {weekday:'long', day:'numeric', month:'long'});
+  }
+
+  function skillColor(skill) {
+    const map = {'P':'#27ae60','N+':'#e67e22','N':'#00a8cc','N-':'#2c3e50','BG':'#95a5a6'};
+    return map[skill] || '#00a8cc';
+  }
+
+  function renderPD() {
+    if (!appState) return;
+    const overlay = document.getElementById('public-display-overlay');
+    if (!overlay || overlay.style.display === 'none') return;
+
+    const matches = appState.matches || [];
+    const queues  = appState.matchQueues || [];
+    const players = appState.players || [];
+
+    // Header counts
+    const checkedIn = players.filter(p => p.isCheckedIn).length;
+    document.getElementById('pd-checkin-count').textContent = checkedIn;
+    document.getElementById('pd-active-count').textContent = matches.length + ' สนาม';
+    document.getElementById('pd-queue-count').textContent  = queues.length + ' คิว';
+
+    // ---- COURTS ----
+    const courtsEl = document.getElementById('pd-courts-list');
+    const noCourts = document.getElementById('pd-no-courts');
+    if (matches.length === 0) {
+      courtsEl.innerHTML = '';
+      noCourts.style.display = 'block';
+    } else {
+      noCourts.style.display = 'none';
+      courtsEl.innerHTML = matches.map(m => {
+        const renderTeam = ids => ids.map(id => {
+          const p = players.find(x => x.id === id);
+          const name = p ? p.name : '???';
+          const skill = p ? p.skill : '?';
+          const sc = skillColor(skill);
+          return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0;">
+            <span style="font-size:1.1rem;font-weight:700;color:#fff;">${name}</span>
+            <span style="background:${sc};color:#fff;padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:700;">${skill}</span>
+          </div>`;
+        }).join('');
+
+        const elapsed = Math.floor((Date.now() - (m.startTime || Date.now())) / 1000);
+        const hh = String(Math.floor(elapsed/3600)).padStart(2,'0');
+        const mm = String(Math.floor((elapsed%3600)/60)).padStart(2,'0');
+        const ss = String(elapsed%60).padStart(2,'0');
+        const timerStr = elapsed >= 3600 ? `${hh}:${mm}:${ss}` : `${mm}:${ss}`;
+        const isLong = elapsed >= 1800;
+
+        return `<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(0,168,204,0.2);border-radius:14px;padding:1rem 1.25rem;position:relative;overflow:hidden;">
+          <div style="position:absolute;top:0;left:0;width:4px;height:100%;background:linear-gradient(180deg,#00a8cc,rgba(0,168,204,0.2));border-radius:4px 0 0 4px;"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem;padding-left:0.5rem;">
+            <span style="font-size:1rem;font-weight:800;color:#00a8cc;letter-spacing:0.05em;">🏟 ${m.courtName}</span>
+            <span style="font-size:1.1rem;font-weight:800;color:${isLong?'#e74c3c':'#f39c12'};background:rgba(0,0,0,0.3);padding:2px 10px;border-radius:8px;">⏱ ${timerStr}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:0.5rem;padding-left:0.5rem;">
+            <div>${renderTeam(m.team1)}</div>
+            <div style="font-size:1rem;font-weight:900;color:#444;text-align:center;">VS</div>
+            <div style="text-align:right;">${renderTeam(m.team2)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // ---- QUEUE ----
+    const queueEl = document.getElementById('pd-queue-list');
+    const noQueue = document.getElementById('pd-no-queue');
+    if (queues.length === 0) {
+      queueEl.innerHTML = '';
+      noQueue.style.display = 'block';
+    } else {
+      noQueue.style.display = 'none';
+      queueEl.innerHTML = queues.map((q, idx) => {
+        const renderQTeam = ids => ids.map(id => {
+          const p = players.find(x => x.id === id);
+          return p ? `<span style="font-weight:700;color:#fff;font-size:0.95rem;">${p.name}</span>` : '';
+        }).join('<span style="color:#555;margin:0 3px;">&</span>');
+
+        const isNext = idx === 0;
+        const borderColor = isNext ? '#f39c12' : 'rgba(255,255,255,0.07)';
+        const badge = isNext ? '<span style="background:#f39c12;color:#000;font-size:0.7rem;font-weight:800;padding:2px 8px;border-radius:10px;margin-left:0.5rem;">NEXT</span>' : '';
+
+        return `<div style="background:rgba(255,255,255,0.03);border:1px solid ${borderColor};border-radius:12px;padding:0.75rem 1rem;display:flex;align-items:center;gap:1rem;${isNext?'box-shadow:0 0 20px rgba(243,156,18,0.15);':''}">
+          <div style="font-size:1.5rem;font-weight:900;color:${isNext?'#f39c12':'#444'};min-width:32px;text-align:center;">${idx+1}</div>
+          <div style="flex:1;">
+            <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.3rem;">
+              <span style="color:#aaa;font-size:0.8rem;">ทีม 1:</span> ${renderQTeam(q.team1)} ${badge}
+            </div>
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <span style="color:#aaa;font-size:0.8rem;">ทีม 2:</span> ${renderQTeam(q.team2)}
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // ---- WAITING (checked in, not playing, not in queue) ----
+    const inQueueIds = new Set(queues.flatMap(q => [...q.team1, ...q.team2]));
+    const waiting = players.filter(p => p.isCheckedIn && !p.isPlaying && !inQueueIds.has(p.id));
+    const waitingEl = document.getElementById('pd-waiting-list');
+    const noWaiting = document.getElementById('pd-no-waiting');
+    if (waiting.length === 0) {
+      waitingEl.innerHTML = '';
+      noWaiting.style.display = 'block';
+    } else {
+      noWaiting.style.display = 'none';
+      waitingEl.innerHTML = waiting.map(p => {
+        const sc = skillColor(p.skill);
+        return `<div style="display:flex;align-items:center;gap:4px;background:rgba(255,255,255,0.05);border-radius:20px;padding:4px 10px;">
+          <span style="color:#ddd;font-size:0.85rem;font-weight:600;">${p.name}</span>
+          <span style="background:${sc};color:#fff;padding:1px 6px;border-radius:8px;font-size:0.65rem;font-weight:700;">${p.skill}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Re-render when Firebase syncs
+  const _origShow = App.showView.bind(App);
+  App.showView = function(v) {
+    _origShow(v);
+    const overlay = document.getElementById('public-display-overlay');
+    if (overlay && overlay.style.display !== 'none') renderPD();
+  };
+
+})();
+</script>
+<!-- ===== /PUBLIC DISPLAY ===== -->
 </body>
 </html>
