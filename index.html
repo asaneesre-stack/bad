@@ -4,16 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบจัดการสนามแบดมินตัน</title>
-
-    <!-- PWA: ติดตั้งเป็น App บน iPhone (Safari) และ Android -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#00a8cc">
-
-    <!-- iOS / Safari specific -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="สนามแบด🏸">
-    <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <style>
         :root {
             --primary: #1a2b47;
@@ -1262,11 +1252,30 @@
                 <h2>เครื่องมือผู้ดูแลระบบ</h2>
                 <p>เครื่องมือเหล่านี้ใช้สำหรับจัดการข้อมูลในระบบทั้งหมด</p>
 
-                <h3>ล้างข้อมูลผู้เล่นทั้งหมด</h3>
+                <h3>🔒 เปลี่ยน PIN เข้าระบบ</h3>
+                <p style="color:#888;font-size:0.9rem;">PIN ปัจจุบันจะถูกแทนที่ — ต้องเป็นตัวเลข 4-8 หลัก</p>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:0.75rem;">
+                  <div style="flex:1;min-width:160px;">
+                    <label style="display:block;margin-bottom:0.4rem;font-weight:600;">PIN ใหม่</label>
+                    <input type="password" id="new-pin-input" maxlength="8" inputmode="numeric" pattern="[0-9]*"
+                      placeholder="เช่น 5678"
+                      style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1.1rem;letter-spacing:0.3em;">
+                  </div>
+                  <div style="flex:1;min-width:160px;">
+                    <label style="display:block;margin-bottom:0.4rem;font-weight:600;">ยืนยัน PIN</label>
+                    <input type="password" id="confirm-pin-input" maxlength="8" inputmode="numeric" pattern="[0-9]*"
+                      placeholder="ใส่อีกครั้ง"
+                      style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1.1rem;letter-spacing:0.3em;">
+                  </div>
+                  <button class="success" onclick="App.changePinFromUI()">🔑 บันทึก PIN ใหม่</button>
+                </div>
+
+                <h3 style="margin-top:2rem;">ล้างข้อมูลผู้เล่นทั้งหมด</h3>
                 <p style="color: var(--danger); font-weight: bold;">การกระทำนี้จะลบผู้เล่นทั้งหมดออกจากระบบ (แต่ข้อมูลประวัติการเล่นยังคงอยู่)</p>
-                <div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="danger" onclick="App.clearAllPlayers()">เคลียร์ผู้เล่นทั้งหมด</button>
-<button class="warning" onclick="App.clearAllHistory()">🧹 ล้างประวัติผู้เล่นทั้งหมด</button>
-</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                  <button class="danger" onclick="App.clearAllPlayers()">เคลียร์ผู้เล่นทั้งหมด</button>
+                  <button class="warning" onclick="App.clearAllHistory()">🧹 ล้างประวัติผู้เล่นทั้งหมด</button>
+                </div>
             </div>
         </section>
     </main>
@@ -2230,6 +2239,24 @@
                 this.renderPlayerList(uiState.currentFilter);
                 this.renderActiveMatches();
                 showSuccess(`ลบ ${escapeHtml(player.name)} สำเร็จ`);
+            }
+        },
+
+        changePinFromUI: function() {
+            const newPin     = (document.getElementById('new-pin-input').value     || '').trim();
+            const confirmPin = (document.getElementById('confirm-pin-input').value || '').trim();
+            if (!/^\d{4,8}$/.test(newPin)) {
+                showError('PIN ต้องเป็นตัวเลข 4-8 หลัก');
+                return;
+            }
+            if (newPin !== confirmPin) {
+                showError('PIN ทั้งสองช่องไม่ตรงกัน');
+                return;
+            }
+            if (typeof PinLock !== 'undefined' && PinLock.changePin(newPin)) {
+                document.getElementById('new-pin-input').value = '';
+                document.getElementById('confirm-pin-input').value = '';
+                showSuccess('🔑 เปลี่ยน PIN สำเร็จ');
             }
         },
 
@@ -4813,3 +4840,154 @@ setInterval(updateWaitBadgeColors,1000);
 <!-- ===== /PUBLIC DISPLAY ===== -->
 </body>
 </html>
+<!-- ===== PIN LOCK OVERLAY ===== -->
+<div id="pin-overlay" style="
+  position:fixed;inset:0;z-index:9999;
+  background:linear-gradient(135deg,#080d1a,#1a2b47);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:1.5rem;
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+">
+  <img src="apple-touch-icon.png" alt="logo" style="width:80px;height:80px;border-radius:20px;box-shadow:0 4px 24px rgba(0,168,204,0.3);" onerror="this.style.display='none'">
+  <div style="text-align:center;">
+    <div style="font-size:1.4rem;font-weight:800;color:#fff;letter-spacing:0.04em;">ระบบจัดการสนามแบดมินตัน</div>
+    <div style="font-size:0.85rem;color:#00a8cc;margin-top:4px;font-weight:600;">กรุณาใส่ PIN เพื่อเข้าใช้งาน</div>
+  </div>
+  <div id="pin-dots" style="display:flex;gap:14px;margin:0.25rem 0;"></div>
+  <div id="pin-pad" style="display:grid;grid-template-columns:repeat(3,72px);gap:10px;"></div>
+  <div id="pin-error" style="color:#e74c3c;font-size:0.85rem;font-weight:700;min-height:1.2rem;letter-spacing:0.03em;opacity:0;transition:opacity 0.3s;">PIN ไม่ถูกต้อง</div>
+  <div style="font-size:0.72rem;color:#4a5568;margin-top:0.5rem;">🔒 หน้านี้สำหรับผู้ดูแลระบบเท่านั้น</div>
+</div>
+<!-- ===== /PIN LOCK ===== -->
+
+<script>
+(function(){
+  const OVERLAY     = document.getElementById('pin-overlay');
+  const DOTS_EL     = document.getElementById('pin-dots');
+  const PAD_EL      = document.getElementById('pin-pad');
+  const ERROR_EL    = document.getElementById('pin-error');
+  const SESSION_KEY = 'bbad_pin_ok';
+  const DEFAULT_PIN = '1234';
+
+  let entered = '';
+  let correctPin = DEFAULT_PIN;
+  let unlocked = false;
+
+  function loadPinFromFirebase() {
+    try {
+      firebase.database().ref('badmintonState/adminPin').once('value').then(snap => {
+        const val = snap.val();
+        if (val && String(val).length >= 4) correctPin = String(val);
+      }).catch(()=>{});
+    } catch(e){}
+  }
+
+  function buildPad() {
+    const keys = ['1','2','3','4','5','6','7','8','9','←','0','✓'];
+    PAD_EL.innerHTML = keys.map(k => {
+      const isConfirm = k === '✓';
+      const isDel = k === '←';
+      const bg = isConfirm ? '#00a8cc' : 'rgba(255,255,255,0.07)';
+      const border = isConfirm ? '#00a8cc' : 'rgba(255,255,255,0.12)';
+      return `<button onclick="PinLock.press('${k}')" style="
+        width:72px;height:72px;border-radius:50%;
+        background:${bg};border:1.5px solid ${border};
+        color:#fff;font-size:${isDel?'1.2rem':isConfirm?'1.3rem':'1.5rem'};
+        font-weight:700;cursor:pointer;
+        transition:background 0.15s,transform 0.1s;
+        -webkit-tap-highlight-color:transparent;
+      " onpointerdown="this.style.transform='scale(0.9)'"
+         onpointerup="this.style.transform='scale(1)'"
+         onpointerleave="this.style.transform='scale(1)'"
+      >${k}</button>`;
+    }).join('');
+  }
+
+  function renderDots() {
+    DOTS_EL.innerHTML = Array.from({length:4}).map((_,i) =>
+      `<div style="
+        width:14px;height:14px;border-radius:50%;
+        background:${i < entered.length ? '#00a8cc' : 'rgba(255,255,255,0.15)'};
+        border:2px solid ${i < entered.length ? '#00a8cc' : 'rgba(255,255,255,0.25)'};
+        transition:background 0.2s,border-color 0.2s;
+      "></div>`
+    ).join('');
+  }
+
+  function shake() {
+    DOTS_EL.animate([
+      {transform:'translateX(0)'},{transform:'translateX(-10px)'},
+      {transform:'translateX(10px)'},{transform:'translateX(-8px)'},
+      {transform:'translateX(8px)'},{transform:'translateX(0)'}
+    ], {duration:350,easing:'ease-out'});
+  }
+
+  function showError(msg) {
+    ERROR_EL.textContent = msg;
+    ERROR_EL.style.opacity = '1';
+    setTimeout(() => ERROR_EL.style.opacity = '0', 2000);
+  }
+
+  function unlock() {
+    unlocked = true;
+    sessionStorage.setItem(SESSION_KEY, '1');
+    OVERLAY.style.opacity = '0';
+    OVERLAY.style.transition = 'opacity 0.4s';
+    setTimeout(() => { OVERLAY.style.display = 'none'; }, 400);
+  }
+
+  function tryPin() {
+    if (entered === correctPin) {
+      unlock();
+    } else {
+      shake();
+      showError('PIN ไม่ถูกต้อง');
+      entered = '';
+      renderDots();
+    }
+  }
+
+  window.PinLock = {
+    press(key) {
+      if (unlocked) return;
+      if (key === '←') {
+        entered = entered.slice(0,-1);
+        renderDots();
+      } else if (key === '✓') {
+        if (entered.length < 4) { showError('กรุณาใส่ PIN 4 หลัก'); return; }
+        tryPin();
+      } else {
+        if (entered.length >= 4) return;
+        entered += key;
+        renderDots();
+        if (entered.length === 4) setTimeout(tryPin, 200);
+      }
+    },
+    changePin(newPin) {
+      newPin = String(newPin||'').trim();
+      if (!/^\d{4,8}$/.test(newPin)) { alert('PIN ต้องเป็นตัวเลข 4-8 หลัก'); return false; }
+      correctPin = newPin;
+      try { firebase.database().ref('badmintonState/adminPin').set(newPin); } catch(e){}
+      alert('เปลี่ยน PIN สำเร็จ');
+      return true;
+    }
+  };
+
+  document.addEventListener('keydown', e => {
+    if (unlocked) return;
+    if (e.key >= '0' && e.key <= '9') PinLock.press(e.key);
+    else if (e.key === 'Backspace') PinLock.press('←');
+    else if (e.key === 'Enter') PinLock.press('✓');
+  });
+
+  buildPad();
+  renderDots();
+
+  if (sessionStorage.getItem(SESSION_KEY) === '1') {
+    OVERLAY.style.display = 'none';
+    unlocked = true;
+  } else {
+    loadPinFromFirebase();
+  }
+})();
+</script>
