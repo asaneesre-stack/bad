@@ -1489,6 +1489,33 @@
         return true;
     }
 
+    // Firebase stores arrays as objects {0:..., 1:...} — convert them back
+    function _fixFirebaseArrays(data) {
+        if (!data || typeof data !== 'object') return data;
+        const arrayFields = ['players', 'courts', 'matches', 'matchQueues', 'matchHistory'];
+        arrayFields.forEach(field => {
+            if (data[field] && !Array.isArray(data[field])) {
+                data[field] = Object.values(data[field]);
+            }
+        });
+        // Fix history sub-arrays
+        if (data.history && typeof data.history === 'object') {
+            Object.keys(data.history).forEach(pid => {
+                const h = data.history[pid];
+                if (h && h.games && !Array.isArray(h.games)) {
+                    data.history[pid].games = Object.values(h.games);
+                }
+            });
+        }
+        return data;
+    }
+
+    function _applyRemoteData(raw) {
+        const { _savedBy, ...cleanData } = (raw || {});
+        appState = _fixFirebaseArrays(cleanData);
+        validateAndFixState();
+    }
+
     function _startRealtimeSync() {
         const ref = getDbRef();
         if (!ref) return;
@@ -1499,10 +1526,7 @@
             // Skip if this update was saved by THIS device (our own echo)
             if (data._savedBy === _deviceId) return;
 
-            // Strip the internal _savedBy field before applying to appState
-            const { _savedBy, ...cleanData } = data;
-            appState = cleanData;
-            validateAndFixState();
+            _applyRemoteData(data);
 
             const view = document.querySelector('.view.active');
             const viewId = view ? view.id : 'dashboard';
@@ -1525,8 +1549,7 @@
             .then(snapshot => {
                 const data = snapshot.val();
                 if (data) {
-                    appState = data;
-                    validateAndFixState();
+                    _applyRemoteData(data);
                     showSyncStatus('☁️ โหลดจาก Firebase', '#27ae60');
                 } else {
                     _loadFromLocalStorage();
