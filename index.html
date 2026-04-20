@@ -1446,7 +1446,9 @@
 
     let _dbRef = null;
     let _saveDebounce = null;
-    let _lastSaveTimestamp = 0;
+
+    // Unique ID for this browser tab/device — used to detect our own echoes
+    const _deviceId = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
     function getDbRef() {
         if (_dbRef) return _dbRef;
@@ -1473,10 +1475,10 @@
         clearTimeout(_saveDebounce);
         _saveDebounce = setTimeout(() => {
             showSyncStatus('⏫ กำลังบันทึก...', '#e67e22');
-            _lastSaveTimestamp = Date.now();
-            ref.set(appState)
+            // Embed our deviceId so other devices know who saved this
+            const payload = { ...appState, _savedBy: _deviceId };
+            ref.set(payload)
                 .then(() => {
-                    _lastSaveTimestamp = Date.now();
                     showSyncStatus('☁️ sync แล้ว', '#27ae60');
                 })
                 .catch(e => {
@@ -1494,12 +1496,12 @@
             const data = snapshot.val();
             if (!data) return;
 
-            // Skip if this update came within 1.5s of our own save (our own echo)
-            const now = Date.now();
-            if (now - _lastSaveTimestamp < 1500) return;
+            // Skip if this update was saved by THIS device (our own echo)
+            if (data._savedBy === _deviceId) return;
 
-            // Always apply incoming data and re-render
-            appState = data;
+            // Strip the internal _savedBy field before applying to appState
+            const { _savedBy, ...cleanData } = data;
+            appState = cleanData;
             validateAndFixState();
 
             const view = document.querySelector('.view.active');
