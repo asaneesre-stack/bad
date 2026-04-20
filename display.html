@@ -957,6 +957,30 @@
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
+
+    .sound-unlock-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(243,156,18,0.15);
+      border: 1px solid rgba(243,156,18,0.4);
+      color: var(--gold);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.2s;
+      flex-shrink: 0;
+    }
+    .sound-unlock-btn:hover { background: rgba(243,156,18,0.28); }
+    .sound-unlock-btn.unlocked {
+      background: rgba(39,174,96,0.15);
+      border-color: rgba(39,174,96,0.4);
+      color: #27ae60;
+    }
   </style>
 </head>
 <body>
@@ -1000,6 +1024,7 @@
     <div class="watch-chips" id="watch-chips">
       <span class="watch-hint">กดชื่อตัวเองเพื่อรับแจ้งเตือนเมื่อถึงคิว</span>
     </div>
+    <button class="sound-unlock-btn" id="sound-unlock-btn" onclick="unlockAudioManual()">🔇 เปิดเสียง</button>
   </div>
 
   <!-- Alert Overlay -->
@@ -1401,22 +1426,64 @@
     }
 
     // iOS-safe beep using Web Audio API
-    function playBeep() {
+    let _audioCtx = null;
+    let _audioUnlocked = false;
+
+    function getAudioCtx() {
+      if (!_audioCtx) {
+        _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      return _audioCtx;
+    }
+
+    function unlockAudioManual() {
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const times = [0, 0.3, 0.6];
-        times.forEach(t => {
-          const osc = ctx.createOscillator();
+        const ctx = getAudioCtx();
+        // Must resume AND play a real audible tone from user gesture
+        ctx.resume().then(() => {
+          // Play a short beep so iOS knows audio is intentional
+          const osc  = ctx.createOscillator();
           const gain = ctx.createGain();
           osc.connect(gain);
           gain.connect(ctx.destination);
           osc.frequency.value = 880;
           osc.type = 'sine';
-          gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
-          osc.start(ctx.currentTime + t);
-          osc.stop(ctx.currentTime + t + 0.25);
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.2);
+          _audioUnlocked = true;
+
+          // Update button UI
+          const btn = document.getElementById('sound-unlock-btn');
+          if (btn) { btn.textContent = '🔔 เสียงพร้อม'; btn.classList.add('unlocked'); btn.onclick = null; }
         });
+      } catch(e) {}
+    }
+
+    function playBeep() {
+      try {
+        const ctx = getAudioCtx();
+        const doPlay = () => {
+          const times = [0, 0.25, 0.5];
+          times.forEach(t => {
+            const osc  = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.frequency.value = 880;
+            osc.type = 'sine';
+            gain.gain.setValueAtTime(0.5, ctx.currentTime + t);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.22);
+            osc.start(ctx.currentTime + t);
+            osc.stop(ctx.currentTime + t + 0.22);
+          });
+        };
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(doPlay);
+        } else {
+          doPlay();
+        }
       } catch(e) {}
     }
 
