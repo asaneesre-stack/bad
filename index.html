@@ -1588,6 +1588,12 @@
      * Validate and repair corrupted state
      */
     function validateAndFixState() {
+        // Fix Firebase array-as-object issue first, then ensure all arrays exist
+        appState = _fixFirebaseArrays(appState);
+        if (!Array.isArray(appState.players)) appState.players = [];
+        if (!Array.isArray(appState.courts)) appState.courts = [];
+        if (!Array.isArray(appState.matches)) appState.matches = [];
+
         // Ensure core objects exist
         if (!appState.history || typeof appState.history !== 'object') {
             appState.history = {};
