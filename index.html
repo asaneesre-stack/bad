@@ -1446,6 +1446,7 @@
 
     let _dbRef = null;
     let _saveDebounce = null;
+    let _lastSaveTimestamp = 0;
 
     function getDbRef() {
         if (_dbRef) return _dbRef;
@@ -1472,8 +1473,12 @@
         clearTimeout(_saveDebounce);
         _saveDebounce = setTimeout(() => {
             showSyncStatus('⏫ กำลังบันทึก...', '#e67e22');
+            _lastSaveTimestamp = Date.now();
             ref.set(appState)
-                .then(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'))
+                .then(() => {
+                    _lastSaveTimestamp = Date.now();
+                    showSyncStatus('☁️ sync แล้ว', '#27ae60');
+                })
                 .catch(e => {
                     console.error('Firebase save error', e);
                     showSyncStatus('❌ บันทึกไม่สำเร็จ', '#e74c3c');
@@ -1488,17 +1493,20 @@
         ref.on('value', snapshot => {
             const data = snapshot.val();
             if (!data) return;
-            // Only update if data changed from another device (not our own save)
-            const remote = JSON.stringify(data);
-            const local = JSON.stringify(appState);
-            if (remote !== local) {
-                appState = data;
-                validateAndFixState();
-                const view = document.querySelector('.view.active');
-                const viewId = view ? view.id : 'dashboard';
-                App.showView(viewId);
-                showSyncStatus('🔄 อัปเดตจากอุปกรณ์อื่น', '#00a8cc');
-            }
+
+            // Skip if this update came within 1.5s of our own save (our own echo)
+            const now = Date.now();
+            if (now - _lastSaveTimestamp < 1500) return;
+
+            // Always apply incoming data and re-render
+            appState = data;
+            validateAndFixState();
+
+            const view = document.querySelector('.view.active');
+            const viewId = view ? view.id : 'dashboard';
+            App.showView(viewId);
+            showSyncStatus('🔄 อัปเดตจากอุปกรณ์อื่น', '#00a8cc');
+            setTimeout(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'), 2000);
         });
     }
 
