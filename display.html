@@ -948,7 +948,7 @@
     // ── Helpers ───────────────────────────────────────────────────
     const SKILL_COLOR = { P:'#27ae60', 'N+':'#e67e22', N:'#00a8cc', 'N-':'#2c3e50', BG:'#95a5a6' };
 
-    function getPlayer(id) { return (state.players||[]).find(p => p.id === id); }
+    function getPlayer(id) { const _id = +id; return (state.players||[]).find(p => +p.id === _id); }
 
     function skillColor(skill) { return SKILL_COLOR[skill] || '#00a8cc'; }
 
@@ -1113,6 +1113,8 @@
 
     // ── Player History Modal ─────────────────────────────────────
     function openPH(playerId) {
+      // Normalize to number — data-pid comes as string from dataset
+      playerId = +playerId;
       const p = getPlayer(playerId);
       if (!p) return;
 
@@ -1130,21 +1132,25 @@
       skillEl.textContent = p.skill;
       skillEl.style.background = sc;
 
-      // History — stored as { team1:[], team2:[], winner:0/1/2, endTime, startTime }
-      const hist = (state.history && state.history[playerId]) ? state.history[playerId] : null;
-      const games = (hist && Array.isArray(hist.games)) ? hist.games : [];
+      // History — Firebase keys are strings, normalize to string for lookup
+      const histKey = String(playerId);
+      const hist = (state.history && state.history[histKey]) ? state.history[histKey] : null;
+      let games = (hist && hist.games) ? hist.games : [];
+      // Firebase may store array as object {0:..., 1:...}
+      if (!Array.isArray(games)) games = Object.values(games);
 
-      // Determine result per game for this player
+      // Determine result per game — normalize all ids to number for comparison
       function getResult(g) {
-        const inTeam1 = (g.team1||[]).includes(playerId);
-        if (g.winner === 0) return 'draw';
-        if ((inTeam1 && g.winner === 1) || (!inTeam1 && g.winner === 2)) return 'win';
+        const t1 = (g.team1||[]).map(Number);
+        const inTeam1 = t1.includes(playerId);
+        if (+g.winner === 0) return 'draw';
+        if ((inTeam1 && +g.winner === 1) || (!inTeam1 && +g.winner === 2)) return 'win';
         return 'loss';
       }
 
       function getNames(ids) {
         return (ids||[]).map(id => {
-          const pl = getPlayer(id);
+          const pl = getPlayer(+id);
           return pl ? pl.name : '???';
         }).filter(n => n !== p.name);
       }
@@ -1191,7 +1197,7 @@
             const rl = resultLabel[result];
 
             // Partners = teammates (same team, exclude self)
-            const inTeam1 = (g.team1||[]).includes(playerId);
+            const inTeam1 = (g.team1||[]).map(Number).includes(playerId);
             const myTeam  = inTeam1 ? g.team1 : g.team2;
             const oppTeam = inTeam1 ? g.team2 : g.team1;
             const partners  = getNames(myTeam).join(', ') || '-';
