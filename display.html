@@ -1117,11 +1117,48 @@
     let _pushGranted    = false;
     let _fcmToken       = null;
 
-    // watchedId → FCM token stored in Firebase so SW can look it up
+    // ── SW helpers: sync state + start/stop polling ─────────────────
+    function swPost(msg) {
+      if (!_swRegistration || !_swRegistration.active) return;
+      _swRegistration.active.postMessage(msg);
+    }
+
+    function syncStateToSW() {
+      // ส่ง watchedIds และ alertShown ให้ SW เก็บใน IDB
+      swPost({
+        type:       'SYNC_STATE',
+        watchedIds: [...watchedIds],
+        alertShown: Object.fromEntries(
+          [...alertShown].map(k => [k, true])
+        ),
+      });
+    }
+
+    function startSWPoll()  { swPost({ type: 'START_POLL' }); }
+    function stopSWPoll()   { swPost({ type: 'STOP_POLL'  }); }
+
+    // เมื่อพับจอ → sync state แล้ว start polling ใน SW
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        syncStateToSW();
+        startSWPoll();
+      } else {
+        stopSWPoll();
+      }
+    });
+
+    // page ปิด / navigate ออก
+    window.addEventListener('pagehide', () => {
+      syncStateToSW();
+      startSWPoll();
+    });
+
     async function initPWA() {
       if (!('serviceWorker' in navigator)) return;
       try {
         _swRegistration = await navigator.serviceWorker.register('sw.js');
+        // รอ SW พร้อมก่อน
+        await navigator.serviceWorker.ready;
         console.log('[SW] registered');
       } catch(e) { console.warn('[SW] register failed', e); }
     }
@@ -1562,13 +1599,10 @@
         const key2 = `${pid}-court`;
 
         if (pos >= 2) {
-          // In queue but not #1 yet — full reset so next cycle fires fresh
           alertShown.delete(key1);
           alertShown.delete(key2);
 
         } else if (pos === 1) {
-          // Level 1: reached front of queue
-          // If court alert already fired (key2 set), they rejoined queue after playing — full reset first
           if (alertShown.has(key2)) {
             alertShown.delete(key1);
             alertShown.delete(key2);
@@ -1580,16 +1614,15 @@
           }
 
         } else {
-          // pos === 0: not in queue
           if (alertShown.has(key1) && !alertShown.has(key2)) {
-            // Was at #1 then removed = sent to court — Level 2 alert
             alertShown.add(key2);
             const p = getPlayer(pid);
             triggerAlert(p ? p.name : '???', 2);
           }
-          // If key2 already set or key1 never set — wait for re-queue
         }
       });
+      // Sync state ไปหา SW ทุกครั้งที่ตรวจคิว (SW จะ poll ด้วยข้อมูลล่าสุด)
+      syncStateToSW();
     }
 
     function triggerAlert(name, level) {
