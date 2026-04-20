@@ -312,9 +312,12 @@
       font-family: 'Teko', sans-serif;
       font-size: 1.2rem;
       font-weight: 700;
-      color: #333;
+      color: rgba(255,255,255,0.9);
       text-align: center;
       padding: 0 4px;
+      text-shadow:
+        0 0 6px rgba(255,255,255,0.9),
+        0 0 14px rgba(255,255,255,0.5);
     }
 
     /* Queue card */
@@ -440,23 +443,39 @@
     .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
     .empty-state .text { font-size: 0.9rem; }
 
-    /* Marquee ticker for waiting players */
-    .ticker-wrap {
-      overflow: hidden;
-      white-space: nowrap;
+    /* Marquee — removed */
+
+    /* Waiting chips grid */
+    .waiting-chips-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
       margin-top: 0.5rem;
     }
 
-    .ticker-inner {
-      display: inline-block;
-      animation: ticker-scroll 20s linear infinite;
+    .waiting-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 20px;
+      padding: 5px 11px;
+      transition: background 0.2s;
     }
 
-    .ticker-inner:hover { animation-play-state: paused; }
+    .waiting-chip-name {
+      font-size: 0.83rem;
+      font-weight: 700;
+      color: #e8edf2;
+    }
 
-    @keyframes ticker-scroll {
-      0%   { transform: translateX(0); }
-      100% { transform: translateX(-50%); }
+    .skill-badge-sm {
+      font-size: 0.6rem;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 8px;
+      color: #fff;
     }
 
     /* ============================================================
@@ -466,66 +485,103 @@
     /* ── iPhone (portrait ≤ 480px) ── */
     @media (max-width: 480px) {
       .header {
-        padding: 0.6rem 0.9rem;
-        gap: 0.5rem;
+        padding: 0.55rem 0.9rem;
       }
-      .header-logo-img { width: 36px; height: 36px; border-radius: 8px; }
-      .header-title { font-size: 0.85rem; }
-      .header-subtitle { font-size: 0.65rem; }
-      .header-right { gap: 0.75rem; }
-      .stat-pill .val { font-size: 1.3rem; }
-      .stat-pill .lbl { font-size: 0.58rem; }
-      .clock { font-size: 1rem; }
-      .clock-date { font-size: 0.6rem; }
+      .header-logo-img { width: 34px; height: 34px; border-radius: 8px; }
+      .header-title { font-size: 0.82rem; }
+      .header-subtitle { font-size: 0.62rem; }
+      .header-right { gap: 0.7rem; }
+      .stat-pill .val { font-size: 1.2rem; }
+      .stat-pill .lbl { font-size: 0.56rem; }
+      .clock { font-size: 0.95rem; }
+      .clock-date { display: none; } /* ซ่อน เพื่อประหยัดที่ */
 
-      /* Stack courts on top, queue below */
+      /* Layout: สนามด้านบน คิว+รอด้านล่าง แบ่ง 60/40 */
       .main {
         grid-template-columns: 1fr;
-        grid-template-rows: auto auto;
-        height: auto;
-        overflow: visible;
+        grid-template-rows: 1fr auto;
+        height: calc(100dvh - 56px);
+        overflow: hidden;
       }
+
+      /* สนามด้านบน — scroll ได้ */
       .section-left {
         border-right: none;
         border-bottom: 1px solid var(--border);
+        overflow-y: auto;
+        padding: 0.85rem 0.9rem;
       }
-      .section { padding: 1rem; }
-      .section-title { font-size: 0.95rem; }
 
-      .court-card { padding: 0.75rem 1rem; margin-bottom: 0.65rem; }
-      .court-name { font-size: 0.82rem; }
-      .court-timer { font-size: 1.1rem; padding: 2px 8px; }
-      .player-name-txt { font-size: 0.88rem; }
+      /* คิว+รอด้านล่าง — สูงแค่พอดีเนื้อหา max 45vh */
+      .section:not(.section-left) {
+        padding: 0.85rem 0.9rem;
+        overflow-y: auto;
+        max-height: 45vh;
+        background: rgba(0,0,0,0.25);
+        backdrop-filter: blur(8px);
+      }
 
-      .queue-card { padding: 0.55rem 0.75rem; }
-      .queue-num { font-size: 1.5rem; min-width: 28px; }
-      .queue-player { font-size: 0.82rem; }
-      .queue-team-label { font-size: 0.65rem; min-width: 36px; }
+      .section-title { font-size: 0.9rem; }
+      .section-header { margin-bottom: 0.75rem; }
+
+      /* Court card compact */
+      .court-card {
+        padding: 0.65rem 0.85rem;
+        margin-bottom: 0.55rem;
+        border-radius: 12px;
+      }
+      .court-name { font-size: 0.8rem; }
+      .court-timer { font-size: 1rem; padding: 2px 7px; }
+      .player-name-txt { font-size: 0.85rem; }
+      .skill-dot { width: 7px; height: 7px; }
+      .vs-badge { font-size: 1rem; }
+
+      /* Queue card compact */
+      .queue-card {
+        padding: 0.5rem 0.75rem;
+        margin-bottom: 0.45rem;
+        border-radius: 10px;
+        gap: 0.65rem;
+      }
+      .queue-num { font-size: 1.4rem; min-width: 24px; }
+      .queue-player { font-size: 0.8rem; }
+      .queue-team-label { font-size: 0.62rem; min-width: 34px; }
+      .next-badge { font-size: 0.6rem; padding: 2px 6px; }
+
+      /* Waiting chips เล็กลง */
+      .waiting-section { margin-top: 0.75rem; padding-top: 0.65rem; }
+      .waiting-title { font-size: 0.65rem; margin-bottom: 0.4rem; }
+      .waiting-chip { padding: 3px 8px; gap: 4px; }
+      .waiting-chip-name { font-size: 0.75rem; }
+      .skill-badge-sm { font-size: 0.55rem; padding: 1px 5px; }
+      .waiting-chips-grid { gap: 0.3rem; }
+
+      .empty-state { padding: 1.5rem 1rem; }
+      .empty-state .icon { font-size: 1.8rem; }
+      .empty-state .text { font-size: 0.8rem; }
     }
 
     /* ── iPhone landscape / small tablet (481–768px) ── */
     @media (min-width: 481px) and (max-width: 768px) {
       .header { padding: 0.7rem 1.2rem; }
-      .header-logo-img { width: 40px; height: 40px; }
-      .header-title { font-size: 1rem; }
-      .header-right { gap: 1.2rem; }
-      .stat-pill .val { font-size: 1.5rem; }
-      .stat-pill .lbl { font-size: 0.62rem; }
-      .clock { font-size: 1.2rem; }
-      .clock-date { font-size: 0.65rem; }
+      .header-logo-img { width: 38px; height: 38px; }
+      .header-title { font-size: 0.95rem; }
+      .header-right { gap: 1.1rem; }
+      .stat-pill .val { font-size: 1.45rem; }
+      .stat-pill .lbl { font-size: 0.6rem; }
+      .clock { font-size: 1.1rem; }
+      .clock-date { font-size: 0.6rem; }
 
+      /* Landscape: 2 คอลัมน์พอดี */
       .main {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto auto;
-        height: auto;
-        overflow: visible;
+        grid-template-columns: 1fr 1fr;
+        height: calc(100dvh - 62px);
+        overflow: hidden;
       }
-      .section-left {
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-      }
-      .section { padding: 1rem 1.25rem; }
-      .player-name-txt { font-size: 0.92rem; }
+      .section-left { border-right: 1px solid var(--border); border-bottom: none; }
+      .section { padding: 0.9rem 1rem; }
+      .court-card { padding: 0.75rem 0.9rem; }
+      .player-name-txt { font-size: 0.88rem; }
     }
 
     /* ── iPad portrait (769–1024px) ── */
@@ -537,10 +593,9 @@
       .stat-pill .val { font-size: 1.7rem; }
       .clock { font-size: 1.3rem; }
 
-      /* Keep 2-column but reduce padding */
       .main {
         grid-template-columns: 1fr 1fr;
-        height: calc(100vh - 72px);
+        height: calc(100dvh - 72px);
       }
       .section { padding: 1rem 1.25rem; }
       .court-card { padding: 0.85rem 1rem; }
@@ -553,13 +608,13 @@
     @media (min-width: 1025px) and (max-width: 1280px) {
       .header { padding: 0.85rem 1.75rem; }
       .stat-pill .val { font-size: 1.85rem; }
-      .main { height: calc(100vh - 76px); }
+      .main { height: calc(100dvh - 76px); }
       .section { padding: 1.1rem 1.35rem; }
     }
 
-    /* ── Desktop (> 1280px) — default styles apply, just ensure full-height ── */
+    /* ── Desktop (> 1280px) ── */
     @media (min-width: 1281px) {
-      .main { height: calc(100vh - 80px); }
+      .main { height: calc(100dvh - 80px); }
     }
   </style>
 </head>
@@ -623,9 +678,7 @@
       <!-- Waiting -->
       <div class="waiting-section">
         <div class="waiting-title">รอจัดคู่</div>
-        <div class="ticker-wrap" id="ticker-wrap">
-          <div class="ticker-inner" id="ticker-inner"></div>
-        </div>
+        <div class="waiting-chips-grid" id="waiting-chips"></div>
         <div id="waiting-empty" style="display:none;font-size:0.82rem;color:var(--muted);font-style:italic;">ไม่มีผู้เล่นรอ</div>
       </div>
     </div>
@@ -840,34 +893,20 @@
       const inQ = new Set(queues.flatMap(q => [...q.team1, ...q.team2]));
       const waiting = players.filter(p => p.isCheckedIn && !p.isPlaying && !inQ.has(p.id));
 
-      const tickerWrap = document.getElementById('ticker-wrap');
-      const tickerInner = document.getElementById('ticker-inner');
+      const chipsEl = document.getElementById('waiting-chips');
       const emptyEl = document.getElementById('waiting-empty');
 
       if (waiting.length === 0) {
-        tickerWrap.style.display = 'none';
+        chipsEl.innerHTML = '';
         emptyEl.style.display = 'block';
       } else {
         emptyEl.style.display = 'none';
-        tickerWrap.style.display = 'block';
-
-        // Build chip HTML (duplicated for seamless loop)
-        const chipHTML = waiting.map(p =>
-          `<span class="waiting-chip" style="margin-right:0.75rem;">
+        chipsEl.innerHTML = waiting.map(p =>
+          `<div class="waiting-chip">
             <span class="waiting-chip-name">${esc(p.name)}</span>
             <span class="skill-badge-sm" style="background:${skillColor(p.skill)}">${esc(p.skill)}</span>
-          </span>`
+          </div>`
         ).join('');
-
-        // If few players, no need to scroll — just show static
-        if (waiting.length <= 4) {
-          tickerInner.style.animation = 'none';
-          tickerInner.innerHTML = chipHTML;
-        } else {
-          tickerInner.style.animation = '';
-          // Duplicate for seamless infinite scroll
-          tickerInner.innerHTML = chipHTML + chipHTML;
-        }
       }
     }
 
