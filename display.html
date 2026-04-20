@@ -616,6 +616,204 @@
     @media (min-width: 1281px) {
       .main { height: calc(100dvh - 80px); }
     }
+
+    /* ── Player History Modal ── */
+    .ph-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 1000;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .ph-backdrop.open { display: flex; }
+
+    .ph-modal {
+      background: #0f1829;
+      border: 1px solid rgba(0,168,204,0.3);
+      border-radius: 20px;
+      width: 100%;
+      max-width: 480px;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,168,204,0.1);
+      animation: popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.88) translateY(16px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .ph-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem 1.5rem 1rem;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky;
+      top: 0;
+      background: #0f1829;
+      z-index: 2;
+    }
+
+    .ph-player-info { display: flex; align-items: center; gap: 0.75rem; }
+
+    .ph-avatar {
+      width: 46px; height: 46px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Teko', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .ph-name {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .ph-skill-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 3px;
+    }
+
+    .ph-close {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #aaa;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    .ph-close:hover { background: rgba(231,76,60,0.3); color: #fff; }
+
+    .ph-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+
+    .ph-stat {
+      padding: 0.9rem 0.5rem;
+      text-align: center;
+      border-right: 1px solid rgba(255,255,255,0.07);
+    }
+    .ph-stat:last-child { border-right: none; }
+
+    .ph-stat-val {
+      font-family: 'Teko', sans-serif;
+      font-size: 1.7rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .ph-stat-lbl {
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-top: 2px;
+    }
+
+    .ph-games {
+      padding: 1rem 1.5rem 1.5rem;
+    }
+
+    .ph-games-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+    }
+
+    .ph-game-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .ph-game-row:last-child { border-bottom: none; }
+
+    .ph-result-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .ph-game-info { flex: 1; }
+
+    .ph-game-vs {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #ccc;
+    }
+
+    .ph-game-time {
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .ph-result-tag {
+      font-size: 0.68rem;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 8px;
+      color: #fff;
+    }
+
+    .ph-empty {
+      text-align: center;
+      padding: 2rem 1rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+
+    /* clickable player name */
+    .player-name-clickable {
+      cursor: pointer;
+      border-bottom: 1px dashed rgba(0,168,204,0.5);
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .player-name-clickable:hover {
+      color: var(--cyan);
+      border-bottom-color: var(--cyan);
+    }
+
+    .queue-player-clickable {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .queue-player-clickable:hover { color: var(--cyan); }
+
+    .waiting-chip-clickable {
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .waiting-chip-clickable:hover {
+      background: rgba(0,168,204,0.12);
+      border-color: rgba(0,168,204,0.35);
+    }
   </style>
 </head>
 <body>
@@ -823,7 +1021,7 @@
           const name  = p ? esc(p.name) : '???';
           const skill = p ? p.skill : '?';
           const dot = `<div class="skill-dot" style="background:${skillColor(skill)};"></div>`;
-          const nameEl = `<span class="player-name-txt">${name}</span>`;
+          const nameEl = `<span class="player-name-txt player-name-clickable" onclick="openPH(${id})" title="ดูประวัติ">${name}</span>`;
           return `<div class="player-row ${right?'right':''}">
             ${right ? nameEl : dot}
             ${right ? dot    : nameEl}
@@ -870,7 +1068,7 @@
         const isNext = i === 0;
         const names = ids => ids.map(id => {
           const p = getPlayer(id);
-          return `<span class="queue-player">${p ? esc(p.name) : '???'}</span>`;
+          return `<span class="queue-player queue-player-clickable" onclick="openPH(${id})" title="ดูประวัติ">${p ? esc(p.name) : '???'}</span>`;
         }).join('<span class="sep">&</span>');
 
         return `<div class="queue-card ${isNext?'next':''}">
@@ -902,7 +1100,7 @@
       } else {
         emptyEl.style.display = 'none';
         chipsEl.innerHTML = waiting.map(p =>
-          `<div class="waiting-chip">
+          `<div class="waiting-chip waiting-chip-clickable" onclick="openPH(${p.id})" title="ดูประวัติ">
             <span class="waiting-chip-name">${esc(p.name)}</span>
             <span class="skill-badge-sm" style="background:${skillColor(p.skill)}">${esc(p.skill)}</span>
           </div>`
@@ -912,6 +1110,113 @@
 
     // Initial render (empty state)
     render();
+
+    // ── Player History Modal ─────────────────────────────────────
+    function openPH(playerId) {
+      const p = getPlayer(playerId);
+      if (!p) return;
+
+      const sc = skillColor(p.skill);
+      const initials = p.name.slice(0,2).toUpperCase();
+
+      // Avatar
+      const av = document.getElementById('ph-avatar');
+      av.textContent = initials;
+      av.style.background = `linear-gradient(135deg, ${sc}, ${sc}88)`;
+      av.style.boxShadow = `0 0 16px ${sc}44`;
+
+      document.getElementById('ph-name').textContent = p.name;
+      const skillEl = document.getElementById('ph-skill');
+      skillEl.textContent = p.skill;
+      skillEl.style.background = sc;
+
+      // History
+      const hist = (state.history && state.history[playerId]) ? state.history[playerId] : null;
+      const games = (hist && Array.isArray(hist.games)) ? hist.games : [];
+
+      // Stats
+      const totalGames = games.length;
+      const wins  = games.filter(g => g.result === 'win').length;
+      const losses= games.filter(g => g.result === 'loss').length;
+      const draws = games.filter(g => g.result === 'draw').length;
+      const winRate = totalGames > 0 ? Math.round((wins/totalGames)*100) : 0;
+
+      document.getElementById('ph-stats').innerHTML = `
+        <div class="ph-stat">
+          <div class="ph-stat-val" style="color:#00a8cc">${totalGames}</div>
+          <div class="ph-stat-lbl">เกมทั้งหมด</div>
+        </div>
+        <div class="ph-stat">
+          <div class="ph-stat-val" style="color:#27ae60">${wins}</div>
+          <div class="ph-stat-lbl">ชนะ</div>
+        </div>
+        <div class="ph-stat">
+          <div class="ph-stat-val" style="color:#e74c3c">${losses}</div>
+          <div class="ph-stat-lbl">แพ้</div>
+        </div>
+        <div class="ph-stat">
+          <div class="ph-stat-val" style="color:#f39c12">${winRate}%</div>
+          <div class="ph-stat-lbl">Win Rate</div>
+        </div>
+      `;
+
+      // Recent games
+      const gamesEl = document.getElementById('ph-games');
+      if (games.length === 0) {
+        gamesEl.innerHTML = `<div class="ph-empty">ยังไม่มีประวัติการแข่ง</div>`;
+      } else {
+        const recent = [...games].reverse().slice(0, 10);
+        const resultColor = { win:'#27ae60', loss:'#e74c3c', draw:'#f39c12' };
+        const resultLabel = { win:'ชนะ', loss:'แพ้', draw:'เสมอ' };
+
+        gamesEl.innerHTML = `<div class="ph-games-title">ประวัติล่าสุด</div>` +
+          recent.map(g => {
+            const rc = resultColor[g.result] || '#888';
+            const rl = resultLabel[g.result] || g.result || '-';
+            const partners = (g.partners||[]).join(', ') || '-';
+            const opponents = (g.opponents||[]).join(', ') || '-';
+            const timeStr = g.endTime
+              ? new Date(g.endTime).toLocaleString('th-TH',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'})
+              : '';
+            return `<div class="ph-game-row">
+              <div class="ph-result-dot" style="background:${rc};box-shadow:0 0 6px ${rc}88;"></div>
+              <div class="ph-game-info">
+                <div class="ph-game-vs">คู่: ${esc(partners)} <span style="color:#555;">vs</span> ${esc(opponents)}</div>
+                ${timeStr ? `<div class="ph-game-time">${timeStr}</div>` : ''}
+              </div>
+              <div class="ph-result-tag" style="background:${rc}">${rl}</div>
+            </div>`;
+          }).join('');
+      }
+
+      document.getElementById('ph-backdrop').classList.add('open');
+    }
+
+    function closePH() {
+      document.getElementById('ph-backdrop').classList.remove('open');
+    }
+
+    // Close on ESC
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closePH(); });
   </script>
+
+  <!-- Player History Modal -->
+  <div class="ph-backdrop" id="ph-backdrop" onclick="if(event.target===this)closePH()">
+    <div class="ph-modal" id="ph-modal">
+      <div class="ph-header">
+        <div class="ph-player-info">
+          <div class="ph-avatar" id="ph-avatar"></div>
+          <div>
+            <div class="ph-name" id="ph-name"></div>
+            <span class="ph-skill-badge" id="ph-skill"></span>
+          </div>
+        </div>
+        <button class="ph-close" onclick="closePH()">✕</button>
+      </div>
+      <div class="ph-stats" id="ph-stats"></div>
+      <div class="ph-games" id="ph-games"></div>
+    </div>
+  </div>
+
 </body>
 </html>
