@@ -894,6 +894,26 @@
             .timeline-dot { width: 28px; height: 28px; }
         }
     </style>
+    <!-- Firebase SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
+    <script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyCwdZT7tzwXyapCfg3wbjRuhiEDeXapghA",
+        authDomain: "b-bad-d088b.firebaseapp.com",
+        databaseURL: "https://b-bad-d088b-default-rtdb.firebaseio.com",
+        projectId: "b-bad-d088b",
+        storageBucket: "b-bad-d088b.firebasestorage.app",
+        messagingSenderId: "1062091192895",
+        appId: "1:1062091192895:web:4e08ef9e3b2d6459de568a"
+    };
+    try {
+        firebase.initializeApp(firebaseConfig);
+        console.log("Firebase initialized OK");
+    } catch(e) {
+        console.warn("Firebase init error:", e);
+    }
+    </script>
 </head>
 <body>
     <div class="toast-container" id="toast-container"></div>
@@ -901,6 +921,7 @@
     <header>
         <div class="container">
             <h1>🏸 ระบบจัดการสนามแบดมินตัน 🏸</h1>
+            <div id="sync-status" style="font-size:0.75rem;margin-top:0.4rem;opacity:0.9;">⏳ กำลังโหลด...</div>
         </div>
     </header>
 
@@ -1419,52 +1440,111 @@
         activeEventListeners: []
     };
 
-    /**
-     * Save state to localStorage with quota checking
-     */
-    function saveState() {
-        try {
-            const stateToSave = JSON.stringify(appState);
-            
-            // Check storage size before saving
-            if (navigator.storage && navigator.storage.estimate) {
-                navigator.storage.estimate().then(estimate => {
-                    const percentUsed = (estimate.usage / estimate.quota) * 100;
-                    if (percentUsed > STORAGE_WARNING_THRESHOLD) {
-                        console.warn(`Storage usage: ${percentUsed.toFixed(2)}%`);
-                    }
-                });
-            }
+    // ============================================================
+    // FIREBASE REALTIME DATABASE SYNC
+    // ============================================================
 
-            localStorage.setItem(STORAGE_KEY, stateToSave);
-            return true;
-        } catch (e) {
-            if (e.name === 'QuotaExceededError') {
-                showError('Storage เต็มแล้ว ไม่สามารถบันทึกข้อมูลได้');
-                console.error('QuotaExceededError:', e);
-                return false;
+    let _dbRef = null;
+    let _saveDebounce = null;
+
+    function getDbRef() {
+        if (_dbRef) return _dbRef;
+        try {
+            if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length > 0) {
+                _dbRef = firebase.database().ref('badmintonState');
             }
-            console.error('Save state error:', e);
-            return false;
-        }
+        } catch(e) {}
+        return _dbRef;
     }
 
-    /**
-     * Load state from localStorage with fallback
-     */
+    function showSyncStatus(msg, color) {
+        const el = document.getElementById('sync-status');
+        if (el) { el.textContent = msg; el.style.color = color || '#888'; }
+    }
+
+    function saveState() {
+        // Always backup to localStorage
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); } catch(e) {}
+
+        const ref = getDbRef();
+        if (!ref) return true;
+
+        clearTimeout(_saveDebounce);
+        _saveDebounce = setTimeout(() => {
+            showSyncStatus('⏫ กำลังบันทึก...', '#e67e22');
+            ref.set(appState)
+                .then(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'))
+                .catch(e => {
+                    console.error('Firebase save error', e);
+                    showSyncStatus('❌ บันทึกไม่สำเร็จ', '#e74c3c');
+                });
+        }, 800);
+        return true;
+    }
+
+    function _startRealtimeSync() {
+        const ref = getDbRef();
+        if (!ref) return;
+        ref.on('value', snapshot => {
+            const data = snapshot.val();
+            if (!data) return;
+            // Only update if data changed from another device (not our own save)
+            const remote = JSON.stringify(data);
+            const local = JSON.stringify(appState);
+            if (remote !== local) {
+                appState = data;
+                validateAndFixState();
+                const view = document.querySelector('.view.active');
+                const viewId = view ? view.id : 'dashboard';
+                App.showView(viewId);
+                showSyncStatus('🔄 อัปเดตจากอุปกรณ์อื่น', '#00a8cc');
+            }
+        });
+    }
+
     function loadState() {
+        const ref = getDbRef();
+        if (!ref) {
+            _loadFromLocalStorage();
+            App.showView('dashboard');
+            return;
+        }
+
+        showSyncStatus('⏳ กำลังโหลด...', '#888');
+        ref.once('value')
+            .then(snapshot => {
+                const data = snapshot.val();
+                if (data) {
+                    appState = data;
+                    validateAndFixState();
+                    showSyncStatus('☁️ โหลดจาก Firebase', '#27ae60');
+                } else {
+                    _loadFromLocalStorage();
+                    if (appState.players && appState.players.length > 0) {
+                        ref.set(appState).catch(()=>{});
+                        showSyncStatus('☁️ อัปโหลดข้อมูล local สำเร็จ', '#27ae60');
+                    } else {
+                        showSyncStatus('☁️ เชื่อมต่อแล้ว (ยังไม่มีข้อมูล)', '#27ae60');
+                    }
+                }
+                _startRealtimeSync();
+                App.showView('dashboard');
+            })
+            .catch(e => {
+                console.error('Firebase load error', e);
+                _loadFromLocalStorage();
+                showSyncStatus('⚠️ offline — ใช้ข้อมูล local', '#e67e22');
+                App.showView('dashboard');
+            });
+    }
+
+    function _loadFromLocalStorage() {
         try {
             const savedState = localStorage.getItem(STORAGE_KEY);
-            
-            if (!savedState) {
-                appState = getDefaultState();
-                return;
-            }
-
+            if (!savedState) { appState = getDefaultState(); return; }
             appState = JSON.parse(savedState);
             validateAndFixState();
-
-        } catch (e) {
+        } catch(e) {
             console.error('Load state error:', e);
             appState = getDefaultState();
             showWarning('ข้อมูลเสียหาย สร้างใหม่แล้ว');
@@ -3716,9 +3796,8 @@ if (btnViewQueue) {
 
     window.addEventListener('load', function() {
         loadState();
-        App.showView('dashboard');
 
-        // #4: Auto-refresh dashboard every 30 seconds
+        // Auto-refresh dashboard every 30 seconds
         setInterval(() => {
             const dashView = document.getElementById('dashboard');
             if (dashView && dashView.classList.contains('active')) {
