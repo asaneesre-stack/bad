@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🏸 สนามแบดมินตัน — หน้าจอสาธารณะ</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Teko:wght@600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
+  <style>
+    :root {
+      --bg: #080d1a;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(0,168,204,0.18);
+      --cyan: #00a8cc;
+      --gold: #f39c12;
+      --green: #27ae60;
+      --red: #e74c3c;
+      --text: #f0f4f8;
+      --muted: #6b7280;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Sarabun', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,168,204,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,168,204,0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 15% 50%, rgba(0,168,204,0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 60% at 85% 30%, rgba(26,43,71,0.6) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Header */
+    .header {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.9rem 2rem;
+      background: rgba(0,0,0,0.5);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .header-logo {
+      font-size: 2rem;
+      animation: shuttle 3s ease-in-out infinite;
+    }
+
+    @keyframes shuttle {
+      0%, 100% { transform: rotate(-10deg); }
+      50% { transform: rotate(10deg); }
+    }
+
+    .header-title {
+      font-size: 1.3rem;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: 0.04em;
+    }
+
+    .header-subtitle {
+      font-size: 0.78rem;
+      color: var(--cyan);
+      font-weight: 600;
+      margin-top: 1px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+
+    .stat-pill {
+      text-align: center;
+    }
+
+    .stat-pill .val {
+      font-family: 'Teko', sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--cyan);
+      line-height: 1;
+    }
+
+    .stat-pill .lbl {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .clock {
+      font-family: 'Teko', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 600;
+      color: #fff;
+      letter-spacing: 0.05em;
+      text-align: right;
+    }
+
+    .clock-date {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-family: 'Sarabun', sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-align: right;
+    }
+
+    /* Sync status */
+    .sync-bar {
+      position: relative;
+      z-index: 10;
+      text-align: center;
+      padding: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: rgba(0,0,0,0.3);
+    }
+
+    /* Main layout */
+    .main {
+      position: relative;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      height: calc(100vh - 80px);
+      overflow: hidden;
+    }
+
+    /* Section */
+    .section {
+      padding: 1.25rem 1.5rem;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .section::-webkit-scrollbar { display: none; }
+
+    .section-left { border-right: 1px solid var(--border); }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .section-accent {
+      width: 4px;
+      height: 26px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: 0.04em;
+    }
+
+    .count-badge {
+      padding: 0.15rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    /* Court Card */
+    .court-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.9rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.3s;
+      animation: fadeSlideIn 0.4s ease-out;
+    }
+
+    @keyframes fadeSlideIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .court-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 4px; height: 100%;
+      background: linear-gradient(180deg, var(--cyan), rgba(0,168,204,0.2));
+      border-radius: 4px 0 0 4px;
+    }
+
+    .court-card.long::before {
+      background: linear-gradient(180deg, var(--red), rgba(231,76,60,0.2));
+    }
+
+    .court-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      padding-left: 0.6rem;
+    }
+
+    .court-name {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: var(--cyan);
+      letter-spacing: 0.05em;
+    }
+
+    .court-timer {
+      font-family: 'Teko', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 2px 12px;
+      border-radius: 8px;
+      background: rgba(0,0,0,0.4);
+    }
+
+    .court-timer.normal { color: var(--gold); }
+    .court-timer.long   { color: var(--red); animation: blink 1.5s ease-in-out infinite; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.6; }
+    }
+
+    .court-teams {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 0.5rem;
+      padding-left: 0.6rem;
+    }
+
+    .team-players { }
+    .team-players.right { text-align: right; }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 3px 0;
+    }
+
+    .player-row.right {
+      flex-direction: row-reverse;
+    }
+
+    .player-name-txt {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .skill-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .vs-badge {
+      font-family: 'Teko', sans-serif;
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #333;
+      text-align: center;
+      padding: 0 4px;
+    }
+
+    /* Queue card */
+    .queue-card {
+      background: var(--surface);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 0.7rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      animation: fadeSlideIn 0.3s ease-out;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    .queue-card.next {
+      border-color: var(--gold);
+      box-shadow: 0 0 24px rgba(243,156,18,0.12);
+    }
+
+    .queue-num {
+      font-family: 'Teko', sans-serif;
+      font-size: 2rem;
+      font-weight: 700;
+      min-width: 36px;
+      text-align: center;
+      line-height: 1;
+    }
+
+    .queue-teams { flex: 1; }
+
+    .queue-team-row {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 2px 0;
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+
+    .queue-team-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 700;
+      min-width: 44px;
+      text-transform: uppercase;
+    }
+
+    .queue-player {
+      font-weight: 700;
+      color: #fff;
+      font-size: 0.92rem;
+    }
+
+    .sep { color: #444; margin: 0 2px; }
+
+    .next-badge {
+      background: var(--gold);
+      color: #000;
+      font-size: 0.65rem;
+      font-weight: 800;
+      padding: 3px 8px;
+      border-radius: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      align-self: flex-start;
+    }
+
+    /* Waiting section */
+    .waiting-section {
+      margin-top: 1.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .waiting-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 0.6rem;
+    }
+
+    .waiting-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .waiting-chip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 4px 10px;
+    }
+
+    .waiting-chip-name {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #ddd;
+    }
+
+    .skill-badge-sm {
+      font-size: 0.62rem;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 8px;
+      color: #fff;
+    }
+
+    /* Empty states */
+    .empty-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #3a4a5a;
+    }
+
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+    .empty-state .text { font-size: 0.9rem; }
+
+    /* Marquee ticker for waiting players on mobile */
+    .ticker-wrap {
+      display: none;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 700px) {
+      .main { grid-template-columns: 1fr; grid-template-rows: auto auto; height: auto; }
+      .section-left { border-right: none; border-bottom: 1px solid var(--border); }
+      .header { padding: 0.7rem 1rem; }
+      .header-title { font-size: 1rem; }
+      .clock { font-size: 1.2rem; }
+      .stat-pill .val { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <div class="header-logo">🏸</div>
+      <div>
+        <div class="header-title">ระบบจัดการสนามแบดมินตัน</div>
+        <div id="sync-status" class="header-subtitle">⏳ กำลังเชื่อมต่อ...</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="stat-pill">
+        <div class="val" id="stat-courts">0</div>
+        <div class="lbl">สนามแข่ง</div>
+      </div>
+      <div class="stat-pill">
+        <div class="val" id="stat-queue">0</div>
+        <div class="lbl">คิวรอ</div>
+      </div>
+      <div class="stat-pill">
+        <div class="val" id="stat-checkin">0</div>
+        <div class="lbl">เช็คอิน</div>
+      </div>
+      <div>
+        <div class="clock" id="clock-time">--:--:--</div>
+        <div class="clock-date" id="clock-date">--</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- LEFT: Courts -->
+    <div class="section section-left">
+      <div class="section-header">
+        <div class="section-accent" style="background:linear-gradient(180deg,#00a8cc,rgba(0,168,204,0.2));"></div>
+        <div class="section-title">🏟️ สนามที่กำลังแข่ง</div>
+        <div class="count-badge" id="courts-badge" style="background:rgba(0,168,204,0.15);color:#00a8cc;"></div>
+      </div>
+      <div id="courts-list"></div>
+    </div>
+
+    <!-- RIGHT: Queue + Waiting -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-accent" style="background:linear-gradient(180deg,#f39c12,rgba(243,156,18,0.2));"></div>
+        <div class="section-title">⏳ คิวรอเล่น</div>
+        <div class="count-badge" id="queue-badge" style="background:rgba(243,156,18,0.15);color:#f39c12;"></div>
+      </div>
+      <div id="queue-list"></div>
+
+      <!-- Waiting -->
+      <div class="waiting-section">
+        <div class="waiting-title">รอจัดคู่</div>
+        <div id="waiting-chips" class="waiting-chips"></div>
+        <div id="waiting-empty" style="display:none;font-size:0.82rem;color:var(--muted);font-style:italic;">ไม่มีผู้เล่นรอ</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ── Firebase ──────────────────────────────────────────────────
+    const firebaseConfig = {
+      apiKey: "AIzaSyCwdZT7tzwXyapCfg3wbjRuhiEDeXapghA",
+      authDomain: "b-bad-d088b.firebaseapp.com",
+      databaseURL: "https://b-bad-d088b-default-rtdb.firebaseio.com",
+      projectId: "b-bad-d088b",
+      storageBucket: "b-bad-d088b.firebasestorage.app",
+      messagingSenderId: "1062091192895",
+      appId: "1:1062091192895:web:4e08ef9e3b2d6459de568a"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // ── State ─────────────────────────────────────────────────────
+    let state = { players:[], matches:[], matchQueues:[], courts:[] };
+
+    function fixArrays(data) {
+      if (!data) return data;
+      ['players','courts','matches','matchQueues'].forEach(f => {
+        if (data[f] && !Array.isArray(data[f])) data[f] = Object.values(data[f]);
+      });
+      return data;
+    }
+
+    function syncStatus(msg, color) {
+      const el = document.getElementById('sync-status');
+      el.textContent = msg;
+      el.style.color = color || '#00a8cc';
+    }
+
+    db.ref('badmintonState').on('value', snap => {
+      const raw = snap.val();
+      if (!raw) { syncStatus('⚠️ ยังไม่มีข้อมูล', '#e67e22'); return; }
+      const { _savedBy, ...clean } = raw;
+      state = fixArrays(clean);
+      render();
+      syncStatus('🔄 ข้อมูลล่าสุด', '#27ae60');
+      setTimeout(() => syncStatus('☁️ เชื่อมต่อแล้ว', '#00a8cc'), 2000);
+    }, () => syncStatus('❌ เชื่อมต่อไม่ได้', '#e74c3c'));
+
+    // ── Clock ─────────────────────────────────────────────────────
+    function updateClock() {
+      const now = new Date();
+      document.getElementById('clock-time').textContent =
+        now.toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+      document.getElementById('clock-date').textContent =
+        now.toLocaleDateString('th-TH', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // ── Helpers ───────────────────────────────────────────────────
+    const SKILL_COLOR = { P:'#27ae60', 'N+':'#e67e22', N:'#00a8cc', 'N-':'#2c3e50', BG:'#95a5a6' };
+
+    function getPlayer(id) { return (state.players||[]).find(p => p.id === id); }
+
+    function skillColor(skill) { return SKILL_COLOR[skill] || '#00a8cc'; }
+
+    function elapsed(startTime) {
+      return Math.floor((Date.now() - (startTime || Date.now())) / 1000);
+    }
+
+    function fmtTimer(sec) {
+      const h = Math.floor(sec / 3600);
+      const m = Math.floor((sec % 3600) / 60);
+      const s = sec % 60;
+      if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    }
+
+    function esc(t) {
+      if (!t) return '';
+      return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Render ────────────────────────────────────────────────────
+    function render() {
+      const matches = state.matches || [];
+      const queues  = state.matchQueues || [];
+      const players = state.players || [];
+
+      // Stats
+      const checkedIn = players.filter(p => p.isCheckedIn).length;
+      document.getElementById('stat-courts').textContent  = matches.length;
+      document.getElementById('stat-queue').textContent   = queues.length;
+      document.getElementById('stat-checkin').textContent = checkedIn;
+      document.getElementById('courts-badge').textContent = matches.length + ' สนาม';
+      document.getElementById('queue-badge').textContent  = queues.length + ' คิว';
+
+      renderCourts(matches);
+      renderQueue(queues, players);
+      renderWaiting(queues, players);
+    }
+
+    // ── Courts ────────────────────────────────────────────────────
+    function renderCourts(matches) {
+      const el = document.getElementById('courts-list');
+      if (matches.length === 0) {
+        el.innerHTML = `<div class="empty-state"><div class="icon">🏸</div><div class="text">ยังไม่มีสนามที่กำลังแข่ง</div></div>`;
+        return;
+      }
+
+      el.innerHTML = matches.map(m => {
+        const sec  = elapsed(m.startTime);
+        const isLong = sec >= 1800;
+        const timerClass = isLong ? 'long' : 'normal';
+
+        const renderSide = (ids, right) => ids.map(id => {
+          const p = getPlayer(id);
+          const name  = p ? esc(p.name) : '???';
+          const skill = p ? p.skill : '?';
+          const dot = `<div class="skill-dot" style="background:${skillColor(skill)};"></div>`;
+          return `<div class="player-row ${right?'right':''}">
+            ${right ? name : dot}
+            ${right ? dot  : name}
+          </div>`;
+        }).join('');
+
+        return `<div class="court-card ${isLong?'long':''}">
+          <div class="court-top">
+            <span class="court-name">🏟 ${esc(m.courtName)}</span>
+            <span class="court-timer ${timerClass}" data-start="${m.startTime||0}">⏱ ${fmtTimer(sec)}</span>
+          </div>
+          <div class="court-teams">
+            <div class="team-players">${renderSide(m.team1, false)}</div>
+            <div class="vs-badge">VS</div>
+            <div class="team-players right">${renderSide(m.team2, true)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Live timer tick
+    setInterval(() => {
+      document.querySelectorAll('.court-timer[data-start]').forEach(el => {
+        const start = +el.dataset.start;
+        if (!start) return;
+        const sec = elapsed(start);
+        const isLong = sec >= 1800;
+        el.textContent = '⏱ ' + fmtTimer(sec);
+        el.className = 'court-timer ' + (isLong ? 'long' : 'normal');
+        const card = el.closest('.court-card');
+        if (card) card.className = 'court-card ' + (isLong ? 'long' : '');
+      });
+    }, 1000);
+
+    // ── Queue ─────────────────────────────────────────────────────
+    function renderQueue(queues, players) {
+      const el = document.getElementById('queue-list');
+      if (queues.length === 0) {
+        el.innerHTML = `<div class="empty-state"><div class="icon">✅</div><div class="text">ไม่มีคิวรอ</div></div>`;
+        return;
+      }
+
+      el.innerHTML = queues.map((q, i) => {
+        const isNext = i === 0;
+        const names = ids => ids.map(id => {
+          const p = getPlayer(id);
+          return `<span class="queue-player">${p ? esc(p.name) : '???'}</span>`;
+        }).join('<span class="sep">&</span>');
+
+        return `<div class="queue-card ${isNext?'next':''}">
+          <div class="queue-num" style="color:${isNext?'#f39c12':'#444'}">${i+1}</div>
+          <div class="queue-teams">
+            <div class="queue-team-row">
+              <span class="queue-team-label">ทีม 1</span>${names(q.team1)}
+            </div>
+            <div class="queue-team-row">
+              <span class="queue-team-label">ทีม 2</span>${names(q.team2)}
+            </div>
+          </div>
+          ${isNext ? '<div class="next-badge">NEXT</div>' : ''}
+        </div>`;
+      }).join('');
+    }
+
+    // ── Waiting ───────────────────────────────────────────────────
+    function renderWaiting(queues, players) {
+      const inQ = new Set(queues.flatMap(q => [...q.team1, ...q.team2]));
+      const waiting = players.filter(p => p.isCheckedIn && !p.isPlaying && !inQ.has(p.id));
+
+      const chipsEl = document.getElementById('waiting-chips');
+      const emptyEl = document.getElementById('waiting-empty');
+
+      if (waiting.length === 0) {
+        chipsEl.innerHTML = '';
+        emptyEl.style.display = 'block';
+      } else {
+        emptyEl.style.display = 'none';
+        chipsEl.innerHTML = waiting.map(p =>
+          `<div class="waiting-chip">
+            <span class="waiting-chip-name">${esc(p.name)}</span>
+            <span class="skill-badge-sm" style="background:${skillColor(p.skill)}">${esc(p.skill)}</span>
+          </div>`
+        ).join('');
+      }
+    }
+
+    // Initial render (empty state)
+    render();
+  </script>
+</body>
+</html>
