@@ -1130,15 +1130,30 @@
       skillEl.textContent = p.skill;
       skillEl.style.background = sc;
 
-      // History
+      // History — stored as { team1:[], team2:[], winner:0/1/2, endTime, startTime }
       const hist = (state.history && state.history[playerId]) ? state.history[playerId] : null;
       const games = (hist && Array.isArray(hist.games)) ? hist.games : [];
 
+      // Determine result per game for this player
+      function getResult(g) {
+        const inTeam1 = (g.team1||[]).includes(playerId);
+        if (g.winner === 0) return 'draw';
+        if ((inTeam1 && g.winner === 1) || (!inTeam1 && g.winner === 2)) return 'win';
+        return 'loss';
+      }
+
+      function getNames(ids) {
+        return (ids||[]).map(id => {
+          const pl = getPlayer(id);
+          return pl ? pl.name : '???';
+        }).filter(n => n !== p.name);
+      }
+
       // Stats
       const totalGames = games.length;
-      const wins  = games.filter(g => g.result === 'win').length;
-      const losses= games.filter(g => g.result === 'loss').length;
-      const draws = games.filter(g => g.result === 'draw').length;
+      const wins   = games.filter(g => getResult(g) === 'win').length;
+      const losses = games.filter(g => getResult(g) === 'loss').length;
+      const draws  = games.filter(g => getResult(g) === 'draw').length;
       const winRate = totalGames > 0 ? Math.round((wins/totalGames)*100) : 0;
 
       document.getElementById('ph-stats').innerHTML = `
@@ -1171,18 +1186,26 @@
 
         gamesEl.innerHTML = `<div class="ph-games-title">ประวัติล่าสุด</div>` +
           recent.map(g => {
-            const rc = resultColor[g.result] || '#888';
-            const rl = resultLabel[g.result] || g.result || '-';
-            const partners = (g.partners||[]).join(', ') || '-';
-            const opponents = (g.opponents||[]).join(', ') || '-';
+            const result = getResult(g);
+            const rc = resultColor[result];
+            const rl = resultLabel[result];
+
+            // Partners = teammates (same team, exclude self)
+            const inTeam1 = (g.team1||[]).includes(playerId);
+            const myTeam  = inTeam1 ? g.team1 : g.team2;
+            const oppTeam = inTeam1 ? g.team2 : g.team1;
+            const partners  = getNames(myTeam).join(', ') || '-';
+            const opponents = getNames(oppTeam).map(n => esc(n)).join(', ') || '-';
+
             const timeStr = g.endTime
               ? new Date(g.endTime).toLocaleString('th-TH',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'})
               : '';
+
             return `<div class="ph-game-row">
               <div class="ph-result-dot" style="background:${rc};box-shadow:0 0 6px ${rc}88;"></div>
               <div class="ph-game-info">
-                <div class="ph-game-vs">คู่: ${esc(partners)} <span style="color:#555;">vs</span> ${esc(opponents)}</div>
-                ${timeStr ? `<div class="ph-game-time">${timeStr}</div>` : ''}
+                <div class="ph-game-vs">🤝 ${esc(partners)} <span style="color:#555;margin:0 4px;">vs</span> ⚔️ ${opponents}</div>
+                ${timeStr ? `<div class="ph-game-time">🕐 ${timeStr}</div>` : ''}
               </div>
               <div class="ph-result-tag" style="background:${rc}">${rl}</div>
             </div>`;
