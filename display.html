@@ -167,7 +167,7 @@
       z-index: 5;
       display: grid;
       grid-template-columns: 1fr 1fr;
-      height: calc(100vh - 80px);
+      height: calc(100vh - 122px);
       overflow: hidden;
     }
 
@@ -500,7 +500,7 @@
       .main {
         grid-template-columns: 1fr;
         grid-template-rows: 1fr auto;
-        height: calc(100dvh - 56px);
+        height: calc(100dvh - 98px);
         overflow: hidden;
       }
 
@@ -575,7 +575,7 @@
       /* Landscape: 2 คอลัมน์พอดี */
       .main {
         grid-template-columns: 1fr 1fr;
-        height: calc(100dvh - 62px);
+        height: calc(100dvh - 104px);
         overflow: hidden;
       }
       .section-left { border-right: 1px solid var(--border); border-bottom: none; }
@@ -595,7 +595,7 @@
 
       .main {
         grid-template-columns: 1fr 1fr;
-        height: calc(100dvh - 72px);
+        height: calc(100dvh - 114px);
       }
       .section { padding: 1rem 1.25rem; }
       .court-card { padding: 0.85rem 1rem; }
@@ -608,13 +608,13 @@
     @media (min-width: 1025px) and (max-width: 1280px) {
       .header { padding: 0.85rem 1.75rem; }
       .stat-pill .val { font-size: 1.85rem; }
-      .main { height: calc(100dvh - 76px); }
+      .main { height: calc(100dvh - 118px); }
       .section { padding: 1.1rem 1.35rem; }
     }
 
     /* ── Desktop (> 1280px) ── */
     @media (min-width: 1281px) {
-      .main { height: calc(100dvh - 80px); }
+      .main { height: calc(100dvh - 122px); }
     }
 
     /* ── Player History Modal ── */
@@ -814,6 +814,148 @@
       background: rgba(0,168,204,0.12);
       border-color: rgba(0,168,204,0.35);
     }
+
+    /* ── Watch My Queue ── */
+    .watch-bar {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 1.5rem;
+      background: rgba(0,0,0,0.4);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      flex-wrap: wrap;
+    }
+
+    .watch-bar-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .watch-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      flex: 1;
+    }
+
+    .watch-chip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #ccc;
+      transition: all 0.2s;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .watch-chip:hover { background: rgba(0,168,204,0.15); border-color: var(--cyan); color: #fff; }
+
+    .watch-chip.watching {
+      background: rgba(0,168,204,0.2);
+      border-color: var(--cyan);
+      color: #fff;
+    }
+
+    .watch-chip.alert {
+      background: rgba(243,156,18,0.25);
+      border-color: var(--gold);
+      color: var(--gold);
+      animation: pulseChip 1s ease-in-out infinite;
+    }
+
+    @keyframes pulseChip {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(243,156,18,0.4); }
+      50%       { box-shadow: 0 0 0 6px rgba(243,156,18,0); }
+    }
+
+    .watch-hint {
+      font-size: 0.72rem;
+      color: #444;
+      font-style: italic;
+    }
+
+    /* Highlight queue card when watched player is in it */
+    .queue-card.my-queue {
+      border-color: var(--gold) !important;
+      box-shadow: 0 0 28px rgba(243,156,18,0.2) !important;
+    }
+
+    .queue-card.my-queue .queue-num {
+      color: var(--gold) !important;
+    }
+
+    /* Alert overlay */
+    .alert-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      background: rgba(243,156,18,0.12);
+      backdrop-filter: blur(4px);
+      align-items: center;
+      justify-content: center;
+      animation: flashBg 0.6s ease-in-out 3;
+    }
+
+    .alert-overlay.show { display: flex; }
+
+    @keyframes flashBg {
+      0%, 100% { background: rgba(243,156,18,0.08); }
+      50%       { background: rgba(243,156,18,0.25); }
+    }
+
+    .alert-box {
+      background: #0f1829;
+      border: 2px solid var(--gold);
+      border-radius: 24px;
+      padding: 2rem 2.5rem;
+      text-align: center;
+      box-shadow: 0 0 60px rgba(243,156,18,0.4);
+      animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1);
+      max-width: 340px;
+      width: 90%;
+    }
+
+    .alert-icon { font-size: 3.5rem; margin-bottom: 0.5rem; }
+
+    .alert-title {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--gold);
+      margin-bottom: 0.25rem;
+    }
+
+    .alert-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 1.25rem;
+    }
+
+    .alert-close {
+      background: var(--gold);
+      color: #000;
+      border: none;
+      padding: 0.6rem 2rem;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
   </style>
 </head>
 <body>
@@ -848,6 +990,24 @@
         <div class="clock" id="clock-time">--:--:--</div>
         <div class="clock-date" id="clock-date">--</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Watch My Queue Bar -->
+  <div class="watch-bar" id="watch-bar">
+    <span class="watch-bar-label">👁 ติดตามคิวของฉัน:</span>
+    <div class="watch-chips" id="watch-chips">
+      <span class="watch-hint">กดชื่อตัวเองเพื่อรับแจ้งเตือนเมื่อถึงคิว</span>
+    </div>
+  </div>
+
+  <!-- Alert Overlay -->
+  <div class="alert-overlay" id="alert-overlay">
+    <div class="alert-box">
+      <div class="alert-icon">🏸</div>
+      <div class="alert-title">ถึงคิวของคุณแล้ว!</div>
+      <div class="alert-name" id="alert-name"></div>
+      <button class="alert-close" onclick="closeAlert()">รับทราบ</button>
     </div>
   </div>
 
@@ -1110,6 +1270,152 @@
 
     // Initial render (empty state)
     render();
+
+    // ── Watch My Queue ─────────────────────────────────────────
+    const watchedIds = new Set(); // player ids being watched
+    let prevQueueFirst = null;    // track who was first in queue last render
+    let alertShown = new Set();   // avoid repeated alerts for same position
+
+    function renderWatchBar() {
+      const players = state.players || [];
+      const chipsEl = document.getElementById('watch-chips');
+      const checkedIn = players.filter(p => p.isCheckedIn);
+
+      if (checkedIn.length === 0) {
+        chipsEl.innerHTML = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
+        return;
+      }
+
+      chipsEl.innerHTML = checkedIn.map(p => {
+        const isWatching = watchedIds.has(p.id);
+        const inQueue = (state.matchQueues||[]).some(q =>
+          [...q.team1,...q.team2].map(Number).includes(p.id)
+        );
+        const queuePos = getQueuePosition(p.id);
+        const isNext = queuePos === 1;
+        const extraClass = isNext && isWatching ? 'alert' : isWatching ? 'watching' : '';
+        const posLabel = queuePos > 0 ? ` #${queuePos}` : '';
+
+        return `<div class="watch-chip ${extraClass}" data-watch-pid="${p.id}"
+          style="-webkit-tap-highlight-color:transparent;">
+          ${isWatching ? '👁 ' : ''}${esc(p.name)}${posLabel}
+        </div>`;
+      }).join('');
+    }
+
+    function getQueuePosition(pid) {
+      const queues = state.matchQueues || [];
+      for (let i = 0; i < queues.length; i++) {
+        if ([...queues[i].team1, ...queues[i].team2].map(Number).includes(+pid)) return i + 1;
+      }
+      return 0;
+    }
+
+    function checkQueueAlerts() {
+      const queues = state.matchQueues || [];
+      if (queues.length === 0) { alertShown.clear(); return; }
+
+      watchedIds.forEach(pid => {
+        const pos = getQueuePosition(pid);
+        if (pos === 1) {
+          const alertKey = `${pid}-next`;
+          if (!alertShown.has(alertKey)) {
+            alertShown.add(alertKey);
+            const p = getPlayer(pid);
+            triggerAlert(p ? p.name : '???');
+          }
+        } else {
+          // Reset alert so it can fire again next time they reach #1
+          alertShown.delete(`${pid}-next`);
+        }
+      });
+    }
+
+    function triggerAlert(name) {
+      document.getElementById('alert-name').textContent = name + ' — เตรียมพร้อม!';
+      document.getElementById('alert-overlay').classList.add('show');
+      // Vibrate if supported
+      try { navigator.vibrate && navigator.vibrate([300, 100, 300, 100, 500]); } catch(e){}
+      // Play beep sound
+      playBeep();
+      // Auto-close after 8s
+      setTimeout(closeAlert, 8000);
+    }
+
+    function closeAlert() {
+      document.getElementById('alert-overlay').classList.remove('show');
+    }
+
+    // iOS-safe beep using Web Audio API
+    function playBeep() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const times = [0, 0.3, 0.6];
+        times.forEach(t => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.frequency.value = 880;
+          osc.type = 'sine';
+          gain.gain.setValueAtTime(0.4, ctx.currentTime + t);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.25);
+          osc.start(ctx.currentTime + t);
+          osc.stop(ctx.currentTime + t + 0.25);
+        });
+      } catch(e) {}
+    }
+
+    // Highlight queue cards that contain watched players
+    function highlightMyQueues() {
+      document.querySelectorAll('.queue-card').forEach(card => {
+        card.classList.remove('my-queue');
+      });
+      if (watchedIds.size === 0) return;
+      const queues = state.matchQueues || [];
+      queues.forEach((q, i) => {
+        const allIds = [...q.team1, ...q.team2].map(Number);
+        const hasWatched = allIds.some(id => watchedIds.has(id));
+        if (hasWatched) {
+          const cards = document.querySelectorAll('.queue-card');
+          if (cards[i]) cards[i].classList.add('my-queue');
+        }
+      });
+    }
+
+    // Toggle watch on tap
+    document.addEventListener('touchend', function(e) {
+      const chip = e.target.closest('[data-watch-pid]');
+      if (!chip) return;
+      e.preventDefault();
+      e.stopPropagation();
+      toggleWatch(+chip.dataset.watchPid);
+    }, { passive: false });
+    document.addEventListener('click', function(e) {
+      const chip = e.target.closest('[data-watch-pid]');
+      if (!chip) return;
+      toggleWatch(+chip.dataset.watchPid);
+    });
+
+    function toggleWatch(pid) {
+      if (watchedIds.has(pid)) {
+        watchedIds.delete(pid);
+        alertShown.delete(`${pid}-next`);
+      } else {
+        watchedIds.add(pid);
+      }
+      renderWatchBar();
+      highlightMyQueues();
+    }
+
+    // Hook into render to update watch bar + alerts after every sync
+    const _origRender = render;
+    render = function() {
+      _origRender();
+      renderWatchBar();
+      highlightMyQueues();
+      checkQueueAlerts();
+    };
 
     // ── Player History Modal ─────────────────────────────────────
     function openPH(playerId) {
