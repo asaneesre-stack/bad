@@ -1290,6 +1290,37 @@
         </div>
     </div>
 
+    <!-- EDIT PLAYER NAME/SKILL MODAL -->
+    <div id="edit-player-inline-modal" class="modal">
+        <div class="modal-content" style="max-width:380px;">
+            <div class="modal-header">
+                <h2>✏️ แก้ไขข้อมูลผู้เล่น</h2>
+                <button class="close-modal" onclick="document.getElementById('edit-player-inline-modal').classList.remove('active')">✕</button>
+            </div>
+            <div style="margin-bottom:1rem;">
+                <label style="font-weight:600;display:block;margin-bottom:0.4rem;">ชื่อผู้เล่น</label>
+                <input type="text" id="edit-player-inline-name" maxlength="50"
+                    style="width:100%;padding:0.7rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
+            </div>
+            <div style="margin-bottom:1.5rem;">
+                <label style="font-weight:600;display:block;margin-bottom:0.4rem;">ระดับมือ</label>
+                <select id="edit-player-inline-skill"
+                    style="width:100%;padding:0.7rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
+                    <option value="BG">BG (Beginner)</option>
+                    <option value="N-">N- (N-Minus)</option>
+                    <option value="N">N (Normal)</option>
+                    <option value="N+">N+ (N-Plus)</option>
+                    <option value="P">P (Pro)</option>
+                </select>
+            </div>
+            <input type="hidden" id="edit-player-inline-id">
+            <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+                <button class="success" onclick="App.confirmEditPlayerInline()">✅ บันทึก</button>
+                <button class="secondary" onclick="document.getElementById('edit-player-inline-modal').classList.remove('active')">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
 <script>
     /**
      * ========================================================
@@ -3218,10 +3249,12 @@ if (btnViewQueue) {
                     const name = escapeHtml(PlayerUtils.getById(id)?.name || '???');
                     const skill = skills[i];
                     const games = PlayerUtils.getGameCount(id);
-                    return `<div style="margin:4px 0;">
+                    return `<div style="margin:4px 0;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
                         <span onclick="App.openPlayerHistoryModal(${id})" style="cursor:pointer;font-weight:600;border-bottom:1px dashed var(--secondary);color:var(--primary);" title="ดูประวัติ ${name}">${name}</span>
-                        <span class="skill-badge skill-${getSkillClass(skill)}" style="margin-left:4px;">${escapeHtml(skill)}</span>
-                        <span style="font-size:0.75rem;color:#888;margin-left:4px;">${games} เกม</span>
+                        <span class="skill-badge skill-${getSkillClass(skill)}" style="margin-left:2px;">${escapeHtml(skill)}</span>
+                        <span style="font-size:0.75rem;color:#888;">${games} เกม</span>
+                        <button onclick="App.openEditPlayerInlineModal(${id})" title="แก้ไขชื่อ/ระดับ"
+                            style="background:none;border:1px solid #ccc;border-radius:6px;padding:1px 6px;font-size:0.72rem;color:#555;cursor:pointer;min-height:unset;line-height:1.4;">✏️</button>
                     </div>`;
                 }).join('');
 
@@ -3506,6 +3539,32 @@ if (btnViewQueue) {
                 ? `แก้ไขแล้ว: นำ ${escapeHtml(removedNames)} ออก / เพิ่ม ${escapeHtml(addedNames)}`
                 : 'อัปเดตรายชื่อผู้เล่นสำเร็จ';
             showSuccess(msg);
+        },
+
+        openEditPlayerInlineModal: function(playerId) {
+            const player = PlayerUtils.getById(playerId);
+            if (!player) return;
+            document.getElementById('edit-player-inline-name').value = player.name;
+            document.getElementById('edit-player-inline-skill').value = player.skill || 'N';
+            document.getElementById('edit-player-inline-id').value = playerId;
+            document.getElementById('edit-player-inline-modal').classList.add('active');
+        },
+
+        confirmEditPlayerInline: function() {
+            const playerId = parseInt(document.getElementById('edit-player-inline-id').value);
+            const newName = document.getElementById('edit-player-inline-name').value.trim();
+            const newSkill = document.getElementById('edit-player-inline-skill').value;
+            if (!newName) { showError('กรุณาใส่ชื่อผู้เล่น'); return; }
+            const player = PlayerUtils.getById(playerId);
+            if (!player) return;
+            player.name = newName;
+            player.skill = newSkill;
+            saveState();
+            document.getElementById('edit-player-inline-modal').classList.remove('active');
+            this.renderActiveMatches();
+            this.renderCheckInList();
+            this.renderDashboard();
+            showSuccess(`อัปเดต "${newName}" เรียบร้อย`);
         },
 
         /**
