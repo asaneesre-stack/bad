@@ -1021,7 +1021,7 @@
           const name  = p ? esc(p.name) : '???';
           const skill = p ? p.skill : '?';
           const dot = `<div class="skill-dot" style="background:${skillColor(skill)};"></div>`;
-          const nameEl = `<span class="player-name-txt player-name-clickable" onclick="openPH(${id})" title="ดูประวัติ">${name}</span>`;
+          const nameEl = `<div class="player-name-txt player-name-clickable" data-pid="${id}" style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);">${name}</div>`;
           return `<div class="player-row ${right?'right':''}">
             ${right ? nameEl : dot}
             ${right ? dot    : nameEl}
@@ -1068,7 +1068,7 @@
         const isNext = i === 0;
         const names = ids => ids.map(id => {
           const p = getPlayer(id);
-          return `<span class="queue-player queue-player-clickable" onclick="openPH(${id})" title="ดูประวัติ">${p ? esc(p.name) : '???'}</span>`;
+          return `<div class="queue-player queue-player-clickable" data-pid="${id}" style="cursor:pointer;display:inline;-webkit-tap-highlight-color:rgba(0,168,204,0.2);">${p ? esc(p.name) : '???'}</div>`;
         }).join('<span class="sep">&</span>');
 
         return `<div class="queue-card ${isNext?'next':''}">
@@ -1100,7 +1100,7 @@
       } else {
         emptyEl.style.display = 'none';
         chipsEl.innerHTML = waiting.map(p =>
-          `<div class="waiting-chip waiting-chip-clickable" onclick="openPH(${p.id})" title="ดูประวัติ">
+          `<div class="waiting-chip waiting-chip-clickable" data-pid="${p.id}" style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);">
             <span class="waiting-chip-name">${esc(p.name)}</span>
             <span class="skill-badge-sm" style="background:${skillColor(p.skill)}">${esc(p.skill)}</span>
           </div>`
@@ -1198,6 +1198,25 @@
 
     // Close on ESC
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closePH(); });
+
+    // iOS-safe event delegation for all player name clicks
+    function _handlePlayerTap(e) {
+      const el = e.target.closest('[data-pid]');
+      if (!el) return;
+      e.preventDefault();
+      e.stopPropagation();
+      openPH(+el.dataset.pid);
+    }
+    // Use both touchend (iOS) and click (desktop) — prevent double-fire with flag
+    let _lastTap = 0;
+    document.addEventListener('touchend', function(e) {
+      _lastTap = Date.now();
+      _handlePlayerTap(e);
+    }, { passive: false });
+    document.addEventListener('click', function(e) {
+      if (Date.now() - _lastTap < 500) return; // skip if touchend just fired
+      _handlePlayerTap(e);
+    });
   </script>
 
   <!-- Player History Modal -->
