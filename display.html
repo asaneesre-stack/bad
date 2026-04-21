@@ -1021,11 +1021,6 @@
       border-color: rgba(39,174,96,0.4);
       color: #27ae60;
     }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.6; }
-    }
   </style>
 </head>
 <body>
@@ -1035,34 +1030,7 @@
     <div class="header-left">
       <img src="apple-touch-icon.png" alt="B&B Badminton" class="header-logo-img">
       <div>
-        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
-          <div class="header-title">ระบบจัดการสนามแบดมินตัน</div>
-          <span id="version-badge" style="
-            background:rgba(0,168,204,0.15);
-            border:1px solid rgba(0,168,204,0.3);
-            color:#00a8cc;
-            font-size:0.62rem;
-            font-weight:700;
-            padding:1px 7px;
-            border-radius:10px;
-            letter-spacing:0.04em;
-            white-space:nowrap;
-          ">v2.1</span>
-          <span id="update-badge" style="
-            display:none;
-            background:rgba(243,156,18,0.2);
-            border:1px solid rgba(243,156,18,0.5);
-            color:#f39c12;
-            font-size:0.62rem;
-            font-weight:800;
-            padding:1px 8px;
-            border-radius:10px;
-            letter-spacing:0.04em;
-            animation:pulse 1.5s ease-in-out infinite;
-            cursor:pointer;
-            white-space:nowrap;
-          " onclick="location.reload(true)" title="กดเพื่ออัพเดท">🔄 มีเวอร์ชันใหม่</span>
-        </div>
+        <div class="header-title">ระบบจัดการสนามแบดมินตัน</div>
         <div id="sync-status" class="header-subtitle">⏳ กำลังเชื่อมต่อ...</div>
       </div>
     </div>
@@ -1170,19 +1138,42 @@
     function stopSWPoll()   { swPost({ type: 'STOP_POLL'  }); }
 
     // เมื่อพับจอ → sync state แล้ว start polling ใน SW
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        syncStateToSW();
-        startSWPoll();
-      } else {
-        stopSWPoll();
+    // ลบ token ทั้งหมดของ user นี้เมื่อปิดแอป/slide ออก
+    function removeAllMyTokens() {
+      watchedIds.forEach(pid => {
+        try {
+          // ใช้ sendBeacon เพราะ fetch ไม่รับประกันว่าจะทำงานทันก่อนปิด
+          const url = `${FB_CONFIG.databaseURL}/pushTokens/${pid}.json`;
+          navigator.sendBeacon
+            ? navigator.sendBeacon(url + '?method=DELETE', null)
+            : db.ref('pushTokens/' + pid).remove().catch(()=>{});
+        } catch(e) {}
+      });
+    }
+
+    // ลบ token ทุกครั้งที่ SW ยืนยันว่า page ถูก terminate
+    // pagehide = iOS slide out / close tab / navigate away
+    window.addEventListener('pagehide', (e) => {
+      if (!e.persisted) {
+        // page ถูกปิดจริง (ไม่ใช่แค่ bfcache)
+        removeAllMyTokens();
       }
     });
 
-    // page ปิด / navigate ออก
-    window.addEventListener('pagehide', () => {
-      syncStateToSW();
-      startSWPoll();
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        // พับจอ — ยังอยู่ใน bfcache, token ยังคงอยู่, sync SW
+        syncStateToSW();
+        pollNow();
+        if (_swRegistration && _swRegistration.sync) {
+          _swRegistration.sync.register('bb-poll-once').catch(()=>{});
+        }
+      } else {
+        // กลับมาเปิดจอ — re-register token ถ้าเคยถูกลบ
+        if (_pushGranted && watchedIds.size > 0) {
+          watchedIds.forEach(pid => registerFCMToken(pid));
+        }
+      }
     });
 
     async function initPWA() {
@@ -1240,10 +1231,6 @@
       } catch(e) {}
     }
 
-    // ── Version ───────────────────────────────────────────────────
-    const APP_VERSION = '2.1';
-    const BUILD_DATE  = '2025-04-21';
-
     // ── Firebase ──────────────────────────────────────────────────
     const firebaseConfig = {
       apiKey: "AIzaSyCwdZT7tzwXyapCfg3wbjRuhiEDeXapghA",
@@ -1257,6 +1244,7 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+    const FB_CONFIG = firebaseConfig; // alias for use in pagehide
 
     // ── State ─────────────────────────────────────────────────────
     let state = { players:[], matches:[], matchQueues:[], courts:[] };
@@ -1531,23 +1519,6 @@
         ).join('');
       }
     }
-
-
-    // ── Version Check ─────────────────────────────────────────────
-    // เช็คเวอร์ชันจาก GitHub Pages ทุก 2 นาที
-    async function checkForUpdate() {
-      try {
-        const r = await fetch('./display.html?_=' + Date.now(), { cache: 'no-store' });
-        const html = await r.text();
-        const match = html.match(/APP_VERSION\s*=\s*'([^']+)'/);
-        if (match && match[1] !== APP_VERSION) {
-          document.getElementById('update-badge').style.display = 'inline';
-          document.getElementById('version-badge').textContent = 'v' + APP_VERSION + ' → v' + match[1];
-        }
-      } catch(e) {}
-    }
-    setInterval(checkForUpdate, 120000); // ทุก 2 นาที
-    setTimeout(checkForUpdate, 5000);    // เช็คครั้งแรกหลัง 5 วิ
 
     // Initial render (empty state)
     render();
@@ -1835,18 +1806,26 @@
 
     function toggleWatch(pid) {
       if (watchedIds.has(pid)) {
+        // เลิกติดตาม — ลบ token และ alertState ออกทันที
         watchedIds.delete(pid);
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
-        // Remove FCM token from Firebase
         db.ref('pushTokens/' + pid).remove().catch(()=>{});
+        db.ref('alertState/' + pid).remove().catch(()=>{});
       } else {
+        // เริ่มติดตาม — ขอ permission แล้ว register token
         watchedIds.add(pid);
-        // Register FCM token if push already granted
-        if (_pushGranted) registerFCMToken(pid);
+        if (_pushGranted) {
+          registerFCMToken(pid);
+        } else {
+          requestPushPermission().then(granted => {
+            if (granted) registerFCMToken(pid);
+          });
+        }
       }
       renderWatchBar();
       highlightMyQueues();
+      syncStateToSW();
     }
 
     // Hook into render to update watch bar + alerts after every sync
