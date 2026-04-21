@@ -1021,6 +1021,11 @@
       border-color: rgba(39,174,96,0.4);
       color: #27ae60;
     }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.6; }
+    }
   </style>
 </head>
 <body>
@@ -1030,7 +1035,34 @@
     <div class="header-left">
       <img src="apple-touch-icon.png" alt="B&B Badminton" class="header-logo-img">
       <div>
-        <div class="header-title">ระบบจัดการสนามแบดมินตัน</div>
+        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+          <div class="header-title">ระบบจัดการสนามแบดมินตัน</div>
+          <span id="version-badge" style="
+            background:rgba(0,168,204,0.15);
+            border:1px solid rgba(0,168,204,0.3);
+            color:#00a8cc;
+            font-size:0.62rem;
+            font-weight:700;
+            padding:1px 7px;
+            border-radius:10px;
+            letter-spacing:0.04em;
+            white-space:nowrap;
+          ">v2.1</span>
+          <span id="update-badge" style="
+            display:none;
+            background:rgba(243,156,18,0.2);
+            border:1px solid rgba(243,156,18,0.5);
+            color:#f39c12;
+            font-size:0.62rem;
+            font-weight:800;
+            padding:1px 8px;
+            border-radius:10px;
+            letter-spacing:0.04em;
+            animation:pulse 1.5s ease-in-out infinite;
+            cursor:pointer;
+            white-space:nowrap;
+          " onclick="location.reload(true)" title="กดเพื่ออัพเดท">🔄 มีเวอร์ชันใหม่</span>
+        </div>
         <div id="sync-status" class="header-subtitle">⏳ กำลังเชื่อมต่อ...</div>
       </div>
     </div>
@@ -1124,55 +1156,42 @@
     }
 
     function syncStateToSW() {
+      // ส่ง watchedIds และ alertShown ให้ SW เก็บใน IDB
       swPost({
         type:       'SYNC_STATE',
         watchedIds: [...watchedIds],
-        alertShown: Object.fromEntries([...alertShown].map(k => [k, true])),
+        alertShown: Object.fromEntries(
+          [...alertShown].map(k => [k, true])
+        ),
       });
     }
 
-    function pollNow() { swPost({ type: 'POLL_NOW' }); }
+    function startSWPoll()  { swPost({ type: 'START_POLL' }); }
+    function stopSWPoll()   { swPost({ type: 'STOP_POLL'  }); }
 
-    // เมื่อพับจอ → sync state ให้ SW แล้วขอ poll ทันที
+    // เมื่อพับจอ → sync state แล้ว start polling ใน SW
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         syncStateToSW();
-        pollNow();
-        // ลอง Background Sync (Android Chrome รองรับ)
-        if (_swRegistration && _swRegistration.sync) {
-          _swRegistration.sync.register('bb-poll-once').catch(()=>{});
-        }
+        startSWPoll();
+      } else {
+        stopSWPoll();
       }
     });
 
     // page ปิด / navigate ออก
     window.addEventListener('pagehide', () => {
       syncStateToSW();
-      pollNow();
+      startSWPoll();
     });
-
-    // sync state ทุก 10 วิ ขณะหน้าจอเปิดอยู่ (ป้องกัน SW ลืม state)
-    setInterval(() => {
-      if (watchedIds.size > 0) syncStateToSW();
-    }, 10000);
 
     async function initPWA() {
       if (!('serviceWorker' in navigator)) return;
       try {
         _swRegistration = await navigator.serviceWorker.register('sw.js');
+        // รอ SW พร้อมก่อน
         await navigator.serviceWorker.ready;
         console.log('[SW] registered');
-
-        // ลงทะเบียน Periodic Background Sync (Android Chrome / iOS 16.4+)
-        if (_swRegistration.periodicSync) {
-          try {
-            const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
-            if (status.state === 'granted') {
-              await _swRegistration.periodicSync.register('bb-poll', { minInterval: 60000 });
-              console.log('[SW] periodic sync registered');
-            }
-          } catch(e) { console.log('[SW] periodic sync not supported'); }
-        }
       } catch(e) { console.warn('[SW] register failed', e); }
     }
     initPWA();
@@ -1220,6 +1239,10 @@
         });
       } catch(e) {}
     }
+
+    // ── Version ───────────────────────────────────────────────────
+    const APP_VERSION = '2.1';
+    const BUILD_DATE  = '2025-04-21';
 
     // ── Firebase ──────────────────────────────────────────────────
     const firebaseConfig = {
@@ -1508,6 +1531,23 @@
         ).join('');
       }
     }
+
+
+    // ── Version Check ─────────────────────────────────────────────
+    // เช็คเวอร์ชันจาก GitHub Pages ทุก 2 นาที
+    async function checkForUpdate() {
+      try {
+        const r = await fetch('./display.html?_=' + Date.now(), { cache: 'no-store' });
+        const html = await r.text();
+        const match = html.match(/APP_VERSION\s*=\s*'([^']+)'/);
+        if (match && match[1] !== APP_VERSION) {
+          document.getElementById('update-badge').style.display = 'inline';
+          document.getElementById('version-badge').textContent = 'v' + APP_VERSION + ' → v' + match[1];
+        }
+      } catch(e) {}
+    }
+    setInterval(checkForUpdate, 120000); // ทุก 2 นาที
+    setTimeout(checkForUpdate, 5000);    // เช็คครั้งแรกหลัง 5 วิ
 
     // Initial render (empty state)
     render();
@@ -1798,15 +1838,15 @@
         watchedIds.delete(pid);
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
+        // Remove FCM token from Firebase
         db.ref('pushTokens/' + pid).remove().catch(()=>{});
       } else {
         watchedIds.add(pid);
+        // Register FCM token if push already granted
         if (_pushGranted) registerFCMToken(pid);
       }
       renderWatchBar();
       highlightMyQueues();
-      // sync state ให้ SW ทันทีเมื่อเปลี่ยน watched list
-      syncStateToSW();
     }
 
     // Hook into render to update watch bar + alerts after every sync
