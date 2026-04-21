@@ -1,5 +1,5 @@
-// sw.js — B&B Badminton Service Worker
-// iOS fallback: poll Firebase ทุก 30 วิ เมื่อ FCM push ไม่ถึง
+// sw.js — B&B Badminton Service Worker v2
+// แก้ปัญหา iOS: ใช้ push event + REST poll แทน setInterval
 
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
@@ -18,16 +18,17 @@ firebase.initializeApp(FB_CONFIG);
 const messaging = firebase.messaging();
 
 // ── FCM Background push ───────────────────────────────────────────
+// iOS 16.4+ Add to Home Screen จะได้รับ push นี้
 messaging.onBackgroundMessage(payload => {
   const { title, body, tag } = payload.notification || {};
   return self.registration.showNotification(title || '🏸 B&B Badminton', {
-    body: body || 'มีการแจ้งเตือนใหม่',
-    tag:  tag  || 'badminton-alert',
-    icon: 'apple-touch-icon.png',
-    badge:'apple-touch-icon.png',
-    vibrate: [200, 80, 200, 80, 400],
-    requireInteraction: true,
-    data: { url: './display.html' },
+    body:              body || 'มีการแจ้งเตือนใหม่',
+    tag:               tag  || 'badminton-alert',
+    icon:              'apple-touch-icon.png',
+    badge:             'apple-touch-icon.png',
+    vibrate:           [200, 80, 200, 80, 400],
+    requireInteraction:true,
+    data:              { url: './display.html' },
   });
 });
 
@@ -40,7 +41,7 @@ self.addEventListener('notificationclick', event => {
   event.notification.close();
   const url = event.notification.data?.url || './display.html';
   event.waitUntil(
-    clients.matchAll({ type:'window', includeUncontrolled:true }).then(list => {
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       for (const c of list) {
         if (c.url.includes('display.html') && 'focus' in c) return c.focus();
       }
@@ -49,21 +50,15 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
-// ── iOS Polling Fallback ──────────────────────────────────────────
-// iOS อาจ throttle FCM push — SW poll Firebase REST API ทุก 30 วิแทน
-// เก็บ state ใน IndexedDB เพื่อไม่แจ้งเตือนซ้ำ
+// ═══════════════════════════════════════════════════════════════════
+// IDB helpers
+// ═══════════════════════════════════════════════════════════════════
+const DB_NAME = 'bb-sw-state';
 
-const DB_NAME   = 'bb-sw-state';
-const POLL_INTERVAL_MS = 30000; // 30 วินาที
-let _pollTimer = null;
-
-// ── IDB helpers ───────────────────────────────────────────────────
 function idbOpen() {
   return new Promise((res, rej) => {
     const r = indexedDB.open(DB_NAME, 1);
-    r.onupgradeneeded = e => {
-      e.target.result.createObjectStore('kv');
-    };
+    r.onupgradeneeded = e => e.target.result.createObjectStore('kv');
     r.onsuccess = e => res(e.target.result);
     r.onerror   = e => rej(e);
   });
@@ -74,7 +69,7 @@ async function idbGet(key) {
   return new Promise((res, rej) => {
     const tx = db.transaction('kv', 'readonly');
     const r  = tx.objectStore('kv').get(key);
-    r.onsuccess = () => res(r.result);
+    r.onsuccess = () => res(r.result ?? null);
     r.onerror   = rej;
   });
 }
@@ -89,126 +84,141 @@ async function idbSet(key, val) {
   });
 }
 
-// ── Fetch Firebase REST ───────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════
+// Firebase REST fetch
+// ═══════════════════════════════════════════════════════════════════
 async function fbGet(path) {
-  const url = `${FB_CONFIG.databaseURL}/${path}.json`;
-  const r = await fetch(url);
-  if (!r.ok) return null;
-  return r.json();
-}
-
-// ── Poll logic ────────────────────────────────────────────────────
-async function pollAndNotify() {
   try {
-    // อ่าน watchedIds ที่ page บันทึกไว้
-    const watchedRaw = await idbGet('watchedIds');
-    if (!watchedRaw || watchedRaw.length === 0) return;
-    const watchedIds = watchedRaw; // array of pid numbers
-
-    // อ่าน alertShown state
-    const alertShownRaw = await idbGet('alertShown') || {};
-
-    // ดึง state จาก Firebase
-    const state = await fbGet('badmintonState');
-    if (!state) return;
-
-    const queues  = state.matchQueues  ? Object.values(state.matchQueues)  : [];
-    const players = state.players      ? Object.values(state.players)      : [];
-
-    function getPos(pid) {
-      for (let i = 0; i < queues.length; i++) {
-        const q = queues[i];
-        const ids = [...(q.team1||[]), ...(q.team2||[])].map(Number);
-        if (ids.includes(+pid)) return i + 1;
-      }
-      return 0;
-    }
-
-    function getPlayerName(pid) {
-      const p = players.find(pl => +pl.id === +pid);
-      return p ? p.name : '???';
-    }
-
-    let stateChanged = false;
-
-    for (const pid of watchedIds) {
-      const pos  = getPos(pid);
-      const key1 = `${pid}-next`;
-      const key2 = `${pid}-court`;
-
-      if (pos >= 2) {
-        if (alertShownRaw[key1] || alertShownRaw[key2]) {
-          alertShownRaw[key1] = false;
-          alertShownRaw[key2] = false;
-          stateChanged = true;
-        }
-      } else if (pos === 1) {
-        if (alertShownRaw[key2]) {
-          alertShownRaw[key1] = false;
-          alertShownRaw[key2] = false;
-          stateChanged = true;
-        }
-        if (!alertShownRaw[key1]) {
-          alertShownRaw[key1] = true;
-          stateChanged = true;
-          const name = getPlayerName(pid);
-          await self.registration.showNotification('🏸 ถึงคิวของคุณแล้ว!', {
-            body: `${name} — เตรียมพร้อม!`,
-            tag:  key1,
-            icon: 'apple-touch-icon.png',
-            badge:'apple-touch-icon.png',
-            vibrate: [300, 100, 300, 100, 500],
-            requireInteraction: true,
-            data: { url: './display.html' },
-          });
-        }
-      } else {
-        // pos === 0
-        if (alertShownRaw[key1] && !alertShownRaw[key2]) {
-          alertShownRaw[key2] = true;
-          stateChanged = true;
-          const name = getPlayerName(pid);
-          await self.registration.showNotification('✅ สนามว่างแล้ว!', {
-            body: `${name} — ลงสนามได้เลย!`,
-            tag:  key2,
-            icon: 'apple-touch-icon.png',
-            badge:'apple-touch-icon.png',
-            vibrate: [200, 80, 200, 80, 200, 80, 600],
-            requireInteraction: true,
-            data: { url: './display.html' },
-          });
-        }
-      }
-    }
-
-    if (stateChanged) await idbSet('alertShown', alertShownRaw);
-  } catch(e) {
-    console.warn('[SW poll]', e);
-  }
+    const r = await fetch(`${FB_CONFIG.databaseURL}/${path}.json`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    return r.json();
+  } catch(e) { return null; }
 }
 
-// ── Message from page: sync state & start/stop polling ───────────
-self.addEventListener('message', async event => {
+// ═══════════════════════════════════════════════════════════════════
+// Core poll & notify
+// ═══════════════════════════════════════════════════════════════════
+async function pollAndNotify() {
+  const watchedIds    = await idbGet('watchedIds')   || [];
+  const alertShownRaw = await idbGet('alertShown')   || {};
+
+  if (watchedIds.length === 0) return;
+
+  const fbState = await fbGet('badmintonState');
+  if (!fbState) return;
+
+  const queues  = fbState.matchQueues ? Object.values(fbState.matchQueues)  : [];
+  const players = fbState.players     ? Object.values(fbState.players)      : [];
+
+  function getPos(pid) {
+    for (let i = 0; i < queues.length; i++) {
+      const ids = [...(queues[i].team1||[]), ...(queues[i].team2||[])].map(Number);
+      if (ids.includes(+pid)) return i + 1;
+    }
+    return 0;
+  }
+
+  function getName(pid) {
+    const p = players.find(pl => +pl.id === +pid);
+    return p ? p.name : '???';
+  }
+
+  let changed = false;
+
+  for (const pid of watchedIds) {
+    const pos  = getPos(pid);
+    const k1   = `${pid}-next`;   // ถึงคิวแรก
+    const k2   = `${pid}-court`;  // ลงสนามแล้ว
+
+    if (pos >= 2) {
+      // รีเซ็ต alert ทั้งหมดเมื่อกลับไปอยู่คิวหลัง
+      if (alertShownRaw[k1] || alertShownRaw[k2]) {
+        alertShownRaw[k1] = false;
+        alertShownRaw[k2] = false;
+        changed = true;
+      }
+
+    } else if (pos === 1) {
+      // ถึงคิวแรก — แจ้งเตือน
+      if (!alertShownRaw[k1]) {
+        alertShownRaw[k1] = true;
+        changed = true;
+        await self.registration.showNotification('🏸 ถึงคิวของคุณแล้ว!', {
+          body:               `${getName(pid)} — เตรียมพร้อม!`,
+          tag:                k1,
+          icon:               'apple-touch-icon.png',
+          badge:              'apple-touch-icon.png',
+          vibrate:            [300, 100, 300, 100, 500],
+          requireInteraction: true,
+          data:               { url: './display.html' },
+        });
+      }
+
+    } else {
+      // pos === 0 ไม่อยู่ในคิว
+      // ถ้าเคยถึงคิว 1 แล้ว (k1 = true) แสดงว่าถูกเรียกขึ้นสนามแล้ว
+      if (alertShownRaw[k1] && !alertShownRaw[k2]) {
+        alertShownRaw[k2] = true;
+        changed = true;
+        await self.registration.showNotification('✅ ลงสนามได้เลย!', {
+          body:               `${getName(pid)} — สนามรอคุณอยู่!`,
+          tag:                k2,
+          icon:               'apple-touch-icon.png',
+          badge:              'apple-touch-icon.png',
+          vibrate:            [200, 80, 200, 80, 200, 80, 600],
+          requireInteraction: true,
+          data:               { url: './display.html' },
+        });
+      }
+    }
+  }
+
+  if (changed) await idbSet('alertShown', alertShownRaw);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Message from page
+// ═══════════════════════════════════════════════════════════════════
+self.addEventListener('message', event => {
   const { type, watchedIds, alertShown } = event.data || {};
 
   if (type === 'SYNC_STATE') {
-    // Page ส่ง watchedIds และ alertShown state มาให้ SW เก็บไว้
-    if (watchedIds !== undefined) await idbSet('watchedIds', watchedIds);
-    if (alertShown !== undefined) await idbSet('alertShown', alertShown);
+    // ใช้ event.waitUntil เพื่อไม่ให้ SW terminate ก่อนบันทึกเสร็จ
+    event.waitUntil((async () => {
+      if (watchedIds !== undefined) await idbSet('watchedIds', watchedIds);
+      if (alertShown !== undefined) await idbSet('alertShown', alertShown);
+    })());
   }
 
-  if (type === 'START_POLL') {
-    if (_pollTimer) return; // ทำงานอยู่แล้ว
-    await pollAndNotify(); // poll ทันที
-    _pollTimer = setInterval(pollAndNotify, POLL_INTERVAL_MS);
-  }
-
-  if (type === 'STOP_POLL') {
-    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+  if (type === 'POLL_NOW') {
+    // Page ขอให้ poll ทันที (เช่น ตอน visibilitychange)
+    event.waitUntil(pollAndNotify());
   }
 });
 
-// ── Background sync (รองรับ periodic background sync บางรุ่น) ─────
+// ═══════════════════════════════════════════════════════════════════
+// Periodic Background Sync — iOS/Android รุ่นใหม่รองรับ
+// ลงทะเบียนใน display.html ด้วย periodicSync.register('bb-poll')
+// ═══════════════════════════════════════════════════════════════════
 self.addEventListener('periodicsync', event => {
-  if (event.tag === 'bb-poll') event.waitUntil(pollAndNotify());
+  if (event.tag === 'bb-poll') {
+    event.waitUntil(pollAndNotify());
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Push event — fallback สำหรับ FCM push ที่ส่งมาจาก server
+// (ถ้าตั้ง Cloud Function ส่ง push ได้)
+// ═══════════════════════════════════════════════════════════════════
+self.addEventListener('push', event => {
+  event.waitUntil(pollAndNotify());
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Sync event — Background Sync API (one-shot)
+// ═══════════════════════════════════════════════════════════════════
+self.addEventListener('sync', event => {
+  if (event.tag === 'bb-poll-once') {
+    event.waitUntil(pollAndNotify());
+  }
 });

@@ -1124,42 +1124,55 @@
     }
 
     function syncStateToSW() {
-      // ส่ง watchedIds และ alertShown ให้ SW เก็บใน IDB
       swPost({
         type:       'SYNC_STATE',
         watchedIds: [...watchedIds],
-        alertShown: Object.fromEntries(
-          [...alertShown].map(k => [k, true])
-        ),
+        alertShown: Object.fromEntries([...alertShown].map(k => [k, true])),
       });
     }
 
-    function startSWPoll()  { swPost({ type: 'START_POLL' }); }
-    function stopSWPoll()   { swPost({ type: 'STOP_POLL'  }); }
+    function pollNow() { swPost({ type: 'POLL_NOW' }); }
 
-    // เมื่อพับจอ → sync state แล้ว start polling ใน SW
+    // เมื่อพับจอ → sync state ให้ SW แล้วขอ poll ทันที
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         syncStateToSW();
-        startSWPoll();
-      } else {
-        stopSWPoll();
+        pollNow();
+        // ลอง Background Sync (Android Chrome รองรับ)
+        if (_swRegistration && _swRegistration.sync) {
+          _swRegistration.sync.register('bb-poll-once').catch(()=>{});
+        }
       }
     });
 
     // page ปิด / navigate ออก
     window.addEventListener('pagehide', () => {
       syncStateToSW();
-      startSWPoll();
+      pollNow();
     });
+
+    // sync state ทุก 10 วิ ขณะหน้าจอเปิดอยู่ (ป้องกัน SW ลืม state)
+    setInterval(() => {
+      if (watchedIds.size > 0) syncStateToSW();
+    }, 10000);
 
     async function initPWA() {
       if (!('serviceWorker' in navigator)) return;
       try {
         _swRegistration = await navigator.serviceWorker.register('sw.js');
-        // รอ SW พร้อมก่อน
         await navigator.serviceWorker.ready;
         console.log('[SW] registered');
+
+        // ลงทะเบียน Periodic Background Sync (Android Chrome / iOS 16.4+)
+        if (_swRegistration.periodicSync) {
+          try {
+            const status = await navigator.permissions.query({ name: 'periodic-background-sync' });
+            if (status.state === 'granted') {
+              await _swRegistration.periodicSync.register('bb-poll', { minInterval: 60000 });
+              console.log('[SW] periodic sync registered');
+            }
+          } catch(e) { console.log('[SW] periodic sync not supported'); }
+        }
       } catch(e) { console.warn('[SW] register failed', e); }
     }
     initPWA();
@@ -1785,15 +1798,15 @@
         watchedIds.delete(pid);
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
-        // Remove FCM token from Firebase
         db.ref('pushTokens/' + pid).remove().catch(()=>{});
       } else {
         watchedIds.add(pid);
-        // Register FCM token if push already granted
         if (_pushGranted) registerFCMToken(pid);
       }
       renderWatchBar();
       highlightMyQueues();
+      // sync state ให้ SW ทันทีเมื่อเปลี่ยน watched list
+      syncStateToSW();
     }
 
     // Hook into render to update watch bar + alerts after every sync
