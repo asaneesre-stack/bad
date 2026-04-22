@@ -1525,84 +1525,90 @@
     let alertShown = new Set();   // avoid repeated alerts for same position
 
     function renderWatchBar() {
-      const players = state.players || [];
-      const chipsEl = document.getElementById('watch-chips');
+      const players  = state.players || [];
+      const chipsEl  = document.getElementById('watch-chips');
       const checkedIn = players.filter(p => p.isCheckedIn);
 
-      // Show: watched chips first, then a small "+ เพิ่ม" button to open picker
-      const watchedPlayers = checkedIn.filter(p => watchedIds.has(p.id));
+      if (checkedIn.length === 0) {
+        chipsEl.innerHTML = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
+        return;
+      }
 
-      let html = '';
+      const watchedPlayer = checkedIn.find(p => watchedIds.has(p.id));
 
-      // Watched chips (with position + remove on tap)
-      html += watchedPlayers.map(p => {
+      if (watchedPlayer) {
+        // ── กำลังติดตามอยู่: แสดงชื่อ + ✕ ──────────────────────
+        const p = watchedPlayer;
         const queuePos = getQueuePosition(p.id);
-        const isNext = queuePos === 1;
-        const extraClass = isNext ? 'alert' : 'watching';
-        const posLabel = queuePos > 0 ? ` <span style="opacity:0.7;font-size:0.7em;">#${queuePos}</span>` : '';
-        const posText = queuePos > 0 ? `<span style="background:${isNext?'var(--gold)':'rgba(0,168,204,0.4)'};color:#fff;font-size:0.72em;padding:1px 7px;border-radius:10px;margin-left:4px;">คิว #${queuePos}</span>` : '';
-        return `<div class="watch-chip ${extraClass}" data-watch-pid="${p.id}"
-          style="-webkit-tap-highlight-color:transparent;" title="กดเพื่อเลิกติดตาม">
-          👁 <span style="font-size:1em;">${esc(p.name)}</span>${posText}
-          <span style="margin-left:5px;opacity:0.45;font-size:0.8em;">✕</span>
-        </div>`;
-      }).join('');
+        const isNext   = queuePos === 1;
+        const chipClass = isNext ? 'alert' : 'watching';
+        const posTag = queuePos > 0
+          ? `<span style="background:${isNext?'var(--gold)':'rgba(0,168,204,0.5)'};color:#fff;
+              font-size:0.68em;padding:1px 7px;border-radius:10px;margin-left:4px;">คิว #${queuePos}</span>`
+          : '';
+        chipsEl.innerHTML = `
+          <div class="watch-chip ${chipClass}" style="pointer-events:none;">
+            👁 ${esc(p.name)}${posTag}
+          </div>
+          <div onclick="toggleWatch(${p.id})"
+            ontouchend="event.preventDefault();toggleWatch(${p.id});"
+            style="display:flex;align-items:center;padding:4px 12px;border-radius:20px;
+              border:1.5px solid rgba(231,76,60,0.5);background:rgba(231,76,60,0.12);
+              color:#e74c3c;font-size:0.82rem;font-weight:700;cursor:pointer;
+              -webkit-tap-highlight-color:transparent;user-select:none;">✕</div>`;
 
-      // "+ เลือกชื่อ" button — opens picker dropdown
-      html += `<div class="watch-chip" id="watch-add-btn" data-action="open-picker"
-        style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.6;">
-        + เลือกชื่อ
-      </div>`;
+      } else {
+        // ── ยังไม่ได้เลือก: ปุ่ม "เลือกชื่อ" เปิด dropdown ────────
+        chipsEl.innerHTML = `
+          <div id="watch-open-btn"
+            style="display:flex;align-items:center;gap:5px;padding:5px 14px;border-radius:20px;
+              border:1.5px dashed rgba(0,168,204,0.5);background:rgba(0,168,204,0.08);
+              color:#00a8cc;font-size:0.82rem;font-weight:700;cursor:pointer;
+              -webkit-tap-highlight-color:transparent;">
+            👁 เลือกชื่อของคุณ
+          </div>
+          <div id="watch-dropdown" style="display:none;position:absolute;top:calc(100% + 6px);left:0;
+            background:#0f1829;border:1px solid rgba(0,168,204,0.3);border-radius:14px;
+            padding:0.6rem;z-index:300;flex-wrap:wrap;gap:0.4rem;max-width:92vw;
+            box-shadow:0 8px 32px rgba(0,0,0,0.7);">
+            <div style="width:100%;font-size:0.65rem;color:#666;padding:2px 4px 6px;
+              font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">เลือกชื่อของคุณ</div>
+            ${checkedIn.map(p =>
+              `<div class="watch-chip"
+                onclick="toggleWatch(${p.id})"
+                ontouchend="event.preventDefault();toggleWatch(${p.id});"
+                style="-webkit-tap-highlight-color:rgba(0,168,204,0.2);user-select:none;">${esc(p.name)}</div>`
+            ).join('')}
+          </div>`;
 
-      // Picker dropdown (hidden by default)
-      const unwatched = checkedIn.filter(p => !watchedIds.has(p.id));
-      if (unwatched.length > 0) {
-        html += `<div id="watch-picker" style="display:none;position:absolute;top:calc(100% + 4px);left:0;
-          background:#0f1829;border:1px solid rgba(0,168,204,0.3);border-radius:12px;
-          padding:0.5rem;z-index:200;display:none;flex-wrap:wrap;gap:0.35rem;max-width:90vw;
-          box-shadow:0 8px 32px rgba(0,0,0,0.6);">
-          <div style="width:100%;font-size:0.65rem;color:#666;padding:0 4px 4px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">เลือกชื่อที่ต้องการติดตาม</div>
-          ${unwatched.map(p =>
-            `<div class="watch-chip" data-watch-pid="${p.id}"
-              style="-webkit-tap-highlight-color:transparent;">
-              ${esc(p.name)}
-            </div>`
-          ).join('')}
-        </div>`;
-      }
+        // เปิด/ปิด dropdown
+        const openBtn = document.getElementById('watch-open-btn');
+        const dropdown = document.getElementById('watch-dropdown');
+        if (openBtn && dropdown) {
+          function doOpen(e) {
+            e.preventDefault(); e.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'flex' ? 'none' : 'flex';
+          }
+          openBtn.addEventListener('touchend', doOpen, { passive: false });
+          openBtn.addEventListener('click', doOpen);
 
-      if (watchedPlayers.length === 0 && unwatched.length === 0) {
-        html = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
-      }
-
-      chipsEl.innerHTML = html;
-
-      // Attach picker toggle
-      const addBtn = document.getElementById('watch-add-btn');
-      const picker = document.getElementById('watch-picker');
-      if (addBtn && picker) {
-        function openPicker(e) {
-          e.stopPropagation();
-          e.preventDefault();
-          picker.style.display = picker.style.display === 'flex' ? 'none' : 'flex';
+          // ปิดเมื่อแตะนอก (รอ toggleWatch ทำงานก่อน)
+          setTimeout(() => {
+            function closeDD(e) {
+              const dd = document.getElementById('watch-dropdown');
+              if (!dd) return document.removeEventListener('touchend', closeDD);
+              if (dd.contains(e.target)) {
+                setTimeout(() => { dd.style.display = 'none'; }, 80);
+              } else if (e.target !== openBtn) {
+                dd.style.display = 'none';
+              }
+              document.removeEventListener('touchend', closeDD);
+              document.removeEventListener('click', closeDD);
+            }
+            document.addEventListener('touchend', closeDD);
+            document.addEventListener('click', closeDD);
+          }, 100);
         }
-        addBtn.addEventListener('touchend', openPicker, { passive: false });
-        addBtn.addEventListener('click', openPicker);
-        // Close picker when clicking outside
-        setTimeout(() => {
-          document.addEventListener('touchend', function closePicker(e) {
-            if (!picker.contains(e.target) && e.target !== addBtn) {
-              picker.style.display = 'none';
-              document.removeEventListener('touchend', closePicker);
-            }
-          });
-          document.addEventListener('click', function closePicker2(e) {
-            if (!picker.contains(e.target) && e.target !== addBtn) {
-              picker.style.display = 'none';
-              document.removeEventListener('click', closePicker2);
-            }
-          });
-        }, 50);
       }
     }
 
