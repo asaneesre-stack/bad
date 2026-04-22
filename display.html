@@ -1166,7 +1166,13 @@
           _swRegistration.sync.register('bb-poll-once').catch(()=>{});
         }
       } else {
-        // กลับมาเปิดจอ — re-register token ถ้าเคยถูกลบ
+        // กลับมาเปิดจอ — ลบ notification ทั้งหมดออกทันที
+        if (_swRegistration) {
+          _swRegistration.getNotifications().then(ns => ns.forEach(n => n.close())).catch(()=>{});
+        }
+        // Clear iOS badge
+        if (navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
+        // re-register token
         if (_pushGranted && watchedIds.size > 0) {
           watchedIds.forEach(pid => registerFCMToken(pid));
         }
