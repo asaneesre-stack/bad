@@ -879,9 +879,13 @@
     .watch-chip:hover { background: rgba(0,168,204,0.15); border-color: var(--cyan); color: #fff; }
 
     .watch-chip.watching {
-      background: rgba(0,168,204,0.2);
+      background: linear-gradient(135deg, rgba(0,168,204,0.35), rgba(0,168,204,0.2));
       border-color: var(--cyan);
+      border-width: 2px;
       color: #fff;
+      font-size: 0.92rem;
+      padding: 6px 14px;
+      box-shadow: 0 0 16px rgba(0,168,204,0.3), inset 0 0 12px rgba(0,168,204,0.1);
     }
 
     .watch-chip.alert {
@@ -1138,45 +1142,19 @@
     function stopSWPoll()   { swPost({ type: 'STOP_POLL'  }); }
 
     // เมื่อพับจอ → sync state แล้ว start polling ใน SW
-    // ลบ token ทั้งหมดของ user นี้เมื่อปิดแอป/slide ออก
-    function removeAllMyTokens() {
-      watchedIds.forEach(pid => {
-        try {
-          // ลบเฉพาะ slot ของ device นี้
-          db.ref(`pushTokens/${pid}/${_deviceId}`).remove().catch(()=>{});
-        } catch(e) {}
-      });
-    }
-
-    // ลบ token ทุกครั้งที่ SW ยืนยันว่า page ถูก terminate
-    // pagehide = iOS slide out / close tab / navigate away
-    window.addEventListener('pagehide', (e) => {
-      if (!e.persisted) {
-        // page ถูกปิดจริง (ไม่ใช่แค่ bfcache)
-        removeAllMyTokens();
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        syncStateToSW();
+        startSWPoll();
+      } else {
+        stopSWPoll();
       }
     });
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        // พับจอ — ยังอยู่ใน bfcache, token ยังคงอยู่, sync SW
-        syncStateToSW();
-        pollNow();
-        if (_swRegistration && _swRegistration.sync) {
-          _swRegistration.sync.register('bb-poll-once').catch(()=>{});
-        }
-      } else {
-        // กลับมาเปิดจอ — ลบ notification ทั้งหมดออกทันที
-        if (_swRegistration) {
-          _swRegistration.getNotifications().then(ns => ns.forEach(n => n.close())).catch(()=>{});
-        }
-        // Clear iOS badge
-        if (navigator.clearAppBadge) navigator.clearAppBadge().catch(()=>{});
-        // re-register token
-        if (_pushGranted && watchedIds.size > 0) {
-          watchedIds.forEach(pid => registerFCMToken(pid));
-        }
-      }
+    // page ปิด / navigate ออก
+    window.addEventListener('pagehide', () => {
+      syncStateToSW();
+      startSWPoll();
     });
 
     async function initPWA() {
@@ -1199,14 +1177,7 @@
       return _pushGranted;
     }
 
-    // Device ID เฉพาะของ tab/device นี้ (persistent ใน localStorage)
-    const _deviceId = (()=>{
-      let id = localStorage.getItem('bb-device-id');
-      if (!id) { id = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('bb-device-id', id); }
-      return id;
-    })();
-
-    // Save token under pushTokens/<pid>/<deviceId> — 1 device = 1 slot
+    // Get FCM token and save to Firebase under pushTokens/<pid>
     async function registerFCMToken(pid) {
       if (!_swRegistration || !_pushGranted) return;
       try {
@@ -1217,8 +1188,9 @@
         });
         if (token) {
           _fcmToken = token;
-          await db.ref(`pushTokens/${pid}/${_deviceId}`).set({ token, ts: Date.now() });
-          console.log('[FCM] token saved pid', pid, 'device', _deviceId.slice(0,8));
+          // Save token to Firebase keyed by player id
+          await db.ref('pushTokens/' + pid).set({ token, ts: Date.now() });
+          console.log('[FCM] token saved for pid', pid, token.slice(0,20) + '...');
         }
       } catch(e) { console.warn('[FCM] getToken failed', e); }
     }
@@ -1253,7 +1225,6 @@
 
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
-    const FB_CONFIG = firebaseConfig; // alias for use in pagehide
 
     // ── State ─────────────────────────────────────────────────────
     let state = { players:[], matches:[], matchQueues:[], courts:[] };
@@ -1428,8 +1399,12 @@
           const p = getPlayer(id);
           const name  = p ? esc(p.name) : '???';
           const skill = p ? p.skill : '?';
-          const dot = `<div class="skill-dot" style="background:${skillColor(skill)};"></div>`;
-          const nameEl = `<div class="player-name-txt player-name-clickable" data-pid="${id}" style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);">${name}</div>`;
+          const isWatched = watchedIds.has(id);
+          const dot = `<div class="skill-dot" style="background:${isWatched?'var(--cyan)':skillColor(skill)};${isWatched?'width:10px;height:10px;box-shadow:0 0 6px var(--cyan);':''}"></div>`;
+          const nameEl = `<div class="player-name-txt player-name-clickable" data-pid="${id}"
+            style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);
+            ${isWatched?'color:var(--cyan);font-size:1.15rem;text-shadow:0 0 10px rgba(0,168,204,0.6);':''}"
+          >${isWatched?'👁 ':''}${name}</div>`;
           return `<div class="player-row ${right?'right':''}">
             ${right ? nameEl : dot}
             ${right ? dot    : nameEl}
@@ -1478,7 +1453,11 @@
         const isNext = i === 0;
         const names = ids => ids.map(id => {
           const p = getPlayer(id);
-          return `<div class="queue-player queue-player-clickable" data-pid="${id}" style="cursor:pointer;display:inline;-webkit-tap-highlight-color:rgba(0,168,204,0.2);">${p ? esc(p.name) : '???'}</div>`;
+          const isWatched = watchedIds.has(id);
+          return `<div class="queue-player queue-player-clickable" data-pid="${id}"
+            style="cursor:pointer;display:inline;-webkit-tap-highlight-color:rgba(0,168,204,0.2);
+            ${isWatched?'color:var(--cyan);font-size:1.05rem;text-shadow:0 0 8px rgba(0,168,204,0.5);font-size:1rem;':''}"
+          >${isWatched?'👁 ':''}${p ? esc(p.name) : '???'}</div>`;
         }).join('<span class="sep">&</span>');
 
         // ประมาณเวลารอ — แสดงเสมอ
@@ -1520,12 +1499,20 @@
         emptyEl.style.display = 'block';
       } else {
         emptyEl.style.display = 'none';
-        chipsEl.innerHTML = waiting.map(p =>
-          `<div class="waiting-chip waiting-chip-clickable" data-pid="${p.id}" style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);">
-            <span class="waiting-chip-name">${esc(p.name)}</span>
+        chipsEl.innerHTML = waiting.map(p => {
+          const isWatched = watchedIds.has(p.id);
+          const watchStyle = isWatched
+            ? 'background:rgba(0,168,204,0.25);border:2px solid var(--cyan);box-shadow:0 0 12px rgba(0,168,204,0.4);'
+            : '';
+          const watchIcon = isWatched ? '👁 ' : '';
+          return `<div class="waiting-chip waiting-chip-clickable" data-pid="${p.id}"
+            style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);${watchStyle}">
+            <span class="waiting-chip-name" style="${isWatched?'color:#00a8cc;font-size:0.95rem;':''}">
+              ${watchIcon}${esc(p.name)}
+            </span>
             <span class="skill-badge-sm" style="background:${skillColor(p.skill)}">${esc(p.skill)}</span>
-          </div>`
-        ).join('');
+          </div>`;
+        }).join('');
       }
     }
 
@@ -1553,9 +1540,11 @@
         const isNext = queuePos === 1;
         const extraClass = isNext ? 'alert' : 'watching';
         const posLabel = queuePos > 0 ? ` <span style="opacity:0.7;font-size:0.7em;">#${queuePos}</span>` : '';
+        const posText = queuePos > 0 ? `<span style="background:${isNext?'var(--gold)':'rgba(0,168,204,0.4)'};color:#fff;font-size:0.72em;padding:1px 7px;border-radius:10px;margin-left:4px;">คิว #${queuePos}</span>` : '';
         return `<div class="watch-chip ${extraClass}" data-watch-pid="${p.id}"
           style="-webkit-tap-highlight-color:transparent;" title="กดเพื่อเลิกติดตาม">
-          👁 ${esc(p.name)}${posLabel} <span style="margin-left:3px;opacity:0.5;font-size:0.8em;">✕</span>
+          👁 <span style="font-size:1em;">${esc(p.name)}</span>${posText}
+          <span style="margin-left:5px;opacity:0.45;font-size:0.8em;">✕</span>
         </div>`;
       }).join('');
 
@@ -1815,14 +1804,21 @@
 
     function toggleWatch(pid) {
       if (watchedIds.has(pid)) {
-        // เลิกติดตาม — ลบ token และ alertState ออกทันที
+        // ปิดติดตาม
         watchedIds.delete(pid);
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
         db.ref(`pushTokens/${pid}/${_deviceId}`).remove().catch(()=>{});
         db.ref('alertState/' + pid).remove().catch(()=>{});
       } else {
-        // เริ่มติดตาม — ขอ permission แล้ว register token
+        // เปิดติดตาม — ยกเลิกคนเก่าก่อน (แค่ 1 คนเท่านั้น)
+        watchedIds.forEach(oldPid => {
+          alertShown.delete(`${oldPid}-next`);
+          alertShown.delete(`${oldPid}-court`);
+          db.ref(`pushTokens/${oldPid}/${_deviceId}`).remove().catch(()=>{});
+        });
+        watchedIds.clear();
+        // เพิ่มคนใหม่
         watchedIds.add(pid);
         if (_pushGranted) {
           registerFCMToken(pid);
@@ -1834,6 +1830,7 @@
       }
       renderWatchBar();
       highlightMyQueues();
+      render(); // re-render ทุกส่วนให้ไฮไลต์อัพเดท
       syncStateToSW();
     }
 
