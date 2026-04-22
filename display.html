@@ -1149,19 +1149,37 @@
         startSWPoll();
       } else {
         stopSWPoll();
-        _justReturned = true; // กลับมาจาก background — skip checkQueueAlerts รอบแรก
-        // ลบ SW notifications ที่ค้างอยู่
+        _justReturned = true;
         if (_swRegistration) {
           _swRegistration.getNotifications().then(ns => ns.forEach(n => n.close())).catch(()=>{});
         }
-        setTimeout(() => { _justReturned = false; }, 3000); // reset หลัง 3 วินาที
+        setTimeout(() => { _justReturned = false; }, 3000);
+        // re-register token เพราะอาจถูกลบตอน bfcache หรือ pagehide
+        if (_pushGranted && watchedIds.size > 0) {
+          watchedIds.forEach(pid => registerFCMToken(pid));
+        }
       }
     });
 
-    // page ปิด / navigate ออก
-    window.addEventListener('pagehide', () => {
-      syncStateToSW();
-      startSWPoll();
+    // ลบ token ทั้งหมดเมื่อ slide ออก / ปิดแอป
+    function removeAllMyTokens() {
+      const did = localStorage.getItem('bb-device-id');
+      if (!did) return;
+      watchedIds.forEach(pid => {
+        try { db.ref(`pushTokens/${pid}/${did}`).remove(); } catch(e) {}
+      });
+    }
+
+    // page ปิด / slide ออก
+    window.addEventListener('pagehide', (e) => {
+      if (!e.persisted) {
+        // ปิดจริง ไม่ใช่ bfcache — ลบ token ทันที
+        removeAllMyTokens();
+      } else {
+        // bfcache (พับจอ) — token ยังคงอยู่ SW รับแทน
+        syncStateToSW();
+        startSWPoll();
+      }
     });
 
     async function initPWA() {
