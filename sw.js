@@ -1,6 +1,6 @@
-// sw.js — B&B Badminton Service Worker v6
-// iOS แสดง notification จาก APNs เองอยู่แล้ว
-// ไม่ต้องให้ SW แสดงซ้ำอีกครั้ง
+// sw.js — B&B Badminton Service Worker v7
+// Cloud Function ส่ง data-only push (silent)
+// SW แสดง notification เองครั้งเดียวจาก data payload
 
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
@@ -17,14 +17,27 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// ── onBackgroundMessage: suppress duplicate ───────────────────────
-// iOS จะแสดง notification จาก APNs payload โดยตรงอยู่แล้ว 1 ครั้ง
-// ถ้า onBackgroundMessage แสดงซ้ำจะกลายเป็น 2 ครั้ง
-// จึงดักไว้แต่ไม่ showNotification — ปล่อยให้ iOS จัดการเอง
+// ── onBackgroundMessage ───────────────────────────────────────────
+// รับ data-only push แล้วแสดง notification เองครั้งเดียว
 messaging.onBackgroundMessage(payload => {
-  // ไม่ทำอะไร — ป้องกัน duplicate
-  console.log('[SW] onBackgroundMessage suppressed (iOS handles natively)');
-  return Promise.resolve();
+  const data  = payload.data || {};
+  const title = data.title || '🏸 B&B Badminton';
+  const body  = data.body  || '';
+  const tag   = data.tag   || 'bb-notify';
+  const url   = data.url   || './display.html';
+
+  console.log('[SW] showing notification:', title);
+
+  return self.registration.showNotification(title, {
+    body,
+    tag,
+    renotify:           false,
+    icon:               'apple-touch-icon.png',
+    badge:              'apple-touch-icon.png',
+    vibrate:            [300, 100, 300, 100, 500],
+    requireInteraction: true,
+    data:               { url, tag },
+  });
 });
 
 self.addEventListener('install',  () => self.skipWaiting());
