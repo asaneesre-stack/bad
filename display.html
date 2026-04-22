@@ -1142,12 +1142,19 @@
     function stopSWPoll()   { swPost({ type: 'STOP_POLL'  }); }
 
     // เมื่อพับจอ → sync state แล้ว start polling ใน SW
+    let _justReturned = false; // flag ป้องกันแจ้งเตือนซ้ำเมื่อเปิดแอปกลับมา
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         syncStateToSW();
         startSWPoll();
       } else {
         stopSWPoll();
+        _justReturned = true; // กลับมาจาก background — skip checkQueueAlerts รอบแรก
+        // ลบ SW notifications ที่ค้างอยู่
+        if (_swRegistration) {
+          _swRegistration.getNotifications().then(ns => ns.forEach(n => n.close())).catch(()=>{});
+        }
+        setTimeout(() => { _justReturned = false; }, 3000); // reset หลัง 3 วินาที
       }
     });
 
@@ -1189,8 +1196,13 @@
         if (token) {
           _fcmToken = token;
           // Save token to Firebase keyed by player id
-          await db.ref('pushTokens/' + pid).set({ token, ts: Date.now() });
-          console.log('[FCM] token saved for pid', pid, token.slice(0,20) + '...');
+          const _did = (()=>{
+            let id = localStorage.getItem('bb-device-id');
+            if (!id) { id = Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('bb-device-id',id); }
+            return id;
+          })();
+          await db.ref(`pushTokens/${pid}/${_did}`).set({ token, ts: Date.now() });
+          console.log('[FCM] token saved pid', pid);
         }
       } catch(e) { console.warn('[FCM] getToken failed', e); }
     }
@@ -1548,36 +1560,33 @@
         </div>`;
       }).join('');
 
-      // "+ เลือกชื่อ" button — opens picker dropdown
-      html += `<div class="watch-chip" id="watch-add-btn" data-action="open-picker"
-        style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.6;">
-        + เลือกชื่อ
-      </div>`;
-
-      // Picker dropdown (hidden by default)
-      const unwatched = checkedIn.filter(p => !watchedIds.has(p.id));
-      if (unwatched.length > 0) {
-        html += `<div id="watch-picker" style="display:none;position:absolute;top:calc(100% + 4px);left:0;
-          background:#0f1829;border:1px solid rgba(0,168,204,0.3);border-radius:12px;
-          padding:0.5rem;z-index:200;display:none;flex-wrap:wrap;gap:0.35rem;max-width:90vw;
-          box-shadow:0 8px 32px rgba(0,0,0,0.6);">
-          <div style="width:100%;font-size:0.65rem;color:#666;padding:0 4px 4px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;">เลือกชื่อที่ต้องการติดตาม</div>
-          ${unwatched.map(p =>
-            `<div class="watch-chip" data-watch-pid="${p.id}"
-              style="-webkit-tap-highlight-color:transparent;">
-              ${esc(p.name)}
-            </div>`
-          ).join('')}
-        </div>`;
+      if (watchedPlayers.length === 0) {
+        // ยังไม่ได้เลือก — แสดงปุ่ม "+ เลือกชื่อ" + picker
+        if (checkedIn.length === 0) {
+          html = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
+        } else {
+          html += `<div class="watch-chip" id="watch-add-btn"
+            style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.7;">
+            + เลือกชื่อ
+          </div>
+          <div id="watch-picker" style="display:none;position:absolute;top:calc(100% + 4px);left:0;
+            background:#0f1829;border:1px solid rgba(0,168,204,0.3);border-radius:12px;
+            padding:0.5rem;z-index:200;flex-wrap:wrap;gap:0.35rem;max-width:90vw;
+            box-shadow:0 8px 32px rgba(0,0,0,0.6);">
+            <div style="width:100%;font-size:0.65rem;color:#666;padding:0 4px 4px;font-weight:700;
+              text-transform:uppercase;letter-spacing:0.06em;">เลือกชื่อของคุณ</div>
+            ${checkedIn.map(p =>
+              `<div class="watch-chip" data-watch-pid="${p.id}"
+                style="-webkit-tap-highlight-color:transparent;">${esc(p.name)}</div>`
+            ).join('')}
+          </div>`;
+        }
       }
-
-      if (watchedPlayers.length === 0 && unwatched.length === 0) {
-        html = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
-      }
+      // ถ้ามีคนที่ติดตามแล้ว — ไม่แสดงปุ่ม picker (เลือกได้แค่ 1 คน)
 
       chipsEl.innerHTML = html;
 
-      // Attach picker toggle
+      // Attach picker toggle (เฉพาะตอนที่ยังไม่ได้เลือก)
       const addBtn = document.getElementById('watch-add-btn');
       const picker = document.getElementById('watch-picker');
       if (addBtn && picker) {
@@ -1588,7 +1597,6 @@
         }
         addBtn.addEventListener('touchend', openPicker, { passive: false });
         addBtn.addEventListener('click', openPicker);
-        // Close picker when clicking outside
         setTimeout(() => {
           document.addEventListener('touchend', function closePicker(e) {
             if (!picker.contains(e.target) && e.target !== addBtn) {
@@ -1631,15 +1639,19 @@
           }
           if (!alertShown.has(key1)) {
             alertShown.add(key1);
-            const p = getPlayer(pid);
-            triggerAlert(p ? p.name : '???', 1);
+            if (!_justReturned) { // ไม่แสดงซ้ำเมื่อเปิดแอปกลับมา
+              const p = getPlayer(pid);
+              triggerAlert(p ? p.name : '???', 1);
+            }
           }
 
         } else {
           if (alertShown.has(key1) && !alertShown.has(key2)) {
             alertShown.add(key2);
-            const p = getPlayer(pid);
-            triggerAlert(p ? p.name : '???', 2);
+            if (!_justReturned) { // ไม่แสดงซ้ำเมื่อเปิดแอปกลับมา
+              const p = getPlayer(pid);
+              triggerAlert(p ? p.name : '???', 2);
+            }
           }
         }
       });
@@ -1808,14 +1820,16 @@
         watchedIds.delete(pid);
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
-        db.ref(`pushTokens/${pid}/${_deviceId}`).remove().catch(()=>{});
+        const _did1 = localStorage.getItem('bb-device-id');
+        if (_did1) db.ref(`pushTokens/${pid}/${_did1}`).remove().catch(()=>{});
         db.ref('alertState/' + pid).remove().catch(()=>{});
       } else {
         // เปิดติดตาม — ยกเลิกคนเก่าก่อน (แค่ 1 คนเท่านั้น)
         watchedIds.forEach(oldPid => {
           alertShown.delete(`${oldPid}-next`);
           alertShown.delete(`${oldPid}-court`);
-          db.ref(`pushTokens/${oldPid}/${_deviceId}`).remove().catch(()=>{});
+          const _did2 = localStorage.getItem('bb-device-id');
+          if (_did2) db.ref(`pushTokens/${oldPid}/${_did2}`).remove().catch(()=>{});
         });
         watchedIds.clear();
         // เพิ่มคนใหม่
