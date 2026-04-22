@@ -1681,11 +1681,14 @@
       overlay.classList.add('show');
       level === 2 ? playBeep2() : playBeep1();
 
-      // Push notification (ใช้งานได้แม้ปิดหน้าจอ ถ้าให้สิทธิ์แล้ว)
-      if (level === 2) {
-        sendPushNotification('✅ สนามว่างแล้ว!', name + ' — ลงสนามได้เลย!', 'court-' + name);
-      } else {
-        sendPushNotification('🏸 ถึงคิวของคุณแล้ว!', name + ' — เตรียมพร้อม!', 'queue-' + name);
+      // ส่ง push notification เฉพาะตอนพับจอเท่านั้น
+      // ถ้าเปิดแอปค้างไว้ overlay แสดงอยู่แล้ว ไม่ต้องส่งซ้ำ
+      if (document.hidden) {
+        if (level === 2) {
+          sendPushNotification('✅ สนามว่างแล้ว!', name + ' — ลงสนามได้เลย!', 'court-' + name);
+        } else {
+          sendPushNotification('🏸 ถึงคิวของคุณแล้ว!', name + ' — เตรียมพร้อม!', 'queue-' + name);
+        }
       }
 
       // Auto-close after 8s
