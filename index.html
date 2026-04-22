@@ -1326,6 +1326,27 @@
                 <div id="broadcast-status" style="margin-top:0.75rem;font-size:0.85rem;color:#888;"></div>
             </div>
 
+            <!-- Firebase Usage -->
+            <div class="card">
+                <h2>📊 ตรวจสอบการใช้งาน Firebase</h2>
+                <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">เช็คว่าใช้พื้นที่ free tier ไปเท่าไหร่แล้ว</p>
+
+                <div id="firebase-usage-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1rem;">
+                    <!-- จะ render ด้วย JS -->
+                </div>
+
+                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center;">
+                    <button onclick="App.checkFirebaseUsage()" id="btn-check-usage">🔍 เช็คการใช้งาน</button>
+                    <span id="usage-last-check" style="font-size:0.78rem;color:#aaa;"></span>
+                </div>
+                <div id="usage-note" style="margin-top:0.75rem;font-size:0.8rem;color:#888;display:none;">
+                    ⚠️ ข้อมูลนี้เป็นการประมาณจาก Firebase Realtime Database เท่านั้น
+                    สำหรับข้อมูลแม่นยำสุด ดูได้ที่
+                    <a href="https://console.firebase.google.com/project/b-bad-d088b/usage" target="_blank"
+                        style="color:var(--secondary);">Firebase Console</a>
+                </div>
+            </div>
+
             <!-- เครื่องมืออื่น -->
             <div class="card">
                 <h2>เครื่องมือผู้ดูแลระบบ</h2>
@@ -1336,6 +1357,22 @@
                     <button class="danger" onclick="App.clearAllPlayers()">เคลียร์ผู้เล่นทั้งหมด</button>
                     <button class="warning" onclick="App.clearAllHistory()">🧹 ล้างประวัติผู้เล่นทั้งหมด</button>
                 </div>
+
+                <h3 style="margin-top:1.5rem;">🔔 จัดการการแจ้งเตือน</h3>
+                <p style="color:#888;font-size:0.85rem;">ใช้ตอนทดสอบ หรือเมื่อต้องการหยุดแจ้งเตือนทุกเครื่องทันที</p>
+
+                <!-- Connected devices -->
+                <div id="connected-devices-list" style="margin:0.75rem 0;display:none;">
+                    <div style="font-size:0.8rem;font-weight:700;color:var(--primary);margin-bottom:0.5rem;">📱 เครื่องที่เชื่อมต่ออยู่:</div>
+                    <div id="connected-devices-body" style="display:flex;flex-direction:column;gap:0.4rem;max-height:240px;overflow-y:auto;"></div>
+                </div>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:0.75rem;">
+                    <button onclick="App.checkConnectedDevices()">📱 ดูเครื่องที่เชื่อมต่อ</button>
+                    <button class="danger" onclick="App.clearAllPushTokens()">🔕 เคลียร์ token ทั้งหมด</button>
+                    <button class="secondary" onclick="App.clearAlertState()">🔄 รีเซ็ต alert state</button>
+                </div>
+                <div id="clear-token-status" style="margin-top:0.5rem;font-size:0.82rem;color:#888;"></div>
             </div>
         </section>
     </main>
@@ -2303,6 +2340,127 @@
         },
 
 
+
+        // ── Firebase Usage Check ────────────────────────────────────
+        checkFirebaseUsage: async function() {
+            const btn = document.getElementById('btn-check-usage');
+            const grid = document.getElementById('firebase-usage-grid');
+            const noteEl = document.getElementById('usage-note');
+            const lastEl = document.getElementById('usage-last-check');
+
+            btn.disabled = true;
+            btn.textContent = '⏳ กำลังตรวจสอบ...';
+            grid.innerHTML = '<div style="color:#888;font-size:0.9rem;padding:1rem;">กำลังโหลด...</div>';
+
+            try {
+                // ── 1. Realtime Database size (ประมาณจาก JSON) ──────
+                const ref = firebase.database().ref('/');
+                const snap = await ref.once('value');
+                const jsonStr = JSON.stringify(snap.val() || {});
+                const dbBytes = new Blob([jsonStr]).size;
+                const dbMB = dbBytes / (1024 * 1024);
+                const dbLimit = 1024; // 1GB = 1024MB free tier
+                const dbPct = (dbMB / dbLimit * 100).toFixed(2);
+
+                // ── 2. นับ FCM tokens (จำนวน unique devices) ────────
+                const tokenSnap = await firebase.database().ref('pushTokens').once('value');
+                const tokenCount = tokenSnap.val() ? Object.keys(tokenSnap.val()).length : 0;
+
+                // ── 3. นับ players และ games ─────────────────────────
+                const playerCount = (appState.players || []).length;
+                let totalGames = 0;
+                Object.values(appState.history || {}).forEach(h => {
+                    totalGames += (h?.games?.length || 0);
+                });
+
+                // ── 4. Cloud Functions invocations (ดูจาก alertState) ─
+                const alertSnap = await firebase.database().ref('alertState').once('value');
+                const alertCount = alertSnap.val() ? Object.keys(alertSnap.val()).length : 0;
+
+                // ── Render ───────────────────────────────────────────
+                const items = [
+                    {
+                        icon: '🗄️',
+                        label: 'Realtime Database',
+                        used: dbMB.toFixed(3) + ' MB',
+                        limit: '1,024 MB',
+                        pct: +dbPct,
+                        color: +dbPct > 80 ? '#e74c3c' : +dbPct > 50 ? '#f39c12' : '#27ae60',
+                    },
+                    {
+                        icon: '🔔',
+                        label: 'FCM Push (devices)',
+                        used: tokenCount + ' เครื่อง',
+                        limit: 'ไม่จำกัด',
+                        pct: 0,
+                        color: '#27ae60',
+                        noBar: true,
+                    },
+                    {
+                        icon: '⚡',
+                        label: 'Cloud Functions',
+                        used: 'ดูที่ Console',
+                        limit: '2,000,000/เดือน',
+                        pct: 0,
+                        color: '#00a8cc',
+                        noBar: true,
+                        link: 'https://console.firebase.google.com/project/b-bad-d088b/functions',
+                    },
+                    {
+                        icon: '👥',
+                        label: 'ผู้เล่นในระบบ',
+                        used: playerCount + ' คน',
+                        limit: 'ไม่จำกัด',
+                        pct: 0,
+                        color: '#27ae60',
+                        noBar: true,
+                    },
+                    {
+                        icon: '🏸',
+                        label: 'ประวัติเกมทั้งหมด',
+                        used: totalGames + ' เกม',
+                        limit: 'ไม่จำกัด',
+                        pct: 0,
+                        color: '#27ae60',
+                        noBar: true,
+                    },
+                ];
+
+                grid.innerHTML = items.map(item => `
+                    <div style="background:var(--light);border-radius:12px;padding:1rem;border:1px solid #e0e0e0;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+                            <span style="font-size:1.4rem;">${item.icon}</span>
+                            <div>
+                                <div style="font-weight:700;font-size:0.88rem;color:var(--primary);">${item.label}</div>
+                                <div style="font-size:0.75rem;color:#888;">limit: ${item.limit}</div>
+                            </div>
+                        </div>
+                        <div style="font-size:1.3rem;font-weight:800;color:${item.color};margin-bottom:${item.noBar?'0':'0.5rem'};">
+                            ${item.link
+                                ? `<a href="${item.link}" target="_blank" style="color:${item.color};text-decoration:none;">${item.used} ↗</a>`
+                                : item.used
+                            }
+                        </div>
+                        ${!item.noBar ? `
+                        <div style="background:#e0e0e0;border-radius:4px;height:6px;overflow:hidden;">
+                            <div style="width:${Math.min(item.pct,100)}%;height:100%;background:${item.color};border-radius:4px;transition:width 0.5s;"></div>
+                        </div>
+                        <div style="font-size:0.72rem;color:${item.color};margin-top:3px;font-weight:700;">${item.pct}% ของ free tier</div>
+                        ` : ''}
+                    </div>
+                `).join('');
+
+                noteEl.style.display = 'block';
+                lastEl.textContent = 'อัพเดทล่าสุด: ' + new Date().toLocaleTimeString('th-TH');
+
+            } catch(e) {
+                grid.innerHTML = '<div style="color:#e74c3c;">❌ โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่</div>';
+                console.error('Usage check error:', e);
+            }
+
+            btn.disabled = false;
+            btn.textContent = '🔍 เช็คการใช้งาน';
+        },
         // ── Broadcast / Direct Message ─────────────────────────────
         switchMsgTab: function(tab) {
             document.getElementById('tab-content-broadcast').style.display = tab === 'broadcast' ? 'block' : 'none';
@@ -2386,6 +2544,133 @@
                 statusEl.style.color = '#e74c3c';
             }
         },
+        checkConnectedDevices: async function() {
+            const listEl   = document.getElementById('connected-devices-list');
+            const bodyEl   = document.getElementById('connected-devices-body');
+            const statusEl = document.getElementById('clear-token-status');
+
+            statusEl.textContent = '⏳ กำลังโหลด...';
+            statusEl.style.color = '#e67e22';
+
+            try {
+                const snap = await firebase.database().ref('pushTokens').once('value');
+                const data = snap.val();
+
+                if (!data) {
+                    statusEl.textContent = '📭 ไม่มีเครื่องเชื่อมต่ออยู่';
+                    statusEl.style.color = '#888';
+                    listEl.style.display = 'none';
+                    return;
+                }
+
+                statusEl.textContent = '';
+                listEl.style.display = 'block';
+
+                let totalDevices = 0;
+                let rows = '';
+
+                for (const [pidStr, deviceTokens] of Object.entries(data)) {
+                    const player = PlayerUtils.getById(+pidStr);
+                    const name = player ? escapeHtml(player.name) : `Player #${pidStr}`;
+                    const skill = player ? player.skill : '?';
+                    const skillClass = player ? getSkillClass(player.skill) : 'N';
+
+                    // นับจำนวน devices
+                    let deviceCount = 0;
+                    let deviceRows = '';
+                    const now = Date.now();
+
+                    if (typeof deviceTokens.token === 'string') {
+                        // format เก่า
+                        deviceCount = 1;
+                        const ago = deviceTokens.ts ? Math.floor((now - deviceTokens.ts) / 60000) : null;
+                        const agoStr = ago !== null ? (ago < 1 ? 'เพิ่งเชื่อมต่อ' : `${ago} นาทีที่แล้ว`) : '';
+                        deviceRows = `<span style="font-size:0.72rem;color:#aaa;">📲 1 เครื่อง ${agoStr}</span>`;
+                    } else if (typeof deviceTokens === 'object') {
+                        const devices = Object.entries(deviceTokens)
+                            .filter(([,v]) => v?.token)
+                            .sort(([,a],[,b]) => (b.ts||0) - (a.ts||0));
+                        deviceCount = devices.length;
+                        deviceRows = devices.map(([devId, d]) => {
+                            const ago = d.ts ? Math.floor((now - d.ts) / 60000) : null;
+                            const agoStr = ago !== null ? (ago < 1 ? 'เพิ่งเชื่อมต่อ' : `${ago} นาทีที่แล้ว`) : '';
+                            return `<span style="font-size:0.72rem;color:#aaa;margin-left:1rem;">📲 ${devId.slice(0,8)}... — ${agoStr}</span>`;
+                        }).join('');
+                    }
+
+                    totalDevices += deviceCount;
+
+                    rows += `
+                        <div style="display:flex;align-items:center;justify-content:space-between;
+                            background:var(--light);border-radius:8px;padding:0.5rem 0.75rem;flex-wrap:wrap;gap:0.4rem;">
+                            <div style="display:flex;align-items:center;gap:0.5rem;">
+                                <span class="skill-badge skill-${skillClass}">${escapeHtml(skill)}</span>
+                                <span style="font-weight:700;font-size:0.9rem;">${name}</span>
+                                <span style="background:#27ae60;color:#fff;font-size:0.65rem;font-weight:700;
+                                    padding:1px 7px;border-radius:10px;">${deviceCount} เครื่อง</span>
+                            </div>
+                            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+                                ${deviceRows}
+                                <button class="danger" style="font-size:0.7rem;padding:2px 8px;min-height:unset;"
+                                    onclick="App.revokePlayerToken(${pidStr}, '${name}')">ถอน</button>
+                            </div>
+                        </div>`;
+                }
+
+                bodyEl.innerHTML = `
+                    <div style="font-size:0.82rem;color:#27ae60;font-weight:700;margin-bottom:0.4rem;">
+                        ✅ รวม ${totalDevices} เครื่อง จาก ${Object.keys(data).length} คน
+                    </div>` + rows;
+
+            } catch(e) {
+                statusEl.textContent = '❌ โหลดไม่สำเร็จ';
+                statusEl.style.color = '#e74c3c';
+            }
+        },
+
+        revokePlayerToken: function(pid, name) {
+            if (!confirm(`ถอน token ของ ${name}? เครื่องนั้นจะหยุดรับแจ้งเตือน`)) return;
+            firebase.database().ref('pushTokens/' + pid).remove()
+                .then(() => {
+                    showSuccess(`ถอน token ของ ${name} แล้ว`);
+                    this.checkConnectedDevices();
+                })
+                .catch(() => showError('ถอน token ไม่สำเร็จ'));
+        },
+
+        clearAllPushTokens: function() {
+            if (!confirm('เคลียร์ token ทั้งหมด? ทุกเครื่องจะหยุดรับแจ้งเตือนทันที')) return;
+            const statusEl = document.getElementById('clear-token-status');
+            statusEl.textContent = '⏳ กำลังเคลียร์...';
+            firebase.database().ref('pushTokens').remove()
+                .then(() => {
+                    statusEl.textContent = '✅ เคลียร์ token เรียบร้อย — ทุกเครื่องหยุดแจ้งเตือนแล้ว';
+                    statusEl.style.color = '#27ae60';
+                    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+                    showSuccess('เคลียร์ push token ทั้งหมดแล้ว');
+                })
+                .catch(() => {
+                    statusEl.textContent = '❌ เคลียร์ไม่สำเร็จ';
+                    statusEl.style.color = '#e74c3c';
+                });
+        },
+
+        clearAlertState: function() {
+            if (!confirm('รีเซ็ต alert state? การแจ้งเตือนจะเริ่มนับใหม่ทุกคน')) return;
+            const statusEl = document.getElementById('clear-token-status');
+            firebase.database().ref('alertState').remove()
+                .then(() => {
+                    statusEl.textContent = '✅ รีเซ็ต alert state เรียบร้อย';
+                    statusEl.style.color = '#27ae60';
+                    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+                    showSuccess('รีเซ็ต alert state แล้ว');
+                })
+                .catch(() => {
+                    statusEl.textContent = '❌ รีเซ็ตไม่สำเร็จ';
+                    statusEl.style.color = '#e74c3c';
+                });
+        },
+
         clearAllPlayers: function() {
             if (appState.matches.length > 0) {
                 showError('ไม่สามารถลบผู้เล่นได้! มีผู้เล่นบางคนกำลังแข่ง');
