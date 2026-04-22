@@ -1,4 +1,7 @@
-// sw.js — B&B Badminton Service Worker v5
+// sw.js — B&B Badminton Service Worker v6
+// iOS แสดง notification จาก APNs เองอยู่แล้ว
+// ไม่ต้องให้ SW แสดงซ้ำอีกครั้ง
+
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -14,40 +17,25 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// ── FCM Background Message ────────────────────────────────────────
-// ใช้ tag เดิมจาก payload เสมอ → iOS replace แทนเพิ่มใหม่
+// ── onBackgroundMessage: suppress duplicate ───────────────────────
+// iOS จะแสดง notification จาก APNs payload โดยตรงอยู่แล้ว 1 ครั้ง
+// ถ้า onBackgroundMessage แสดงซ้ำจะกลายเป็น 2 ครั้ง
+// จึงดักไว้แต่ไม่ showNotification — ปล่อยให้ iOS จัดการเอง
 messaging.onBackgroundMessage(payload => {
-  const title = payload.notification?.title || '🏸 B&B Badminton';
-  const body  = payload.notification?.body  || '';
-  const tag   = payload.notification?.tag   || payload.data?.tag || 'bb-notify';
-
-  // เช็คว่ามี notification tag นี้อยู่แล้วไหม — ถ้ามีให้ replace ไม่ต้องแสดงซ้ำ
-  return self.registration.getNotifications({ tag }).then(existing => {
-    // ไม่ว่าจะมีหรือไม่ — show ด้วย tag เดิม → iOS จะ replace อัตโนมัติ
-    return self.registration.showNotification(title, {
-      body,
-      tag,                  // key สำคัญ: tag เดิม = replace ไม่เพิ่มใหม่
-      renotify: false,      // ไม่สั่น/เสียงซ้ำถ้า tag เหมือนกัน
-      icon:               'apple-touch-icon.png',
-      badge:              'apple-touch-icon.png',
-      vibrate:            [300, 100, 300, 100, 500],
-      requireInteraction: true,
-      data:               { url: './display.html', tag },
-    });
-  });
+  // ไม่ทำอะไร — ป้องกัน duplicate
+  console.log('[SW] onBackgroundMessage suppressed (iOS handles natively)');
+  return Promise.resolve();
 });
 
 self.addEventListener('install',  () => self.skipWaiting());
 self.addEventListener('activate', e  => e.waitUntil(clients.claim()));
 
-// กด notification → เปิดแอป + ลบ notification ทั้งหมด
+// กด notification → เปิดแอป
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const url = event.notification.data?.url || './display.html';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      // ลบ notification ที่เหลือทั้งหมด
-      self.registration.getNotifications().then(ns => ns.forEach(n => n.close()));
       for (const c of list) {
         if (c.url.includes('display.html') && 'focus' in c) return c.focus();
       }
