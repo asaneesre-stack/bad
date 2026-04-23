@@ -1079,41 +1079,53 @@
   </div>
 
   <!-- Payment Modal -->
-  <div id="payment-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);
-    z-index:1000;align-items:center;justify-content:center;">
-    <div style="background:#fff;border-radius:20px;padding:1.5rem;max-width:340px;width:90%;text-align:center;
-      box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+  <div id="payment-modal" onclick="if(event.target===this)this.style.display='none'"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);
+    z-index:1000;align-items:center;justify-content:center;padding:1rem;">
+    <div style="background:#fff;border-radius:24px;overflow:hidden;max-width:340px;width:100%;
+      box-shadow:0 24px 80px rgba(0,0,0,0.35);">
 
-      <div style="font-size:1.1rem;font-weight:800;color:#1a2b47;margin-bottom:0.25rem;">💳 ชำระค่าสนาม</div>
-      <div id="payment-name" style="font-size:0.9rem;color:#888;margin-bottom:1.25rem;"></div>
-
-      <!-- ราคา -->
-      <div style="font-size:2rem;font-weight:900;color:#e74c3c;margin-bottom:0.25rem;" id="payment-price-display"></div>
-      <div style="font-size:0.82rem;color:#aaa;margin-bottom:1rem;">นาย อัสนี ศรีวงษ์รักษ์ — พร้อมเพย์</div>
-
-      <!-- QR Image จาก API -->
-      <div style="margin-bottom:1rem;">
-        <img id="payment-qr-img" src="" alt="QR PromptPay"
-          style="width:220px;height:220px;border-radius:12px;border:1px solid #eee;background:#f9f9f9;"
-          onerror="this.src='';this.style.display='none';document.getElementById('qr-error').style.display='block'">
-        <div id="qr-error" style="display:none;color:#e74c3c;font-size:0.85rem;margin-top:0.5rem;">
-          ❌ โหลด QR ไม่ได้ — ลองใหม่อีกครั้ง
-        </div>
-        <div id="payment-qr-container" style="display:none;"></div>
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#1a2b47,#0f1e35);padding:1.25rem 1.5rem 1rem;text-align:center;">
+        <div style="font-size:0.75rem;color:rgba(255,255,255,0.5);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.25rem;">ชำระค่าสนามแบดมินตัน</div>
+        <div id="payment-name" style="font-size:1.1rem;font-weight:800;color:#fff;"></div>
       </div>
 
-      <div id="payment-notify-area">
-        <button id="btn-notify-paid" onclick="notifyPaid()"
-          style="background:linear-gradient(135deg,#27ae60,#219a52);color:#fff;border:none;
-          border-radius:12px;padding:0.85rem;font-size:0.95rem;font-weight:700;
-          cursor:pointer;width:100%;margin-bottom:0.5rem;">
-          ✅ จ่ายแล้ว — แจ้งชำระเงิน
-        </button>
-        <button onclick="document.getElementById('payment-modal').style.display='none'"
-          style="background:#f0f0f0;color:#666;border:none;border-radius:12px;
-          padding:0.6rem;font-size:0.85rem;cursor:pointer;width:100%;">
-          ปิด
-        </button>
+      <!-- Body -->
+      <div style="padding:1.25rem 1.5rem;text-align:center;">
+
+        <!-- ราคา -->
+        <div style="font-size:2.5rem;font-weight:900;color:#e74c3c;line-height:1;" id="payment-price-display"></div>
+        <div style="font-size:0.78rem;color:#aaa;margin-top:4px;margin-bottom:1.25rem;">บาท · พร้อมเพย์ · นาย อัสนี ศรีวงษ์รักษ์</div>
+
+        <!-- QR -->
+        <div style="display:inline-block;padding:12px;background:#fff;border-radius:16px;
+          border:2px solid #f0f0f0;box-shadow:0 4px 20px rgba(0,0,0,0.08);margin-bottom:1rem;">
+          <img id="payment-qr-img" src="" alt="QR PromptPay"
+            style="width:200px;height:200px;display:block;border-radius:8px;"
+            onerror="this.style.display='none';document.getElementById('qr-error').style.display='block'">
+          <div id="qr-error" style="display:none;width:200px;height:200px;display:flex;align-items:center;
+            justify-content:center;color:#e74c3c;font-size:0.85rem;">❌ โหลด QR ไม่ได้</div>
+        </div>
+        <div id="payment-qr-container" style="display:none;"></div>
+
+        <div style="font-size:0.75rem;color:#bbb;margin-bottom:1.25rem;">สแกนด้วยแอปธนาคารทุกเจ้า</div>
+
+        <!-- Buttons -->
+        <div id="payment-notify-area">
+          <button id="btn-notify-paid" onclick="notifyPaid()"
+            style="background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;
+            border-radius:14px;padding:1rem;font-size:1rem;font-weight:700;
+            cursor:pointer;width:100%;margin-bottom:0.6rem;letter-spacing:0.02em;
+            box-shadow:0 4px 15px rgba(39,174,96,0.3);">
+            ✅ จ่ายแล้ว — แจ้งชำระเงิน
+          </button>
+          <button onclick="document.getElementById('payment-modal').style.display='none'"
+            style="background:none;color:#aaa;border:none;font-size:0.9rem;cursor:pointer;
+            padding:0.5rem;width:100%;">
+            ปิด
+          </button>
+        </div>
       </div>
     </div>
   </div>
