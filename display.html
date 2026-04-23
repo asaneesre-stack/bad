@@ -1464,34 +1464,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // ── Presence Tracking ────────────────────────────────────────────
-    // ติดตามว่า user online/offline จริงๆ ผ่าน Firebase .info/connected
-    let _presencePid = null;
-    let _presenceRef = null;
-
-    function setupPresence(pid) {
-      if (_presenceRef) { _presenceRef.remove(); _presenceRef = null; }
-      _presencePid = pid;
-
-      const connectedRef = db.ref('.info/connected');
-      connectedRef.on('value', snap => {
-        if (!snap.val() || !_presencePid) return;
-
-        const did = localStorage.getItem('bb-device-id') || 'unknown';
-        _presenceRef = db.ref(`presence/${_presencePid}/${did}`);
-
-        // ถ้า connection ขาด (สไลด์แอป/ปิด) → ลบ presence อัตโนมัติ
-        _presenceRef.onDisconnect().remove();
-        // บันทึกว่า online อยู่
-        _presenceRef.set({ online: true, ts: Date.now() });
-      });
-    }
-
-    function clearPresence() {
-      if (_presenceRef) { _presenceRef.remove(); _presenceRef = null; }
-      _presencePid = null;
-    }
-
     // ── State ─────────────────────────────────────────────────────
     let state = { players:[], matches:[], matchQueues:[], courts:[], payments:{} };
 
@@ -2131,7 +2103,6 @@
         watchedIds.delete(pid);
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
-        clearPresence();
         const _did1 = localStorage.getItem('bb-device-id');
         if (_did1) db.ref(`pushTokens/${pid}/${_did1}`).remove().catch(()=>{});
         db.ref('alertState/' + pid).remove().catch(()=>{});
@@ -2146,7 +2117,6 @@
         watchedIds.clear();
         // เพิ่มคนใหม่
         watchedIds.add(pid);
-        setupPresence(pid);
         if (_pushGranted) {
           registerFCMToken(pid);
         } else {
