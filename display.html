@@ -11,6 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="B&B Badminton">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-messaging-compat.min.js"></script>
@@ -1069,6 +1070,40 @@
       <span class="watch-hint">กดชื่อตัวเองเพื่อรับแจ้งเตือนเมื่อถึงคิว</span>
     </div>
     <button class="sound-unlock-btn" id="sound-unlock-btn" onclick="unlockAudioManual()">🔇 เปิดเสียง</button>
+    <button id="pay-btn" onclick="showPaymentQR()"
+      style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;
+      border-radius:20px;padding:5px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;
+      display:none;">
+      💳 จ่ายค่าสนาม
+    </button>
+  </div>
+
+  <!-- Payment QR Modal -->
+  <div id="payment-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);
+    z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:20px;padding:1.5rem;max-width:340px;width:90%;text-align:center;
+      box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+      <div style="font-size:1.1rem;font-weight:800;color:#1a2b47;margin-bottom:0.25rem;">💳 ชำระค่าสนาม</div>
+      <div id="payment-name" style="font-size:0.9rem;color:#666;margin-bottom:1rem;"></div>
+      <canvas id="payment-qr" style="width:220px;height:220px;border-radius:12px;"></canvas>
+      <div style="margin-top:0.75rem;">
+        <div style="font-size:1.4rem;font-weight:800;color:#e74c3c;" id="payment-price-display"></div>
+        <div style="font-size:0.8rem;color:#888;margin-top:2px;">พร้อมเพย์ — นาย อัสนี ศรีวงษ์รักษ์</div>
+      </div>
+      <div id="payment-notify-area" style="margin-top:1rem;">
+        <button id="btn-notify-paid" onclick="notifyPaid()"
+          style="background:linear-gradient(135deg,#27ae60,#219a52);color:#fff;border:none;
+          border-radius:12px;padding:0.75rem 2rem;font-size:0.95rem;font-weight:700;
+          cursor:pointer;width:100%;margin-bottom:0.5rem;">
+          ✅ แจ้งชำระเงินแล้ว
+        </button>
+        <button onclick="document.getElementById('payment-modal').style.display='none'"
+          style="background:#eee;color:#666;border:none;border-radius:12px;
+          padding:0.6rem 2rem;font-size:0.85rem;cursor:pointer;width:100%;">
+          ปิด
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Alert Overlay -->
@@ -1300,6 +1335,9 @@
       el.textContent = msg;
       el.style.color = color || '#00a8cc';
     }
+
+    // Listen payment status changes
+    db.ref('badmintonState/payments').on('value', () => { updatePayBtn(); });
 
     db.ref('badmintonState').on('value', snap => {
       const raw = snap.val();
@@ -1884,8 +1922,128 @@
       }
       renderWatchBar();
       highlightMyQueues();
-      render(); // re-render ทุกส่วนให้ไฮไลต์อัพเดท
+      render();
+      updatePayBtn();
       syncStateToSW();
+    }
+
+
+    // ── Payment QR ──────────────────────────────────────────────────
+    // Generate PromptPay QR payload (EMV format)
+    function promptPayPayload(id, amount) {
+      function crc16(str) {
+        let crc = 0xFFFF;
+        for (let i = 0; i < str.length; i++) {
+          crc ^= str.charCodeAt(i) << 8;
+          for (let j = 0; j < 8; j++) {
+            crc = (crc & 0x8000) ? (crc << 1) ^ 0x1021 : crc << 1;
+          }
+        }
+        return ((crc & 0xFFFF).toString(16).toUpperCase().padStart(4,'0'));
+      }
+      function field(id, val) { return id + val.length.toString().padStart(2,'0') + val; }
+
+      // แปลงเบอร์/เลขบัญชีเป็น format PromptPay
+      let account = id.replace(/[-\s]/g,'');
+      if (account.length === 10 && account.startsWith('0')) {
+        account = '0066' + account.substring(1); // เบอร์มือถือ
+      } else if (account.length === 13) {
+        // เลขบัตรประชาชน ใช้ตรงๆ
+      } else {
+        account = account; // เลขบัญชี/อื่นๆ
+      }
+
+      const merchantInfo = field('00','A000000677010111') + field('01', account);
+      const amountStr    = amount ? amount.toFixed(2) : '';
+      let payload =
+        field('00','01') +
+        field('01','12') +
+        field('29', merchantInfo) +
+        field('53','764') +
+        (amountStr ? field('54', amountStr) : '') +
+        field('58','TH') +
+        field('62', field('07','BBADMINTON')) +
+        '6304';
+
+      return payload + crc16(payload);
+    }
+
+    async function showPaymentQR() {
+      const watchedPlayer = (state.players||[]).find(p => watchedIds.has(p.id));
+      const name = watchedPlayer ? watchedPlayer.name : 'ผู้เล่น';
+
+      // อ่าน payment settings จาก Firebase
+      const snap = await db.ref('badmintonState/paymentSettings').once('value');
+      const settings = snap.val() || {};
+      const ppId  = settings.promptpay || '1348356484';
+      const price = settings.price     || 210;
+
+      document.getElementById('payment-name').textContent  = name;
+      document.getElementById('payment-price-display').textContent = `฿${price} บาท`;
+
+      // Generate QR
+      const payload = promptPayPayload(ppId, price);
+      const canvas  = document.getElementById('payment-qr');
+
+      // ใช้ QRCode library
+      if (window.QRCode) {
+        QRCode.toCanvas(canvas, payload, { width: 220, margin: 1 }, err => {
+          if (err) console.warn('QR error:', err);
+        });
+      }
+
+      document.getElementById('payment-modal').style.display = 'flex';
+    }
+
+    // แสดงปุ่มจ่ายเมื่อมีการติดตามชื่อ
+    function updatePayBtn() {
+      const btn = document.getElementById('pay-btn');
+      if (!btn) return;
+      if (watchedIds.size === 0) { btn.style.display = 'none'; return; }
+      // เช็คสถานะจ่ายจาก Firebase
+      const pid = [...watchedIds][0];
+      db.ref(`badmintonState/payments/${pid}`).once('value').then(snap => {
+        const p = snap.val();
+        if (p && p.paid) {
+          btn.textContent  = '✅ ชำระแล้ว';
+          btn.style.background = 'linear-gradient(135deg,#27ae60,#219a52)';
+          btn.style.display = 'inline-flex';
+          btn.onclick = null;
+        } else if (p && p.pending) {
+          btn.textContent  = '⏳ รอยืนยัน...';
+          btn.style.background = 'linear-gradient(135deg,#e67e22,#d35400)';
+          btn.style.display = 'inline-flex';
+          btn.onclick = showPaymentQR;
+        } else {
+          btn.textContent  = '💳 จ่ายค่าสนาม';
+          btn.style.background = 'linear-gradient(135deg,#e74c3c,#c0392b)';
+          btn.style.display = 'inline-flex';
+          btn.onclick = showPaymentQR;
+        }
+      });
+    }
+
+    async function notifyPaid() {
+      const pid = [...watchedIds][0];
+      if (!pid) return;
+      const p = (state.players||[]).find(pl => pl.id === pid);
+      const name = p ? p.name : '???';
+
+      const btn = document.getElementById('btn-notify-paid');
+      btn.textContent = '⏳ กำลังส่ง...';
+      btn.disabled = true;
+
+      await db.ref(`badmintonState/payments/${pid}`).set({
+        pending: true,
+        paid: false,
+        name,
+        ts: Date.now(),
+      });
+
+      btn.textContent = '✅ แจ้งแล้ว รอ admin ยืนยัน';
+      btn.style.background = '#95a5a6';
+      document.getElementById('payment-modal').style.display = 'none';
+      updatePayBtn();
     }
 
     // Hook into render to update watch bar + alerts after every sync
