@@ -3271,6 +3271,8 @@
             set('shuttle-used',          s.used      || 0);
         },
 
+        _payFilter: 'all',
+
         renderCombinedPaymentList: function() {
             const listEl = document.getElementById('combined-payment-list');
             if (!listEl) return;
@@ -3285,8 +3287,56 @@
             const buffet    = parseFloat(document.getElementById('price-buffet')?.value) || 210;
             const courtG    = parseFloat(document.getElementById('price-court-per-game')?.value) || 90;
             const perG      = parseFloat(document.getElementById('price-per-game')?.value) || 27;
+            const filter    = this._payFilter || 'all';
 
-            listEl.innerHTML = checkedIn.map(p => {
+            // เรียง: pending → ยังไม่จ่าย → จ่ายแล้ว
+            const sorted = [...checkedIn].sort((a, b) => {
+                const getOrder = p => {
+                    const pay = payments[p.id];
+                    if (pay?.pending && !pay?.paid) return 0; // pending ขึ้นบน
+                    if (!pay?.paid) return 1;                 // ยังไม่จ่าย
+                    return 2;                                 // จ่ายแล้ว
+                };
+                return getOrder(a) - getOrder(b);
+            });
+
+            // กรอง
+            const filtered = sorted.filter(p => {
+                const pay = payments[p.id];
+                if (filter === 'pending') return pay?.pending && !pay?.paid;
+                if (filter === 'unpaid')  return !pay?.paid && !pay?.pending;
+                if (filter === 'paid')    return pay?.paid;
+                return true;
+            });
+
+            // นับแต่ละสถานะ
+            const cntPending = sorted.filter(p => payments[p.id]?.pending && !payments[p.id]?.paid).length;
+            const cntUnpaid  = sorted.filter(p => !payments[p.id]?.paid && !payments[p.id]?.pending).length;
+            const cntPaid    = sorted.filter(p => payments[p.id]?.paid).length;
+
+            // filter bar
+            const filterBar = document.getElementById('payment-filter-bar');
+            if (filterBar) {
+                const btn = (f, label, count, color) => `
+                    <button onclick="App._payFilter='${f}';App.renderCombinedPaymentList();"
+                        style="padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;
+                        cursor:pointer;min-height:unset;border:2px solid ${filter===f?color:'#ddd'};
+                        background:${filter===f?color:'#fff'};color:${filter===f?'#fff':'#888'};">
+                        ${label} ${count > 0 ? `<span style="background:${filter===f?'rgba(255,255,255,0.3)':'#eee'};border-radius:10px;padding:0 5px;">${count}</span>` : ''}
+                    </button>`;
+                filterBar.innerHTML =
+                    btn('all',     'ทั้งหมด',       sorted.length, '#1a2b47') +
+                    btn('pending', '🔔 แจ้งแล้ว',   cntPending,    '#e67e22') +
+                    btn('unpaid',  '❌ ยังไม่จ่าย', cntUnpaid,     '#e74c3c') +
+                    btn('paid',    '✅ จ่ายแล้ว',   cntPaid,       '#27ae60');
+            }
+
+            if (!filtered.length) {
+                listEl.innerHTML = '<div style="color:#aaa;font-size:0.85rem;padding:0.5rem;text-align:center;">ไม่มีรายการ</div>';
+                return;
+            }
+
+            listEl.innerHTML = filtered.map(p => {
                 const mode   = payMode[p.id] || 'buffet';
                 const games  = this._countPlayerGamesToday(p.id);
                 const amt    = mode === 'buffet' ? buffet : courtG + perG * games;
@@ -6175,7 +6225,9 @@ setInterval(updateWaitBadgeColors,1000);
     <!-- ── 2. รายการชำระเงิน (รวมโหมด + สถานะ) ── -->
     <div class="card">
       <h2>💳 รายการชำระเงิน</h2>
-      <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">เลือกโหมดจ่าย และกด ✅ ยืนยันรับเงินได้ในแถวเดียว</p>
+      <p style="color:#888;font-size:0.85rem;margin-bottom:0.75rem;">เลือกโหมดจ่าย และกด ✅ ยืนยันรับเงินได้ในแถวเดียว</p>
+      <!-- filter bar -->
+      <div id="payment-filter-bar" style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.75rem;"></div>
       <div id="combined-payment-list" style="display:flex;flex-direction:column;gap:0.4rem;max-height:500px;overflow-y:auto;"></div>
       <div style="display:flex;gap:0.75rem;margin-top:0.75rem;flex-wrap:wrap;">
         <button onclick="App.renderCombinedPaymentList()" class="secondary" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:unset;">🔄 รีเฟรช</button>
