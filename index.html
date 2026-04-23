@@ -2951,20 +2951,35 @@
                 const closeTime   = court.closeTime || '--:--';
                 const autoEnabled = court.autoSchedule !== false; // default true
 
-                // คำนวณ countdown แบบ hh:mm:ss
-                function getCourtCountdown(openT, closeT) {
-                    if (!openT || !closeT || openT === '--:--' || closeT === '--:--' || !openT || !closeT) return '';
-                    const now = new Date();
-                    const [oh, om] = openT.split(':').map(Number);
-                    const [ch, cm] = closeT.split(':').map(Number);
+                // คำนวณ countdown แบบ hh:mm:ss พร้อมเช็ควัน
+                function getCourtCountdown(openT, closeT, days) {
+                    if (!openT || !closeT || openT === '--:--' || closeT === '--:--') return '';
+                    const now     = new Date();
+                    const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
+                    const todayK  = dayKeys[now.getDay()];
+                    const activeDays = days && days.length > 0 ? days : dayKeys;
+
+                    // วันนี้ไม่ใช่วันเปิด
+                    if (!activeDays.includes(todayK)) {
+                        // หาวันถัดไปที่เปิด
+                        let daysUntil = 0;
+                        for (let i = 1; i <= 7; i++) {
+                            const nextDay = dayKeys[(now.getDay() + i) % 7];
+                            if (activeDays.includes(nextDay)) { daysUntil = i; break; }
+                        }
+                        const dayThNames = {'sun':'อา','mon':'จ','tue':'อ','wed':'พ','thu':'พฤ','fri':'ศ','sat':'ส'};
+                        const nextDayName = dayThNames[dayKeys[(now.getDay() + daysUntil) % 7]];
+                        return `<span style="color:#e74c3c;font-size:0.78rem;font-weight:700;">🔒 วันนี้ไม่เปิด — เปิดวัน${nextDayName} ${openT}</span>`;
+                    }
+
+                    const [oh,om] = openT.split(':').map(Number);
+                    const [ch,cm] = closeT.split(':').map(Number);
                     const nowSec   = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
                     const openSec  = oh*3600 + om*60;
                     const closeSec = ch*3600 + cm*60;
 
                     function fmt(sec) {
-                        const h = Math.floor(sec/3600);
-                        const m = Math.floor((sec%3600)/60);
-                        const s = sec%60;
+                        const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60;
                         if (h > 0) return h+'ชม '+m+'น '+s+'ว';
                         if (m > 0) return m+'น '+s+'ว';
                         return s+'ว';
@@ -2972,16 +2987,17 @@
 
                     if (nowSec < openSec) {
                         const diff = openSec - nowSec;
-                        return `<span class="court-cd" data-open="${openT}" data-close="${closeT}" style="color:#e67e22;font-size:0.78rem;font-weight:700;">⏳ เปิดใน ${fmt(diff)}</span>`;
-                    } else if (nowSec >= openSec && nowSec < closeSec) {
+                        return `<span class="court-cd" data-open="${openT}" data-close="${closeT}" data-days='${JSON.stringify(activeDays)}' style="color:#e67e22;font-size:0.78rem;font-weight:700;">⏳ เปิดใน ${fmt(diff)}</span>`;
+                    } else if (nowSec < closeSec) {
                         const diff = closeSec - nowSec;
-                        return `<span class="court-cd" data-open="${openT}" data-close="${closeT}" style="color:#27ae60;font-size:0.78rem;font-weight:700;">✅ เปิดอยู่ — ปิดใน ${fmt(diff)}</span>`;
+                        return `<span class="court-cd" data-open="${openT}" data-close="${closeT}" data-days='${JSON.stringify(activeDays)}' style="color:#27ae60;font-size:0.78rem;font-weight:700;">✅ เปิดอยู่ — ปิดใน ${fmt(diff)}</span>`;
                     } else {
                         return `<span style="color:#999;font-size:0.78rem;">🔒 ปิดแล้ว</span>`;
                     }
                 }
                 // ถ้ากำลังเล่นอยู่ ไม่แสดง countdown
-                const countdownHtml = (autoEnabled && court.status !== 'playing') ? getCourtCountdown(openTime, closeTime) : '';
+                const courtDays = court.openDays || ['sun','mon','tue','wed','thu','fri','sat'];
+                const countdownHtml = (autoEnabled && court.status !== 'playing') ? getCourtCountdown(openTime, closeTime, courtDays) : '';
 
                 li.style.cssText = 'background:var(--light);padding:1rem;margin-bottom:0.75rem;border-radius:8px;';
                 li.innerHTML = `
@@ -3034,16 +3050,21 @@
                         const nowSec   = now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
                         const openSec  = oh*3600+om*60;
                         const closeSec = ch*3600+cm*60;
-                        function fmt(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60; if(h>0)return h+'ชม '+m+'น '+sc+'ว'; if(m>0)return m+'น '+sc+'ว'; return sc+'ว'; }
-                        if (nowSec < openSec) {
+                            function fmt(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60; if(h>0)return h+'ชม '+m+'น '+sc+'ว'; if(m>0)return m+'น '+sc+'ว'; return sc+'ว'; }
+                        const dKeys=['sun','mon','tue','wed','thu','fri','sat'];
+                        const todayK2=dKeys[new Date().getDay()];
+                        let days2; try{days2=JSON.parse(el.dataset.days||'null');}catch(e){days2=null;}
+                        const actDays=days2&&days2.length>0?days2:dKeys;
+                        if (!actDays.includes(todayK2)) {
+                            el.textContent = '🔒 วันนี้ไม่เปิด'; el.style.color='#e74c3c';
+                        } else if (nowSec < openSec) {
                             el.textContent = '⏳ เปิดใน ' + fmt(openSec - nowSec);
                             el.style.color = '#e67e22';
                         } else if (nowSec < closeSec) {
                             el.textContent = '✅ เปิดอยู่ — ปิดใน ' + fmt(closeSec - nowSec);
                             el.style.color = '#27ae60';
                         } else {
-                            el.textContent = '🔒 ปิดแล้ว';
-                            el.style.color = '#999';
+                            el.textContent = '🔒 ปิดแล้ว'; el.style.color = '#999';
                         }
                     });
                 }, 1000);
