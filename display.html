@@ -1111,16 +1111,6 @@
 
         <div style="font-size:0.75rem;color:#bbb;margin-bottom:1rem;">สแกนด้วยแอปธนาคารทุกเจ้า</div>
 
-        <!-- ปุ่มเปิดลิงค์โอนเงิน -->
-        <a id="btn-promptpay-link" href="#" target="_blank"
-          style="display:flex;align-items:center;justify-content:center;gap:8px;
-            background:linear-gradient(135deg,#1a73e8,#0d5bba);color:#fff;
-            border-radius:14px;padding:0.9rem;font-size:1rem;font-weight:700;
-            text-decoration:none;box-shadow:0 4px 15px rgba(26,115,232,0.35);
-            margin-bottom:0.6rem;cursor:pointer;">
-          📱 กดเพื่อเปิดแอปธนาคารโอนเงิน
-        </a>
-
         <!-- Buttons -->
         <div id="payment-notify-area">
           <!-- Upload Slip -->
@@ -2009,6 +1999,83 @@
       return str + crc16(str);
     }
 
+    // ── PromptPay App Selector ──────────────────────────────────────
+    function openPromptPayPage() {
+      const num   = window._ppNum   || '0628801778';
+      const price = window._ppPrice || 210;
+      // สร้าง payload พร้อมเพย์
+      const payload = promptPayPayload(num, price);
+
+      // deep links ของแต่ละธนาคาร (ถ้าไม่รองรับจะ fallback เปิด browser)
+      const banks = [
+        { name:'K PLUS',    icon:'🟩', scheme:`kplus://payment?data=${encodeURIComponent(payload)}`,    fallback:'https://www.kasikornbank.com/th/personal/digital-banking/pages/kplus.aspx' },
+        { name:'SCB Easy',  icon:'🟣', scheme:`scbeasy://payment?data=${encodeURIComponent(payload)}`,  fallback:'https://play.google.com/store/apps/details?id=com.scb.phone' },
+        { name:'KTB Next',  icon:'🔵', scheme:`ktbnext://payment?data=${encodeURIComponent(payload)}`,  fallback:'https://krungthai.com/th/personal/digital-banking/krungthai-next' },
+        { name:'BBL M-Pay', icon:'🔷', scheme:`mbanking-bbl://payment?data=${encodeURIComponent(payload)}`, fallback:'https://www.bangkokbank.com/th-TH/Personal/Digital-Banking/Mobile-Banking/Bangkok-Bank-Mobile-Banking' },
+        { name:'ttb Touch', icon:'🟠', scheme:`ttbtouch://promptpay?payload=${encodeURIComponent(payload)}`, fallback:'https://www.ttbbank.com/th/personal/digital-services/mobile-banking/ttb-touch' },
+        { name:'True Wallet',icon:'🔴',scheme:`truemoney://promptpay?data=${encodeURIComponent(payload)}`, fallback:'https://www.truemoney.com/wallet/' },
+      ];
+
+      // สร้าง modal
+      const overlay = document.createElement('div');
+      overlay.id = 'pp-app-overlay';
+      overlay.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:3000;
+        display:flex;align-items:flex-end;justify-content:center;`;
+      overlay.onclick = (e) => { if(e.target===overlay) overlay.remove(); };
+
+      const qrDiv = document.createElement('div');
+      qrDiv.id = 'pp-qr-tmp';
+      qrDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+      document.body.appendChild(qrDiv);
+
+      overlay.innerHTML = `
+        <div style="background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:420px;
+          padding:1.5rem 1.5rem 2rem;max-height:90vh;overflow-y:auto;">
+          <div style="text-align:center;margin-bottom:1rem;">
+            <div style="font-size:1rem;font-weight:800;color:#1a2b47;margin-bottom:4px;">📱 โอนผ่านแอปธนาคาร</div>
+            <div style="font-size:0.8rem;color:#888;">สแกน QR หรือเลือกแอปที่ใช้</div>
+          </div>
+          <div style="display:flex;justify-content:center;margin-bottom:1.25rem;">
+            <div style="background:#fff;padding:10px;border-radius:12px;border:2px solid #eee;display:inline-block;">
+              <img src="https://promptpay.io/${num}/${price}.png"
+                style="width:180px;height:180px;display:block;"
+                onerror="this.src='https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(payload)}'">
+            </div>
+          </div>
+          <div style="font-size:0.75rem;color:#aaa;text-align:center;margin-bottom:1rem;">
+            หรือกดปุ่มด้านล่างเพื่อเปิดแอปธนาคาร
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;">
+            ${banks.map(b => `
+              <button onclick="tryOpenBank('${b.scheme}','${b.fallback}')"
+                style="display:flex;align-items:center;gap:6px;background:#f8f9fa;border:1.5px solid #e0e0e0;
+                border-radius:10px;padding:0.7rem 0.9rem;font-size:0.88rem;font-weight:700;
+                color:#333;cursor:pointer;transition:background 0.15s;"
+                onmouseover="this.style.background='#e8f0fe'"
+                onmouseout="this.style.background='#f8f9fa'">
+                <span style="font-size:1.2rem;">${b.icon}</span> ${b.name}
+              </button>`).join('')}
+          </div>
+          <button onclick="document.getElementById('pp-app-overlay').remove()"
+            style="width:100%;margin-top:1rem;background:none;border:none;color:#aaa;
+            font-size:0.85rem;cursor:pointer;padding:0.5rem;">ปิด</button>
+        </div>`;
+
+      document.body.appendChild(overlay);
+    }
+
+    function tryOpenBank(scheme, fallback) {
+      // ลองเปิด deep link ก่อน ถ้า 1.5 วินาทีแล้วยังอยู่ที่เดิม = แอปไม่ได้ติดตั้ง
+      const start = Date.now();
+      window.location.href = scheme;
+      setTimeout(() => {
+        if (Date.now() - start < 2000) {
+          // ยังอยู่ที่หน้าเดิม — เปิด fallback
+          window.open(fallback, '_blank');
+        }
+      }, 1500);
+    }
+
     async function showPaymentQR() {
       const watchedPlayer = (state.players||[]).find(p => watchedIds.has(p.id));
       const name = watchedPlayer ? watchedPlayer.name : 'ผู้เล่น';
@@ -2045,11 +2112,9 @@
       // promptpay.io: GET /api/{phone_or_id}/{amount}
       qrImg.src = `https://promptpay.io/${ppNum}/${price}.png`;
 
-      // อัพเดทลิงค์ promptpay2.me
-      const ppLink = document.getElementById('btn-promptpay-link');
-      if (ppLink) {
-        ppLink.href = `https://promptpay2.me/${ppNum}/${price}`;
-      }
+      // เก็บค่าไว้ให้ openPromptPayPage ใช้
+      window._ppNum   = ppNum;
+      window._ppPrice = price;
 
       document.getElementById('payment-modal').style.display = 'flex';
     }
@@ -2153,47 +2218,91 @@
           throw new Error('สลิปไม่ชัดเจน กรุณาลองใหม่');
         }
 
-        // Match ชื่อกับผู้เล่น
-        const profiles = state.playerProfiles || [];
-        const players  = state.players || [];
-        const allPlayers = profiles.length > 0 ? profiles : players;
+        // ── ฟังก์ชัน fuzzy match ชื่อ ──────────────────────────────
+        function normalName(s) {
+          // ตัดคำนำหน้า นาย/นาง/น.ส./ด.ช./ด.ญ. และ spaces
+          return (s || '').replace(/^(นาย|นาง|น\.ส\.|นางสาว|ด\.ช\.|ด\.ญ\.|mr\.?|ms\.?|mrs\.?)/i,'')
+                          .replace(/\s+/g,'').toLowerCase();
+        }
+        function nameScore(slipRaw, realNameRaw) {
+          if (!slipRaw || !realNameRaw) return 0;
+          const slip = normalName(slipRaw);
+          const real = normalName(realNameRaw);
+          if (!slip || !real) return 0;
+          // ตรงเป๊ะ
+          if (slip === real) return 100;
+          // ชื่อแรกตรง (ชื่อต้น)
+          const slipFirst = slip.substring(0, Math.min(real.length, slip.length));
+          if (slipFirst === real || real.startsWith(slipFirst)) return 80;
+          // real อยู่ใน slip
+          if (slip.includes(real)) return 75;
+          if (real.includes(slip)) return 70;
+          // ชื่อแรก 3 ตัวตรง
+          if (slip.length >= 3 && real.length >= 3 && slip.substring(0,3) === real.substring(0,3)) return 60;
+          return 0;
+        }
 
-        const matched = allPlayers.find(p => {
-          const realName = p.realName || '';
-          const name     = p.name || '';
-          const slipName = slip.senderName.toLowerCase().replace(/\s/g,'');
-          return realName.toLowerCase().replace(/\s/g,'').includes(slipName) ||
-                 slipName.includes(realName.toLowerCase().replace(/\s/g,'').substring(0,4)) ||
-                 name.toLowerCase().replace(/\s/g,'').includes(slipName);
+        // หา pid จาก watchedIds ก่อน (คนที่กดปุ่มจ่าย)
+        const watchedPid = [...watchedIds][0];
+        const watchedPlayer = (state.players||[]).find(p => p.id === watchedPid);
+
+        // พยายาม match ชื่อสลิปกับ realName ของผู้เล่นทุกคน
+        const allPlayers = state.players || [];
+        let bestMatch = null;
+        let bestScore = 0;
+        allPlayers.forEach(p => {
+          const score = nameScore(slip.senderName, p.realName);
+          if (score > bestScore) { bestScore = score; bestMatch = p; }
         });
 
-        if (matched) {
-          const pid = matched.id;
-          await db.ref(`badmintonState/payments/${pid}`).set({
-            paid: true, pending: false,
-            slipName: slip.senderName,
-            amount: slip.amount,
-            time: slip.time || '',
-            date: slip.date || '',
-            ts: Date.now(),
-          });
+        // ถ้าคนที่กดปุ่ม (watched) มี realName match ดีพอ ให้ใช้ watched แทน
+        let pid = watchedPid;
+        let matchNote = '';
+        if (bestScore >= 70) {
+          pid = bestMatch.id;
+          matchNote = bestScore === 100 ? 'ชื่อตรง' : `ชื่อใกล้เคียง (${bestScore}%)`;
+          // ถ้า best match ไม่ใช่คนที่กดปุ่ม — เตือน
+          if (bestMatch.id !== watchedPid) {
+            matchNote += ` (พบชื่อ ${bestMatch.name} แทน)`;
+          }
+        } else {
+          // ไม่ match — ใช้ watched แต่ pending
+          matchNote = 'ไม่พบชื่อตรง';
+        }
+
+        // ตรวจสอบยอดเงิน
+        const snap2 = await db.ref('badmintonState/paymentSettings').once('value');
+        const settings2 = snap2.val() || {};
+        const expectedPrice = settings2.price || 210;
+        const amountOk = Math.abs(slip.amount - expectedPrice) <= 5;
+
+        const isPaid = amountOk && bestScore >= 70;
+
+        await db.ref(`badmintonState/payments/${pid}`).set({
+          paid: isPaid,
+          pending: !isPaid,
+          slipName: slip.senderName,
+          playerName: watchedPlayer ? watchedPlayer.name : '',
+          amount: slip.amount,
+          expectedAmount: expectedPrice,
+          matchNote,
+          time: slip.time || '',
+          date: slip.date || '',
+          ts: Date.now(),
+        });
+
+        if (isPaid) {
           statusEl.textContent = `✅ ยืนยันแล้ว! ${slip.senderName} โอน ฿${slip.amount}`;
           statusEl.style.color = '#27ae60';
           document.getElementById('payment-modal').style.display = 'none';
-          updatePayBtn();
-        } else {
-          // ไม่ match — แจ้ง admin
-          const pid = [...watchedIds][0];
-          await db.ref(`badmintonState/payments/${pid}`).set({
-            pending: true, paid: false,
-            slipName: slip.senderName,
-            amount: slip.amount,
-            time: slip.time || '',
-            ts: Date.now(),
-          });
-          statusEl.textContent = `⚠️ ไม่พบชื่อ "${slip.senderName}" ในระบบ — รอ admin ยืนยัน`;
+        } else if (!amountOk) {
+          statusEl.textContent = `⚠️ ยอดไม่ถูก (${slip.amount}฿ ≠ ${expectedPrice}฿) — รอ admin`;
           statusEl.style.color = '#e67e22';
-          updatePayBtn();
+        } else {
+          statusEl.textContent = `⚠️ ชื่อไม่ตรง "${slip.senderName}" — รอ admin ยืนยัน`;
+          statusEl.style.color = '#e67e22';
+        }
+        updatePayBtn();
         }
       } catch(err) {
         statusEl.textContent = `❌ ${err.message || 'เกิดข้อผิดพลาด'}`;
