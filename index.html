@@ -1530,16 +1530,7 @@
                 </div>
             </div>
 
-            <!-- สถานะการจ่ายเงิน -->
-            <div class="card">
-                <h2>💰 สถานะการชำระเงิน</h2>
-                <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">ผู้เล่นที่เช็คอินแล้ว — กด ✅ ยืนยันรับเงิน</p>
-                <div id="payment-status-list" style="display:flex;flex-direction:column;gap:0.5rem;max-height:300px;overflow-y:auto;"></div>
-                <div style="margin-top:0.75rem;display:flex;gap:0.75rem;">
-                    <button onclick="App.loadPaymentStatus()">🔄 รีเฟรช</button>
-                    <button class="secondary" onclick="App.resetAllPayments()">🗑️ เคลียร์ทั้งหมด</button>
-                </div>
-            </div>
+
 
             <!-- เครื่องมืออื่น -->
             <div class="card">
@@ -1880,6 +1871,14 @@
             App.showView(viewId);
             showSyncStatus('🔄 อัปเดตจากอุปกรณ์อื่น', '#00a8cc');
             setTimeout(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'), 2000);
+        });
+
+        // Global payment listener — ทำงานตลอด ไม่ขึ้นกับแท็บที่เปิด
+        firebase.database().ref('badmintonState/payments').on('value', snap => {
+            appState.payments = snap.val() || {};
+            // update UI ถ้าเปิดอยู่
+            if (document.getElementById('combined-payment-list')) App.renderCombinedPaymentList();
+            if (document.getElementById('payment-status-list')) App.loadPaymentStatus();
         });
     }
 
@@ -2244,12 +2243,23 @@
                 case 'summary':
                     this.loadPriceSettings();
                     this.renderSummary();
+                    // realtime listener สำหรับ payment
+                    if (!this._summaryPaymentListener) {
+                        this._summaryPaymentListener = true;
+                        firebase.database().ref('badmintonState/payments').on('value', snap => {
+                            appState.payments = snap.val() || {};
+                            if (document.getElementById('combined-payment-list')) {
+                                this.renderCombinedPaymentList();
+                            }
+                        });
+                    }
                     break;
                 case 'manager-tools':
                     this.loadPaymentStatus();
                     if (!this._paymentListener) {
                         this._paymentListener = true;
-                        firebase.database().ref('badmintonState/payments').on('value', () => {
+                        firebase.database().ref('badmintonState/payments').on('value', snap => {
+                            appState.payments = snap.val() || {};
                             if (document.getElementById('payment-status-list')) this.loadPaymentStatus();
                         });
                     }
@@ -2965,22 +2975,28 @@
 
         togglePayment: function(pid, paid) {
             if (!appState.payments) appState.payments = {};
+            const ref = firebase.database().ref(`badmintonState/payments/${pid}`);
             if (paid) {
                 const existing = appState.payments[pid] || {};
-                appState.payments[pid] = { ...existing, paid: true, pending: false, paidTs: Date.now() };
+                const data = { ...existing, paid: true, pending: false, paidTs: Date.now() };
+                appState.payments[pid] = data;
+                ref.set(data);
             } else {
                 delete appState.payments[pid];
+                ref.remove();
             }
-            saveState();
+            // ไม่ saveState() เพื่อป้องกัน overwrite payment ของ user
             this.loadPaymentStatus();
+            if (document.getElementById('combined-payment-list')) this.renderCombinedPaymentList();
             showSuccess(paid ? '✅ ยืนยันรับเงินแล้ว' : 'ยกเลิกแล้ว');
         },
 
         resetAllPayments: function() {
             if (!confirm('เคลียร์สถานะการจ่ายทั้งหมด?')) return;
             appState.payments = {};
-            saveState();
+            firebase.database().ref('badmintonState/payments').remove();
             this.loadPaymentStatus();
+            if (document.getElementById('combined-payment-list')) this.renderCombinedPaymentList();
             showSuccess('เคลียร์แล้ว');
         },
         checkConnectedDevices: async function() {
@@ -4866,8 +4882,10 @@ if (btnViewQueue) {
                 const player = PlayerUtils.getById(playerId);
                 if (player) {
                     player.isPlaying = false;
-            player.checkInTime = Date.now(); // reset timer
+                    player.checkInTime = Date.now(); // reset timer
                 }
+
+
             });
 
             const court = CourtUtils.getById(match.courtId);
