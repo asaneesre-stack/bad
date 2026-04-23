@@ -3877,6 +3877,13 @@ if (btnViewQueue) {
             setupContentEl.innerHTML = `
                 <h3>สนาม ${escapeHtml(appState.courts.find(c => c.id == courtId).name)}</h3>
                 <p>เลือกผู้เล่น 4 คนตามลำดับ (1-2 สำหรับทีม 1, 3-4 สำหรับทีม 2) <span id="selection-status" style="font-weight: bold; color: var(--secondary);">: เลือกคนที่ 1</span></p>
+                <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;
+  padding:0.6rem 0.9rem;background:#f8f9fa;border-radius:8px;font-size:0.8rem;align-items:center;">
+  <span style="color:#888;font-weight:600;">⏳ เวลารอ:</span>
+  <span style="color:#555;">⬜ &lt; 15 นาที — ปกติ</span>
+  <span style="color:#ff8c00;font-weight:700;">🟠 15–29 นาที — รอนาน</span>
+  <span style="color:#ff0000;font-weight:700;">🔴 ≥ 30 นาที — รอนานมาก</span>
+</div>
                 <div id="manual-selection-grid" class="check-in-grid"></div>
                 <div style="text-align: center; margin-top: 1.5rem;">
                     <button class="success" onclick="App.confirmManualMatch(${courtId})" id="btn-confirm-manual" disabled>ยืนยันคู่เล่นแบดมินตัน</button>
@@ -4134,6 +4141,13 @@ if (btnViewQueue) {
             setupContentEl.innerHTML = `
                 <h3>🧩 จัดคิวเอง (เลือกผู้เล่น 4 คน)</h3>
                 <p>แตะเลือกผู้เล่น 4 คนตามลำดับ (1-2 ทีม 1, 3-4 ทีม 2) <span id="selection-status" style="font-weight: bold; color: var(--secondary);">: เลือกคนที่ 1</span></p>
+                <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;
+  padding:0.6rem 0.9rem;background:#f8f9fa;border-radius:8px;font-size:0.8rem;align-items:center;">
+  <span style="color:#888;font-weight:600;">⏳ เวลารอ:</span>
+  <span style="color:#555;">⬜ &lt; 15 นาที — ปกติ</span>
+  <span style="color:#ff8c00;font-weight:700;">🟠 15–29 นาที — รอนาน</span>
+  <span style="color:#ff0000;font-weight:700;">🔴 ≥ 30 นาที — รอนานมาก</span>
+</div>
                 <div id="manual-selection-grid" class="check-in-grid"></div>
                 <div style="text-align: center; margin-top: 1.5rem;">
                     <button class="success" onclick="App.confirmManualQueue()" id="btn-confirm-manual" disabled>เพิ่มเข้าคิว</button>
