@@ -1804,14 +1804,21 @@
           </div>
           <div id="watch-picker" style="display:none;position:absolute;top:calc(100% + 4px);left:0;
             background:#0f1829;border:1px solid rgba(0,168,204,0.3);border-radius:12px;
-            padding:0.5rem;z-index:200;flex-wrap:wrap;gap:0.35rem;max-width:90vw;
-            box-shadow:0 8px 32px rgba(0,0,0,0.6);">
-            <div style="width:100%;font-size:0.65rem;color:#666;padding:0 4px 4px;font-weight:700;
+            padding:0.5rem;z-index:200;gap:0.35rem;max-width:92vw;width:280px;
+            box-shadow:0 8px 32px rgba(0,0,0,0.6);flex-direction:column;">
+            <div style="font-size:0.65rem;color:#666;padding:0 4px 4px;font-weight:700;
               text-transform:uppercase;letter-spacing:0.06em;">เลือกชื่อของคุณ</div>
-            ${checkedIn.map(p =>
-              `<div class="watch-chip" data-watch-pid="${p.id}"
-                style="-webkit-tap-highlight-color:transparent;">${esc(p.name)}</div>`
-            ).join('')}
+            <input id="watch-search" type="text" placeholder="🔍 พิมพ์ชื่อ..."
+              style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);
+              border:1px solid rgba(0,168,204,0.3);border-radius:8px;color:#fff;
+              font-size:0.85rem;outline:none;box-sizing:border-box;"
+              oninput="filterWatchPicker(this.value)">
+            <div id="watch-picker-list" style="display:flex;flex-wrap:wrap;gap:0.35rem;max-height:200px;overflow-y:auto;">
+              ${checkedIn.map(p =>
+                `<div class="watch-chip" data-watch-pid="${p.id}"
+                  style="-webkit-tap-highlight-color:transparent;">${esc(p.name)}</div>`
+              ).join('')}
+            </div>
           </div>`;
         }
       }
@@ -1826,7 +1833,15 @@
         function openPicker(e) {
           e.stopPropagation();
           e.preventDefault();
-          picker.style.display = picker.style.display === 'flex' ? 'none' : 'flex';
+          const isOpen = picker.style.display === 'flex';
+          picker.style.display = isOpen ? 'none' : 'flex';
+          if (!isOpen) {
+            // focus search และ reset filter
+            setTimeout(() => {
+              const s = document.getElementById('watch-search');
+              if (s) { s.value = ''; filterWatchPicker(''); s.focus(); }
+            }, 50);
+          }
         }
         addBtn.addEventListener('touchend', openPicker, { passive: false });
         addBtn.addEventListener('click', openPicker);
@@ -1846,6 +1861,16 @@
         }, 50);
       }
     }
+
+    window.filterWatchPicker = function(q) {
+      const list = document.getElementById('watch-picker-list');
+      if (!list) return;
+      const chips = list.querySelectorAll('[data-watch-pid]');
+      chips.forEach(chip => {
+        const name = chip.textContent.toLowerCase();
+        chip.style.display = name.includes(q.toLowerCase()) ? '' : 'none';
+      });
+    };
 
     function getQueuePosition(pid) {
       const queues = state.matchQueues || [];
