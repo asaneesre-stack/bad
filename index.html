@@ -2484,8 +2484,9 @@
         },
 
         setAndSendBroadcast: function(msg) {
+            // แค่ใส่ข้อความใน input ไม่ส่งทันที ให้กด "ส่งทันที" เอง
             document.getElementById('broadcast-msg').value = msg;
-            this.sendBroadcast();
+            document.getElementById('broadcast-msg').focus();
         },
 
         sendBroadcast: function() {
