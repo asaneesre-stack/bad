@@ -1490,8 +1490,11 @@
       el.style.color = color || '#00a8cc';
     }
 
-    // Listen payment status changes
-    db.ref('badmintonState/payments').on('value', () => { updatePayBtn(); });
+    // Listen payment status changes — sync state.payments ตรงๆ ทันที
+    db.ref('badmintonState/payments').on('value', snap => {
+      state.payments = snap.val() || {};
+      updatePayBtn();
+    });
 
     db.ref('badmintonState').on('value', snap => {
       const raw = snap.val();
