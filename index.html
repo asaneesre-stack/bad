@@ -1211,16 +1211,14 @@
                             <input type="text" id="court-name" required maxlength="50" placeholder="เช่น สนาม 7">
                         </div>
                         <div style="flex:1;min-width:100px;">
-                            <label for="court-open-time">เวลาเปิด (HH:MM):</label>
-                            <input type="text" id="court-open-time" value="20:00"
-                                pattern="^([01]\d|2[0-3]):[0-5]\d$" maxlength="5"
-                                placeholder="20:00" style="width:100%;">
+                            <label for="court-open-time">เวลาเปิด (0-23:00):</label>
+                            <input type="text" id="court-open-time" value="20:00" maxlength="5"
+                                placeholder="20:00" style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
                         </div>
                         <div style="flex:1;min-width:100px;">
-                            <label for="court-close-time">เวลาปิด (HH:MM):</label>
-                            <input type="text" id="court-close-time" value="23:00"
-                                pattern="^([01]\d|2[0-3]):[0-5]\d$" maxlength="5"
-                                placeholder="23:00" style="width:100%;">
+                            <label for="court-close-time">เวลาปิด (0-23:00):</label>
+                            <input type="text" id="court-close-time" value="23:00" maxlength="5"
+                                placeholder="23:00" style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
                         </div>
                         <div>
                             <button type="submit" id="btn-add-court">เพิ่มสนาม</button>
@@ -1934,7 +1932,21 @@
 
     const CourtUtils = {
         getAvailable: () => {
-            return appState.courts.filter(c => c.status === 'free');
+            const now = new Date();
+            const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+            return appState.courts.filter(c => {
+                if (c.status !== 'free') return false;
+                // ถ้า autoSchedule เปิดอยู่ เช็คเวลาด้วย
+                if (c.autoSchedule && c.openTime && c.closeTime &&
+                    c.openTime !== '--:--' && c.closeTime !== '--:--') {
+                    const [oh,om] = c.openTime.split(':').map(Number);
+                    const [ch,cm] = c.closeTime.split(':').map(Number);
+                    const openSec  = oh*3600 + om*60;
+                    const closeSec = ch*3600 + cm*60;
+                    if (nowSec < openSec || nowSec >= closeSec) return false;
+                }
+                return true;
+            });
         },
 
         getById: (id) => {
@@ -2929,21 +2941,31 @@
                 const closeTime   = court.closeTime || '--:--';
                 const autoEnabled = court.autoSchedule !== false; // default true
 
-                // คำนวณ countdown
+                // คำนวณ countdown แบบ hh:mm:ss
                 function getCourtCountdown(openT, closeT) {
-                    if (!openT || !closeT || openT === '--:--' || closeT === '--:--') return '';
+                    if (!openT || !closeT || openT === '--:--' || closeT === '--:--' || !openT || !closeT) return '';
                     const now = new Date();
                     const [oh, om] = openT.split(':').map(Number);
                     const [ch, cm] = closeT.split(':').map(Number);
-                    const nowMin  = now.getHours() * 60 + now.getMinutes();
-                    const openMin = oh * 60 + om;
-                    const closeMin= ch * 60 + cm;
-                    if (nowMin < openMin) {
-                        const diff = openMin - nowMin;
-                        return `<span style="color:#e67e22;font-size:0.78rem;font-weight:700;">⏳ เปิดใน ${diff} นาที</span>`;
-                    } else if (nowMin >= openMin && nowMin < closeMin) {
-                        const diff = closeMin - nowMin;
-                        return `<span style="color:#27ae60;font-size:0.78rem;font-weight:700;">✅ เปิดอยู่ — ปิดใน ${diff} นาที</span>`;
+                    const nowSec   = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+                    const openSec  = oh*3600 + om*60;
+                    const closeSec = ch*3600 + cm*60;
+
+                    function fmt(sec) {
+                        const h = Math.floor(sec/3600);
+                        const m = Math.floor((sec%3600)/60);
+                        const s = sec%60;
+                        if (h > 0) return h+'ชม '+m+'น '+s+'ว';
+                        if (m > 0) return m+'น '+s+'ว';
+                        return s+'ว';
+                    }
+
+                    if (nowSec < openSec) {
+                        const diff = openSec - nowSec;
+                        return `<span class="court-cd" data-open="${openT}" data-close="${closeT}" style="color:#e67e22;font-size:0.78rem;font-weight:700;">⏳ เปิดใน ${fmt(diff)}</span>`;
+                    } else if (nowSec >= openSec && nowSec < closeSec) {
+                        const diff = closeSec - nowSec;
+                        return `<span class="court-cd" data-open="${openT}" data-close="${closeT}" style="color:#27ae60;font-size:0.78rem;font-weight:700;">✅ เปิดอยู่ — ปิดใน ${fmt(diff)}</span>`;
                     } else {
                         return `<span style="color:#999;font-size:0.78rem;">🔒 ปิดแล้ว</span>`;
                     }
@@ -2968,13 +2990,13 @@
                             <span style="font-size:0.82rem;color:#666;">
                                 <input type="text" value="${openTime !== '--:--' ? openTime : ''}" maxlength="5"
                                     placeholder="20:00"
-                                    style="font-size:0.82rem;padding:3px 6px;border:1px solid #ddd;border-radius:4px;width:68px;text-align:center;"
-                                    onblur="if(/^([01]\d|2[0-3]):[0-5]\d$/.test(this.value))App.updateCourtTime(${court.id},'openTime',this.value);else this.value='${openTime !== '--:--' ? openTime : ''}';App.renderCourtList();">
+                                    style="font-size:0.82rem;padding:3px 6px;border:1px solid #ddd;border-radius:4px;width:60px;text-align:center;"
+                                    onblur="App.updateCourtTime(${court.id},'openTime',this.value)">
                                 –
                                 <input type="text" value="${closeTime !== '--:--' ? closeTime : ''}" maxlength="5"
                                     placeholder="23:00"
-                                    style="font-size:0.82rem;padding:3px 6px;border:1px solid #ddd;border-radius:4px;width:68px;text-align:center;"
-                                    onblur="if(/^([01]\d|2[0-3]):[0-5]\d$/.test(this.value))App.updateCourtTime(${court.id},'closeTime',this.value);else this.value='${closeTime !== '--:--' ? closeTime : ''}';App.renderCourtList();">
+                                    style="font-size:0.82rem;padding:3px 6px;border:1px solid #ddd;border-radius:4px;width:60px;text-align:center;"
+                                    onblur="App.updateCourtTime(${court.id},'closeTime',this.value)">
                             </span>
                             <button class="danger" style="padding:0.4rem 0.8rem;font-size:0.82rem;" onclick="App.deleteCourt(${court.id})">ลบ</button>
                         </div>
@@ -2987,11 +3009,32 @@
         renderSettings: function() {
             this.renderCourtList();
             this.updateShuttleDisplay();
-            // refresh countdown ทุก 1 นาที
+            // ticker ทุก 1 วินาที — อัพเดทเฉพาะ countdown text ไม่ re-render ทั้งหมด
             if (!this._courtTimer) {
                 this._courtTimer = setInterval(() => {
-                    if (document.getElementById('court-list')) this.renderCourtList();
-                }, 60000);
+                    document.querySelectorAll('.court-cd').forEach(el => {
+                        const openT  = el.dataset.open;
+                        const closeT = el.dataset.close;
+                        if (!openT || !closeT) return;
+                        const now    = new Date();
+                        const [oh,om] = openT.split(':').map(Number);
+                        const [ch,cm] = closeT.split(':').map(Number);
+                        const nowSec   = now.getHours()*3600+now.getMinutes()*60+now.getSeconds();
+                        const openSec  = oh*3600+om*60;
+                        const closeSec = ch*3600+cm*60;
+                        function fmt(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60; if(h>0)return h+'ชม '+m+'น '+sc+'ว'; if(m>0)return m+'น '+sc+'ว'; return sc+'ว'; }
+                        if (nowSec < openSec) {
+                            el.textContent = '⏳ เปิดใน ' + fmt(openSec - nowSec);
+                            el.style.color = '#e67e22';
+                        } else if (nowSec < closeSec) {
+                            el.textContent = '✅ เปิดอยู่ — ปิดใน ' + fmt(closeSec - nowSec);
+                            el.style.color = '#27ae60';
+                        } else {
+                            el.textContent = '🔒 ปิดแล้ว';
+                            el.style.color = '#999';
+                        }
+                    });
+                }, 1000);
             }
         },
 
