@@ -1026,6 +1026,120 @@
       border-color: rgba(39,174,96,0.4);
       color: #27ae60;
     }
+
+    .ci-search {
+      position: relative;
+      margin-bottom: 1rem;
+    }
+
+    .ci-search input {
+      width: 100%;
+      padding: 0.75rem 1rem 0.75rem 2.4rem;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(0,168,204,0.2);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 0.95rem;
+    }
+
+    .ci-search input::placeholder { color: #555; }
+    .ci-search input:focus {
+      outline: none;
+      border-color: #00a8cc;
+      background: rgba(255,255,255,0.09);
+    }
+
+    .ci-search-icon {
+      position: absolute;
+      left: 0.7rem;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #555;
+    }
+
+    .ci-section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #444;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0.75rem 0 0.5rem;
+    }
+
+    .ci-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.5rem;
+    }
+
+    @media (min-width: 480px) {
+      .ci-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    .ci-card {
+      background: rgba(255,255,255,0.05);
+      border: 1.5px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 0.75rem 0.4rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .ci-card:active { transform: scale(0.94); }
+
+    .ci-card.checked {
+      background: rgba(39,174,96,0.12);
+      border-color: rgba(39,174,96,0.4);
+      cursor: default;
+    }
+
+    .ci-card.playing {
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .ci-avatar {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: #fff;
+      margin: 0 auto 0.4rem;
+    }
+
+    .ci-name {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #eee;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .ci-status {
+      font-size: 0.65rem;
+      margin-top: 2px;
+      font-weight: 600;
+    }
+
+    
+    .ci-success-flash {
+      display: none;
+      position: fixed; inset: 0;
+      background: #080d1a;
+      z-index: 600;
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center;
+    }
+
+    .ci-success-flash.show { display: flex; }
   </style>
 </head>
 <body>
@@ -1113,12 +1227,13 @@
 
         <!-- Buttons -->
         <div id="payment-notify-area">
-
           <button id="btn-notify-paid" onclick="notifyPaid()"
-            style="background:#f0f0f0;color:#666;border:none;
-            border-radius:14px;padding:0.85rem;font-size:0.9rem;font-weight:600;
-            cursor:pointer;width:100%;margin-bottom:0.5rem;">
-            ✅ แจ้งว่าจ่ายแล้ว (ไม่มีสลิป)
+            style="display:flex;align-items:center;justify-content:center;gap:8px;
+            background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;
+            border-radius:14px;padding:1rem;font-size:1rem;font-weight:700;
+            cursor:pointer;width:100%;margin-bottom:0.6rem;
+            box-shadow:0 4px 15px rgba(39,174,96,0.3);">
+            💸 แจ้งจ่ายเงินแล้ว
           </button>
           <div id="slip-status" style="font-size:0.82rem;color:#888;margin-bottom:0.5rem;min-height:1.2em;text-align:center;"></div>
           <button onclick="document.getElementById('payment-modal').style.display='none'"
@@ -1142,7 +1257,7 @@
   </div>
 
   <!-- Main -->
-  <div class="main">
+  <div class="main" id="view-courts">
 
     <!-- LEFT: Courts -->
     <div class="section section-left">
@@ -2139,168 +2254,7 @@
       });
     }
 
-    async function uploadSlip(input) {
-      const file = input.files[0];
-      if (!file) return;
-      const statusEl = document.getElementById('slip-status');
-      statusEl.textContent = '⏳ กำลังอ่านสลิป...';
-      statusEl.style.color = '#e67e22';
 
-      try {
-        // แปลงรูปเป็น base64
-        const base64 = await new Promise((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(r.result.split(',')[1]);
-          r.onerror = rej;
-          r.readAsDataURL(file);
-        });
-
-        // ส่งไปให้ Gemini อ่านสลิป (ฟรี 1,500 ครั้ง/วัน)
-        const GEMINI_KEY = 'AIzaSyA9RazQ5RyDaYDF7ELv5gzeAYUJ9ccUkLU';
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${GEMINI_KEY}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  {
-                    inline_data: {
-                      mime_type: file.type || 'image/jpeg',
-                      data: base64
-                    }
-                  },
-                  {
-                    text: 'นี่คือสลิปโอนเงิน กรุณาดึงข้อมูลต่อไปนี้และตอบเป็น JSON เท่านั้น ไม่ต้องมีคำอธิบายหรือ markdown: {"senderName": "ชื่อผู้โอน", "amount": ยอดเงิน(ตัวเลข), "time": "เวลา HH:MM", "date": "วันที่"} ถ้าหาข้อมูลใดไม่ได้ให้ใส่ null'
-                  }
-                ]
-              }],
-              generationConfig: { maxOutputTokens: 300, temperature: 0 }
-            })
-          }
-        );
-
-        const data = await response.json();
-        console.log('[Gemini raw response]', JSON.stringify(data));
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        console.log('[Gemini text]', text);
-
-        if (!text) {
-          const errMsg = data.error?.message || data.candidates?.[0]?.finishReason || 'ไม่ได้รับข้อมูลจาก AI';
-          throw new Error('AI ไม่ตอบกลับ: ' + errMsg);
-        }
-
-        let slip;
-        try {
-          // ลอง parse JSON ตรงๆ ก่อน
-          const cleaned = text.replace(/```json|```/gi, '').trim();
-          // หา JSON object ใน text
-          const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-          if (!jsonMatch) throw new Error('no json');
-          slip = JSON.parse(jsonMatch[0]);
-        } catch(e) {
-          console.error('[slip parse error]', e, 'raw text:', text);
-          throw new Error('อ่านสลิปไม่ได้ — กรุณาลองใหม่หรือถ่ายรูปให้ชัดขึ้น');
-        }
-
-        console.log('[slip]', slip);
-
-        if (!slip.senderName || !slip.amount) {
-          throw new Error('สลิปไม่ชัดเจน กรุณาลองใหม่');
-        }
-
-        // ── ฟังก์ชัน fuzzy match ชื่อ ──────────────────────────────
-        function normalName(s) {
-          // ตัดคำนำหน้า นาย/นาง/น.ส./ด.ช./ด.ญ. และ spaces
-          return (s || '').replace(/^(นาย|นาง|น\.ส\.|นางสาว|ด\.ช\.|ด\.ญ\.|mr\.?|ms\.?|mrs\.?)/i,'')
-                          .replace(/\s+/g,'').toLowerCase();
-        }
-        function nameScore(slipRaw, realNameRaw) {
-          if (!slipRaw || !realNameRaw) return 0;
-          const slip = normalName(slipRaw);
-          const real = normalName(realNameRaw);
-          if (!slip || !real) return 0;
-          // ตรงเป๊ะ
-          if (slip === real) return 100;
-          // ชื่อแรกตรง (ชื่อต้น)
-          const slipFirst = slip.substring(0, Math.min(real.length, slip.length));
-          if (slipFirst === real || real.startsWith(slipFirst)) return 80;
-          // real อยู่ใน slip
-          if (slip.includes(real)) return 75;
-          if (real.includes(slip)) return 70;
-          // ชื่อแรก 3 ตัวตรง
-          if (slip.length >= 3 && real.length >= 3 && slip.substring(0,3) === real.substring(0,3)) return 60;
-          return 0;
-        }
-
-        // หา pid จาก watchedIds ก่อน (คนที่กดปุ่มจ่าย)
-        const watchedPid = [...watchedIds][0];
-        const watchedPlayer = (state.players||[]).find(p => p.id === watchedPid);
-
-        // พยายาม match ชื่อสลิปกับ realName ของผู้เล่นทุกคน
-        const allPlayers = state.players || [];
-        let bestMatch = null;
-        let bestScore = 0;
-        allPlayers.forEach(p => {
-          const score = nameScore(slip.senderName, p.realName);
-          if (score > bestScore) { bestScore = score; bestMatch = p; }
-        });
-
-        // ถ้าคนที่กดปุ่ม (watched) มี realName match ดีพอ ให้ใช้ watched แทน
-        let pid = watchedPid;
-        let matchNote = '';
-        if (bestScore >= 70) {
-          pid = bestMatch.id;
-          matchNote = bestScore === 100 ? 'ชื่อตรง' : `ชื่อใกล้เคียง (${bestScore}%)`;
-          // ถ้า best match ไม่ใช่คนที่กดปุ่ม — เตือน
-          if (bestMatch.id !== watchedPid) {
-            matchNote += ` (พบชื่อ ${bestMatch.name} แทน)`;
-          }
-        } else {
-          // ไม่ match — ใช้ watched แต่ pending
-          matchNote = 'ไม่พบชื่อตรง';
-        }
-
-        // ตรวจสอบยอดเงิน
-        const snap2 = await db.ref('badmintonState/paymentSettings').once('value');
-        const settings2 = snap2.val() || {};
-        const expectedPrice = settings2.price || 210;
-        const amountOk = Math.abs(slip.amount - expectedPrice) <= 5;
-
-        const isPaid = amountOk && bestScore >= 70;
-
-        await db.ref(`badmintonState/payments/${pid}`).set({
-          paid: isPaid,
-          pending: !isPaid,
-          slipName: slip.senderName,
-          playerName: watchedPlayer ? watchedPlayer.name : '',
-          amount: slip.amount,
-          expectedAmount: expectedPrice,
-          matchNote,
-          time: slip.time || '',
-          date: slip.date || '',
-          ts: Date.now(),
-        });
-
-        if (isPaid) {
-          statusEl.textContent = `✅ ยืนยันแล้ว! ${slip.senderName} โอน ฿${slip.amount}`;
-          statusEl.style.color = '#27ae60';
-          document.getElementById('payment-modal').style.display = 'none';
-        } else if (!amountOk) {
-          statusEl.textContent = `⚠️ ยอดไม่ถูก (${slip.amount}฿ ≠ ${expectedPrice}฿) — รอ admin`;
-          statusEl.style.color = '#e67e22';
-        } else {
-          statusEl.textContent = `⚠️ ชื่อไม่ตรง "${slip.senderName}" — รอ admin ยืนยัน`;
-          statusEl.style.color = '#e67e22';
-        }
-        updatePayBtn();
-      } catch(err) {
-        statusEl.textContent = `❌ ${err.message || 'เกิดข้อผิดพลาด'}`;
-        statusEl.style.color = '#e74c3c';
-      }
-      input.value = '';
-    }
 
     async function notifyPaid() {
       const pid = [...watchedIds][0];
@@ -2325,7 +2279,8 @@
       updatePayBtn();
     }
 
-    // Hook into render to update watch bar + alerts after every sync
+
+        // Hook into render to update watch bar + alerts after every sync
     const _origRender = render;
     render = function() {
       _origRender();
