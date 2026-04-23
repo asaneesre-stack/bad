@@ -1934,7 +1934,7 @@
 
     const CourtUtils = {
         getAvailable: () => {
-            return appState.courts.filter(c => c.status === 'free' || c.status === 'available');
+            return appState.courts.filter(c => c.status === 'free');
         },
 
         getById: (id) => {
@@ -2869,7 +2869,7 @@
         /**
          * Court management
          */
-        addCourt: function(name) {
+        addCourt: function(name, openTime, closeTime, autoSchedule) {
             const validation = validateCourtName(name);
             if (!validation.valid) {
                 showError(validation.error);
@@ -2880,7 +2880,10 @@
                 id: appState.nextId.court++,
                 name: sanitizeInput(name),
                 status: 'free',
-                currentMatchId: null
+                currentMatchId: null,
+                openTime:      openTime      || '',
+                closeTime:     closeTime     || '',
+                autoSchedule:  autoSchedule  !== undefined ? autoSchedule : true,
             };
 
             appState.courts.push(newCourt);
@@ -2945,7 +2948,8 @@
                         return `<span style="color:#999;font-size:0.78rem;">🔒 ปิดแล้ว</span>`;
                     }
                 }
-                const countdownHtml = autoEnabled ? getCourtCountdown(openTime, closeTime) : '';
+                // ถ้ากำลังเล่นอยู่ ไม่แสดง countdown
+                const countdownHtml = (autoEnabled && court.status !== 'playing') ? getCourtCountdown(openTime, closeTime) : '';
 
                 li.style.cssText = 'background:var(--light);padding:1rem;margin-bottom:0.75rem;border-radius:8px;';
                 li.innerHTML = `
@@ -4384,11 +4388,13 @@ if (btnViewQueue) {
 
     // Add court form
     document.getElementById('add-court-form')?.addEventListener('submit', createSubmitHandler(function() {
-        const name      = document.getElementById('court-name').value;
-        const openTime  = document.getElementById('court-open-time')?.value  || '20:00';
-        const closeTime = document.getElementById('court-close-time')?.value || '23:00';
-        if (App.addCourt(name)) {
+        const name      = document.getElementById('court-name').value.trim();
+        const openTime  = document.getElementById('court-open-time')?.value.trim()  || '';
+        const closeTime = document.getElementById('court-close-time')?.value.trim() || '';
+        if (App.addCourt(name, openTime, closeTime, true)) {
             document.getElementById('court-name').value = '';
+            document.getElementById('court-open-time').value  = '20:00';
+            document.getElementById('court-close-time').value = '23:00';
         }
     }));
 
