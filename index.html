@@ -988,12 +988,35 @@
 
         <!-- PLAYER MANAGEMENT VIEW -->
         <section id="player-management" class="view">
+
+            <!-- Tabs -->
+            <div class="card" style="padding-bottom:0;">
+                <div style="display:flex;gap:0;border-bottom:2px solid var(--light);">
+                    <button id="tab-players-session" onclick="App.switchPlayerTab('session')"
+                        style="background:none;border:none;border-bottom:3px solid var(--secondary);color:var(--secondary);
+                        padding:0.6rem 1.2rem;font-weight:700;font-size:0.95rem;cursor:pointer;min-height:unset;transform:none;margin-bottom:-2px;">
+                        &#128101; รายวัน
+                    </button>
+                    <button id="tab-players-profiles" onclick="App.switchPlayerTab('profiles')"
+                        style="background:none;border:none;border-bottom:3px solid transparent;color:#888;
+                        padding:0.6rem 1.2rem;font-weight:700;font-size:0.95rem;cursor:pointer;min-height:unset;transform:none;margin-bottom:-2px;">
+                        &#128203; โปรไฟล์ทั้งหมด
+                    </button>
+                </div>
+            </div>
+
+            <!-- Session Tab -->
+            <div id="tab-content-session">
             <div class="card">
                 <h2>เพิ่มผู้เล่นคนเดียว</h2>
                 <form id="add-player-form">
                     <div>
-                        <label for="player-name">ชื่อผู้เล่น:</label>
-                        <input type="text" id="player-name" required maxlength="50">
+                        <label for="player-name">ชื่อเล่น (ในระบบ):</label>
+                        <input type="text" id="player-name" required maxlength="50" placeholder="เช่น 1.บอล">
+                    </div>
+                    <div>
+                        <label for="player-realname">ชื่อจริง (ในบัญชีธนาคาร):</label>
+                        <input type="text" id="player-realname" maxlength="100" placeholder="เช่น สมชาย ใจดี">
                     </div>
                     <div>
                         <label for="player-skill">ระดับมือ:</label>
@@ -1011,6 +1034,48 @@
                 </form>
             </div>
 
+            </div><!-- end tab-content-session -->
+
+            <!-- Profile Tab -->
+            <div id="tab-content-profiles" style="display:none;">
+                <div class="card">
+                    <h2>📋 โปรไฟล์ผู้เล่นทั้งหมด</h2>
+                    <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">เก็บข้อมูลถาวร — เพิ่มครั้งเดียวใช้ได้ทุก session</p>
+
+                    <!-- Add Profile Form -->
+                    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;margin-bottom:1.5rem;
+                        padding:1rem;background:var(--light);border-radius:12px;">
+                        <div style="flex:2;min-width:150px;">
+                            <label>ชื่อเล่น:</label>
+                            <input type="text" id="profile-name" maxlength="50" placeholder="เช่น 1.บอล"
+                                style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
+                        </div>
+                        <div style="flex:2;min-width:150px;">
+                            <label>ชื่อจริง (บัญชีธนาคาร):</label>
+                            <input type="text" id="profile-realname" maxlength="100" placeholder="เช่น สมชาย ใจดี"
+                                style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
+                        </div>
+                        <div style="flex:1;min-width:100px;">
+                            <label>ระดับ:</label>
+                            <select id="profile-skill" style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
+                                <option value="BG">BG</option>
+                                <option value="N-">N-</option>
+                                <option value="N" selected>N</option>
+                                <option value="N+">N+</option>
+                                <option value="P">P</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button class="success" onclick="App.addProfile()">➕ เพิ่มโปรไฟล์</button>
+                        </div>
+                    </div>
+
+                    <!-- Profile List -->
+                    <div id="profile-list"></div>
+                </div>
+            </div><!-- end tab-content-profiles -->
+
+            <div id="tab-content-session-bulk">
             <div class="card">
                 <h2>เพิ่มผู้เล่นแบบรวม (วางข้อความ)</h2>
                 <p>คั่นลอกรายชื่อ (ห้ามมีการข้นบรรทัดใหม่ และเว้นวรรค)</p>
@@ -1613,6 +1678,7 @@
      */
     function getDefaultState() {
         return {
+            playerProfiles: [], // โปรไฟล์ถาวร
             players: [],
             courts: [],
             matches: [],
@@ -1624,7 +1690,7 @@
                 practiceTotal: 0,
                 practiceInPlay: 0
             },
-            nextId: { player: 1, court: 1, match: 1, queue: 1 }
+            nextId: { player: 1, court: 1, match: 1, queue: 1, profile: 1 }
         };
     }
 
@@ -2282,7 +2348,7 @@
         /**
          * Player management functions
          */
-        addPlayer: function(name, skill) {
+        addPlayer: function(name, skill, realName) {
             const nameValidation = validatePlayerName(name);
             if (!nameValidation.valid) {
                 return { success: false, error: nameValidation.error };
@@ -2295,6 +2361,7 @@
             const newPlayer = {
                 id: appState.nextId.player++,
                 name: sanitizeInput(name),
+                realName: realName ? sanitizeInput(realName) : '',
                 skill: String(skill),
                 isCheckedIn: false,
                 isPlaying: false
@@ -2328,24 +2395,29 @@
                 tr.innerHTML = `
                     <td>
                         <input type="text" id="name-edit-${player.id}" value="${escapeHtml(player.name)}"
-                               style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;"
-                               placeholder="ชื่อผู้เล่น" maxlength="50">
+                               style="width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:4px;"
+                               placeholder="ชื่อเล่น" maxlength="50">
+                        <input type="text" id="realname-edit-${player.id}" value="${escapeHtml(player.realName||'')}"
+                               style="width:100%;padding:0.4rem;border:1px solid #ddd;border-radius:4px;margin-top:4px;font-size:0.82rem;color:#888;"
+                               placeholder="ชื่อจริงในบัญชีธนาคาร" maxlength="100">
                     </td>
                     <td><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></td>
                     <td>${PlayerUtils.getGameCount(player.id)}</td>
                     <td>
-                        <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
-                            <button class="success" style="padding: 0.5rem 1rem; font-size: 0.85rem;"
-                                    onclick="App.updatePlayerName(${player.id}, document.getElementById('name-edit-${player.id}').value)">บันทึก</button>
-                            <select id="edit-skill-${player.id}" style="padding: 0.5rem; width: auto;">
+                        <div style="display:flex;gap:0.25rem;flex-wrap:wrap;">
+                            <button class="success" style="padding:0.5rem 1rem;font-size:0.85rem;"
+                                onclick="App.updatePlayerInfo(${player.id},
+                                    document.getElementById('name-edit-${player.id}').value,
+                                    document.getElementById('realname-edit-${player.id}').value)">บันทึก</button>
+                            <select id="edit-skill-${player.id}" style="padding:0.5rem;width:auto;">
                                 ${SKILLS_LIST.map(s =>
                                     `<option value="${s}" ${s === player.skill ? 'selected' : ''}>${s}</option>`
                                 ).join('')}
                             </select>
-                            <button class="warning" style="padding: 0.5rem 1rem; font-size: 0.85rem;"
-                                    onclick="App.updatePlayerSkill(${player.id}, document.getElementById('edit-skill-${player.id}').value)">อัปเดต</button>
-                            <button class="danger" style="padding: 0.5rem 1rem; font-size: 0.85rem;"
-                                    onclick="App.deletePlayer(${player.id})">ลบ</button>
+                            <button class="warning" style="padding:0.5rem 1rem;font-size:0.85rem;"
+                                onclick="App.updatePlayerSkill(${player.id}, document.getElementById('edit-skill-${player.id}').value)">อัปเดต</button>
+                            <button class="danger" style="padding:0.5rem 1rem;font-size:0.85rem;"
+                                onclick="App.deletePlayer(${player.id})">ลบ</button>
                         </div>
                     </td>
                 `;
@@ -2359,6 +2431,18 @@
                 `;
                 bulkEditListEl.appendChild(bulkItem);
             });
+        },
+
+        updatePlayerInfo: function(id, newName, newRealName) {
+            const player = PlayerUtils.getById(id);
+            if (!player) return;
+            const nameValidation = validatePlayerName(newName);
+            if (!nameValidation.valid) { showError(nameValidation.error); return; }
+            player.name = sanitizeInput(newName);
+            player.realName = sanitizeInput(newRealName || '');
+            saveState();
+            this.renderPlayerList();
+            showSuccess(`บันทึกข้อมูล ${escapeHtml(player.name)} แล้ว`);
         },
 
         updatePlayerName: function(id, newName) {
@@ -2622,6 +2706,113 @@
             }
         },
 
+
+        // ── Player Profiles ──────────────────────────────────────────
+        switchPlayerTab: function(tab) {
+            const sessionEl  = document.getElementById('tab-content-session');
+            const profilesEl = document.getElementById('tab-content-profiles');
+            const btnSession  = document.getElementById('tab-players-session');
+            const btnProfiles = document.getElementById('tab-players-profiles');
+            if (tab === 'session') {
+                if (sessionEl)  sessionEl.style.display  = 'block';
+                if (profilesEl) profilesEl.style.display = 'none';
+                if (btnSession)  { btnSession.style.borderBottomColor  = 'var(--secondary)'; btnSession.style.color  = 'var(--secondary)'; }
+                if (btnProfiles) { btnProfiles.style.borderBottomColor = 'transparent';       btnProfiles.style.color = '#888'; }
+            } else {
+                if (sessionEl)  sessionEl.style.display  = 'none';
+                if (profilesEl) profilesEl.style.display = 'block';
+                if (btnSession)  { btnSession.style.borderBottomColor  = 'transparent';       btnSession.style.color  = '#888'; }
+                if (btnProfiles) { btnProfiles.style.borderBottomColor = 'var(--secondary)'; btnProfiles.style.color = 'var(--secondary)'; }
+                this.renderProfileList();
+            }
+        },
+
+        addProfile: function() {
+            const name     = document.getElementById('profile-name')?.value.trim();
+            const realName = document.getElementById('profile-realname')?.value.trim();
+            const skill    = document.getElementById('profile-skill')?.value || 'N';
+            if (!name) { showError('กรุณาใส่ชื่อเล่น'); return; }
+            if (!appState.playerProfiles) appState.playerProfiles = [];
+            // เช็คชื่อซ้ำ
+            if (appState.playerProfiles.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+                showError('ชื่อนี้มีอยู่แล้ว'); return;
+            }
+            const id = appState.nextId.profile || (appState.playerProfiles.length + 1);
+            appState.playerProfiles.push({ id, name: sanitizeInput(name), realName: sanitizeInput(realName||''), skill });
+            appState.nextId.profile = id + 1;
+            saveState();
+            document.getElementById('profile-name').value     = '';
+            document.getElementById('profile-realname').value = '';
+            this.renderProfileList();
+            showSuccess(`เพิ่มโปรไฟล์ ${escapeHtml(name)} แล้ว`);
+        },
+
+        renderProfileList: function() {
+            const listEl = document.getElementById('profile-list');
+            if (!listEl) return;
+            const profiles = appState.playerProfiles || [];
+            if (profiles.length === 0) {
+                listEl.innerHTML = '<p style="color:#888;text-align:center;">ยังไม่มีโปรไฟล์ กดเพิ่มด้านบน</p>';
+                return;
+            }
+            listEl.innerHTML = profiles.map(p => {
+                const sc = getSkillClass(p.skill);
+                return `<div style="display:flex;align-items:center;justify-content:space-between;
+                    padding:0.75rem 1rem;background:var(--light);border-radius:10px;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
+                    <div style="display:flex;align-items:center;gap:0.75rem;">
+                        <span class="skill-badge skill-${sc}">${escapeHtml(p.skill)}</span>
+                        <div>
+                            <div style="font-weight:700;">${escapeHtml(p.name)}</div>
+                            <div style="font-size:0.78rem;color:#888;">${p.realName ? escapeHtml(p.realName) : '<span style="color:#bbb;">ยังไม่มีชื่อจริง</span>'}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;align-items:center;">
+                        <button class="success" style="font-size:0.78rem;padding:4px 10px;min-height:unset;"
+                            onclick="App.addPlayerFromProfile(${p.id})">+ เพิ่มรายวัน</button>
+                        <button class="secondary" style="font-size:0.78rem;padding:4px 10px;min-height:unset;"
+                            onclick="App.editProfile(${p.id})">แก้ไข</button>
+                        <button class="danger" style="font-size:0.78rem;padding:4px 10px;min-height:unset;"
+                            onclick="App.deleteProfile(${p.id})">ลบ</button>
+                    </div>
+                </div>`;
+            }).join('');
+        },
+
+        addPlayerFromProfile: function(profileId) {
+            const profile = (appState.playerProfiles||[]).find(p => p.id === profileId);
+            if (!profile) return;
+            // เช็คว่ามีในรายวันแล้วไหม
+            if (appState.players.find(p => p.name === profile.name)) {
+                showError(`${escapeHtml(profile.name)} มีในรายวันแล้ว`); return;
+            }
+            const result = this.addPlayer(profile.name, profile.skill, profile.realName);
+            if (result.success) {
+                saveState();
+                this.renderProfileList();
+                showSuccess(`เพิ่ม ${escapeHtml(profile.name)} ลงรายวันแล้ว`);
+            }
+        },
+
+        editProfile: function(profileId) {
+            const profile = (appState.playerProfiles||[]).find(p => p.id === profileId);
+            if (!profile) return;
+            const newName     = prompt('ชื่อเล่น:', profile.name);
+            if (newName === null) return;
+            const newRealName = prompt('ชื่อจริง (บัญชีธนาคาร):', profile.realName || '');
+            if (newRealName === null) return;
+            profile.name     = sanitizeInput(newName.trim()) || profile.name;
+            profile.realName = sanitizeInput(newRealName.trim());
+            saveState();
+            this.renderProfileList();
+            showSuccess('แก้ไขโปรไฟล์แล้ว');
+        },
+
+        deleteProfile: function(profileId) {
+            if (!confirm('ลบโปรไฟล์นี้?')) return;
+            appState.playerProfiles = (appState.playerProfiles||[]).filter(p => p.id !== profileId);
+            saveState();
+            this.renderProfileList();
+        },
         // ── Payment Settings ─────────────────────────────────────────
         savePaymentSettings: function() {
             const promptpay = document.getElementById('payment-promptpay')?.value.trim();
@@ -4492,14 +4683,16 @@ if (btnViewQueue) {
 
     // Add player form
     document.getElementById('add-player-form')?.addEventListener('submit', createSubmitHandler(function() {
-        const name = document.getElementById('player-name').value;
-        const skill = document.getElementById('player-skill').value;
-        const result = App.addPlayer(name, skill);
+        const name     = document.getElementById('player-name').value;
+        const realName = document.getElementById('player-realname')?.value.trim() || '';
+        const skill    = document.getElementById('player-skill').value;
+        const result   = App.addPlayer(name, skill, realName);
 
         if (result.success) {
             saveState();
             App.renderPlayerList();
             document.getElementById('player-name').value = '';
+            document.getElementById('player-realname').value = '';
             showSuccess(`เพิ่ม ${escapeHtml(result.player.name)} สำเร็จ`);
         } else {
             showError(result.error);

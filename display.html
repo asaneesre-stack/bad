@@ -1113,16 +1113,25 @@
 
         <!-- Buttons -->
         <div id="payment-notify-area">
-          <button id="btn-notify-paid" onclick="notifyPaid()"
-            style="background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;
+          <!-- Upload Slip -->
+          <label style="display:flex;align-items:center;justify-content:center;gap:8px;
+            background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;
             border-radius:14px;padding:1rem;font-size:1rem;font-weight:700;
-            cursor:pointer;width:100%;margin-bottom:0.6rem;letter-spacing:0.02em;
-            box-shadow:0 4px 15px rgba(39,174,96,0.3);">
-            ✅ จ่ายแล้ว — แจ้งชำระเงิน
+            cursor:pointer;box-shadow:0 4px 15px rgba(39,174,96,0.3);margin-bottom:0.6rem;">
+            📎 อัพโหลดสลิป (ยืนยันอัตโนมัติ)
+            <input type="file" id="slip-upload" accept="image/*" style="display:none;"
+              onchange="uploadSlip(this)">
+          </label>
+          <button id="btn-notify-paid" onclick="notifyPaid()"
+            style="background:#f0f0f0;color:#666;border:none;
+            border-radius:14px;padding:0.85rem;font-size:0.9rem;font-weight:600;
+            cursor:pointer;width:100%;margin-bottom:0.5rem;">
+            ✅ แจ้งว่าจ่ายแล้ว (ไม่มีสลิป)
           </button>
+          <div id="slip-status" style="font-size:0.82rem;color:#888;margin-bottom:0.5rem;min-height:1.2em;text-align:center;"></div>
           <button onclick="document.getElementById('payment-modal').style.display='none'"
-            style="background:none;color:#aaa;border:none;font-size:0.9rem;cursor:pointer;
-            padding:0.5rem;width:100%;">
+            style="background:none;color:#bbb;border:none;font-size:0.85rem;cursor:pointer;
+            padding:0.4rem;width:100%;">
             ปิด
           </button>
         </div>
@@ -2055,6 +2064,110 @@
           btn.onclick = showPaymentQR;
         }
       });
+    }
+
+    async function uploadSlip(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const statusEl = document.getElementById('slip-status');
+      statusEl.textContent = '⏳ กำลังอ่านสลิป...';
+      statusEl.style.color = '#e67e22';
+
+      try {
+        // แปลงรูปเป็น base64
+        const base64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result.split(',')[1]);
+          r.onerror = rej;
+          r.readAsDataURL(file);
+        });
+
+        // ส่งไปให้ Claude อ่านสลิป
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 300,
+            messages: [{
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: file.type || 'image/jpeg', data: base64 }
+                },
+                {
+                  type: 'text',
+                  text: 'นี่คือสลิปโอนเงิน กรุณาดึงข้อมูลต่อไปนี้และตอบเป็น JSON เท่านั้น ไม่ต้องมีคำอธิบาย: {"senderName": "ชื่อผู้โอน", "amount": ยอดเงิน(ตัวเลข), "time": "เวลา HH:MM", "date": "วันที่"} ถ้าหาข้อมูลใดไม่ได้ให้ใส่ null'
+                }
+              ]
+            }]
+          })
+        });
+
+        const data = await response.json();
+        const text = data.content?.[0]?.text || '';
+
+        let slip;
+        try {
+          slip = JSON.parse(text.replace(/```json|```/g, '').trim());
+        } catch(e) {
+          throw new Error('อ่านสลิปไม่ได้');
+        }
+
+        console.log('[slip]', slip);
+
+        if (!slip.senderName || !slip.amount) {
+          throw new Error('สลิปไม่ชัดเจน กรุณาลองใหม่');
+        }
+
+        // Match ชื่อกับผู้เล่น
+        const profiles = state.playerProfiles || [];
+        const players  = state.players || [];
+        const allPlayers = profiles.length > 0 ? profiles : players;
+
+        const matched = allPlayers.find(p => {
+          const realName = p.realName || '';
+          const name     = p.name || '';
+          const slipName = slip.senderName.toLowerCase().replace(/\s/g,'');
+          return realName.toLowerCase().replace(/\s/g,'').includes(slipName) ||
+                 slipName.includes(realName.toLowerCase().replace(/\s/g,'').substring(0,4)) ||
+                 name.toLowerCase().replace(/\s/g,'').includes(slipName);
+        });
+
+        if (matched) {
+          const pid = matched.id;
+          await db.ref(`badmintonState/payments/${pid}`).set({
+            paid: true, pending: false,
+            slipName: slip.senderName,
+            amount: slip.amount,
+            time: slip.time || '',
+            date: slip.date || '',
+            ts: Date.now(),
+          });
+          statusEl.textContent = `✅ ยืนยันแล้ว! ${slip.senderName} โอน ฿${slip.amount}`;
+          statusEl.style.color = '#27ae60';
+          document.getElementById('payment-modal').style.display = 'none';
+          updatePayBtn();
+        } else {
+          // ไม่ match — แจ้ง admin
+          const pid = [...watchedIds][0];
+          await db.ref(`badmintonState/payments/${pid}`).set({
+            pending: true, paid: false,
+            slipName: slip.senderName,
+            amount: slip.amount,
+            time: slip.time || '',
+            ts: Date.now(),
+          });
+          statusEl.textContent = `⚠️ ไม่พบชื่อ "${slip.senderName}" ในระบบ — รอ admin ยืนยัน`;
+          statusEl.style.color = '#e67e22';
+          updatePayBtn();
+        }
+      } catch(err) {
+        statusEl.textContent = `❌ ${err.message || 'เกิดข้อผิดพลาด'}`;
+        statusEl.style.color = '#e74c3c';
+      }
+      input.value = '';
     }
 
     async function notifyPaid() {
