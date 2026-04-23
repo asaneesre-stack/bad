@@ -1206,6 +1206,31 @@
     async function registerFCMToken(pid) {
       if (!_swRegistration || !_pushGranted) return;
       try {
+        const did = (()=>{
+          let id = localStorage.getItem('bb-device-id');
+          if (!id) { id = Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('bb-device-id',id); }
+          return id;
+        })();
+
+        // เช็คว่ามี device อื่น token อยู่แล้วไหม
+        const snap = await db.ref(`pushTokens/${pid}`).once('value');
+        const existing = snap.val();
+        if (existing && typeof existing === 'object') {
+          // มี device อื่น (ไม่ใช่ตัวเอง) ติดตามอยู่แล้ว
+          const otherDevices = Object.keys(existing).filter(k => k !== did);
+          if (otherDevices.length > 0) {
+            // แจ้ง user และยกเลิกการติดตาม
+            const p = getPlayer(pid);
+            const name = p ? p.name : '???';
+            alert(`⚠️ ${name} กำลังถูกติดตามจากอุปกรณ์อื่นอยู่แล้ว
+ไม่สามารถติดตามซ้ำได้`);
+            // ยกเลิกออกจาก watchedIds
+            watchedIds.delete(pid);
+            renderWatchBar();
+            return;
+          }
+        }
+
         const messaging = firebase.messaging();
         const token = await messaging.getToken({
           vapidKey: VAPID_KEY,
@@ -1213,13 +1238,7 @@
         });
         if (token) {
           _fcmToken = token;
-          // Save token to Firebase keyed by player id
-          const _did = (()=>{
-            let id = localStorage.getItem('bb-device-id');
-            if (!id) { id = Math.random().toString(36).slice(2)+Date.now().toString(36); localStorage.setItem('bb-device-id',id); }
-            return id;
-          })();
-          await db.ref(`pushTokens/${pid}/${_did}`).set({ token, ts: Date.now() });
+          await db.ref(`pushTokens/${pid}/${did}`).set({ token, ts: Date.now() });
           console.log('[FCM] token saved pid', pid);
         }
       } catch(e) { console.warn('[FCM] getToken failed', e); }
