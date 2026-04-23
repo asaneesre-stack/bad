@@ -1205,12 +1205,26 @@
                 <h2>ตั้งค่าสนาม</h2>
                 <h3>จัดการสนาม</h3>
                 <form id="add-court-form">
-                    <div>
-                        <label for="court-name">ชื่อสนาม:</label>
-                        <input type="text" id="court-name" required maxlength="50">
-                    </div>
-                    <div>
-                        <button type="submit" id="btn-add-court">เพิ่มสนาม</button>
+                    <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+                        <div style="flex:2;min-width:150px;">
+                            <label for="court-name">ชื่อสนาม:</label>
+                            <input type="text" id="court-name" required maxlength="50" placeholder="เช่น สนาม 7">
+                        </div>
+                        <div style="flex:1;min-width:100px;">
+                            <label for="court-open-time">เวลาเปิด (HH:MM):</label>
+                            <input type="text" id="court-open-time" value="20:00"
+                                pattern="^([01]\d|2[0-3]):[0-5]\d$" maxlength="5"
+                                placeholder="20:00" style="width:100%;">
+                        </div>
+                        <div style="flex:1;min-width:100px;">
+                            <label for="court-close-time">เวลาปิด (HH:MM):</label>
+                            <input type="text" id="court-close-time" value="23:00"
+                                pattern="^([01]\d|2[0-3]):[0-5]\d$" maxlength="5"
+                                placeholder="23:00" style="width:100%;">
+                        </div>
+                        <div>
+                            <button type="submit" id="btn-add-court">เพิ่มสนาม</button>
+                        </div>
                     </div>
                 </form>
                 <div id="court-list" style="margin-top: 20px;"></div>
@@ -2906,15 +2920,37 @@
 
             appState.courts.forEach(court => {
                 const li = document.createElement('div');
-                li.style.cssText = 'background-color: ' + (court.status === 'playing' ? '#ffe0b2' : 'var(--light)') + '; padding: 1rem; margin-bottom: 0.75rem; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+                const statusColor = court.status === 'playing' ? 'var(--danger)' : 'var(--success)';
+                const statusText  = court.status === 'playing' ? 'กำลังเล่น' : 'ว่าง';
+                const openTime    = court.openTime  || '--:--';
+                const closeTime   = court.closeTime || '--:--';
+                const autoEnabled = court.autoSchedule !== false; // default true
+
+                li.style.cssText = 'background:var(--light);padding:1rem;margin-bottom:0.75rem;border-radius:8px;';
                 li.innerHTML = `
-                    <span>
-                        ${escapeHtml(court.name)}
-                        <span style="font-size: 0.8rem; color: ${court.status === 'playing' ? 'var(--danger)' : 'var(--success)'}; font-weight: bold;">
-                            (${court.status === 'playing' ? 'กำลังเล่น' : 'ว่าง'})
-                        </span>
-                    </span>
-                    <button class="danger" style="padding: 0.5rem 1rem;" onclick="App.deleteCourt(${court.id})">ลบ</button>
+                    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+                        <div>
+                            <span style="font-weight:700;">${escapeHtml(court.name)}</span>
+                            <span style="font-size:0.8rem;color:${statusColor};font-weight:bold;margin-left:6px;">(${statusText})</span>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                            <label style="display:flex;align-items:center;gap:4px;font-size:0.82rem;cursor:pointer;">
+                                <input type="checkbox" ${autoEnabled?'checked':''} onchange="App.toggleCourtAuto(${court.id}, this.checked)"
+                                    style="width:16px;height:16px;cursor:pointer;">
+                                auto
+                            </label>
+                            <span style="font-size:0.82rem;color:#666;">
+                                <input type="text" value="${openTime}" maxlength="5" placeholder="HH:MM"
+                                    style="font-size:0.82rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px;width:70px;text-align:center;"
+                                    onchange="App.updateCourtTime(${court.id},'openTime',this.value)">
+                                –
+                                <input type="text" value="${closeTime}" maxlength="5" placeholder="HH:MM"
+                                    style="font-size:0.82rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px;width:70px;text-align:center;"
+                                    onchange="App.updateCourtTime(${court.id},'closeTime',this.value)">
+                            </span>
+                            <button class="danger" style="padding:0.4rem 0.8rem;font-size:0.82rem;" onclick="App.deleteCourt(${court.id})">ลบ</button>
+                        </div>
+                    </div>
                 `;
                 listEl.appendChild(li);
             });
@@ -2923,6 +2959,22 @@
         renderSettings: function() {
             this.renderCourtList();
             this.updateShuttleDisplay();
+        },
+
+        updateCourtTime: function(courtId, field, value) {
+            const idx = appState.courts.findIndex(c => c.id === courtId);
+            if (idx === -1) return;
+            appState.courts[idx][field] = value;
+            this.saveState();
+            showSuccess(`อัพเดทเวลา${field === 'openTime' ? 'เปิด' : 'ปิด'}สนามแล้ว`);
+        },
+
+        toggleCourtAuto: function(courtId, enabled) {
+            const idx = appState.courts.findIndex(c => c.id === courtId);
+            if (idx === -1) return;
+            appState.courts[idx].autoSchedule = enabled;
+            this.saveState();
+            showSuccess(`${enabled ? 'เปิด' : 'ปิด'} auto schedule สำหรับสนามนี้แล้ว`);
         },
 
         /**
@@ -4302,7 +4354,9 @@ if (btnViewQueue) {
 
     // Add court form
     document.getElementById('add-court-form')?.addEventListener('submit', createSubmitHandler(function() {
-        const name = document.getElementById('court-name').value;
+        const name      = document.getElementById('court-name').value;
+        const openTime  = document.getElementById('court-open-time')?.value  || '20:00';
+        const closeTime = document.getElementById('court-close-time')?.value || '23:00';
         if (App.addCourt(name)) {
             document.getElementById('court-name').value = '';
         }
