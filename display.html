@@ -1089,47 +1089,18 @@
 
       <!-- ราคา -->
       <div style="font-size:2rem;font-weight:900;color:#e74c3c;margin-bottom:0.25rem;" id="payment-price-display"></div>
-      <div style="font-size:0.82rem;color:#aaa;margin-bottom:1.5rem;">นาย อัสนี ศรีวงษ์รักษ์ — พร้อมเพย์</div>
+      <div style="font-size:0.82rem;color:#aaa;margin-bottom:1rem;">นาย อัสนี ศรีวงษ์รักษ์ — พร้อมเพย์</div>
 
-      <!-- Deep link buttons -->
-      <div style="display:flex;flex-direction:column;gap:0.6rem;margin-bottom:1rem;">
-        <a id="pay-kbank-link" href="#"
-          style="display:flex;align-items:center;justify-content:center;gap:8px;
-          background:#1ba345;color:#fff;border-radius:12px;padding:0.85rem;
-          font-size:0.95rem;font-weight:700;text-decoration:none;">
-          <img src="https://play-lh.googleusercontent.com/RfKMFLVh_mfBMWRwmplWWFiO2K4JNHPM_MZ6JpAuKMv2l0OhiHSizFGLFjEUXJ7WNs=s48" 
-            style="width:24px;height:24px;border-radius:6px;" onerror="this.style.display='none'">
-          เปิด KBank
-        </a>
-        <a id="pay-scb-link" href="#"
-          style="display:flex;align-items:center;justify-content:center;gap:8px;
-          background:#4e2d8c;color:#fff;border-radius:12px;padding:0.85rem;
-          font-size:0.95rem;font-weight:700;text-decoration:none;">
-          <img src="https://play-lh.googleusercontent.com/S7FJbJp6sDCBh5l3v15F1V39NRUEW-PGAr4oR5OVfp6BNJGNXFBzx3ZTD1yLf6MQRA=s48"
-            style="width:24px;height:24px;border-radius:6px;" onerror="this.style.display='none'">
-          เปิด SCB Easy
-        </a>
-        <a id="pay-bbl-link" href="#"
-          style="display:flex;align-items:center;justify-content:center;gap:8px;
-          background:#1e3a8a;color:#fff;border-radius:12px;padding:0.85rem;
-          font-size:0.95rem;font-weight:700;text-decoration:none;">
-          💙 เปิด Bangkok Bank
-        </a>
-        <a id="pay-promptpay-link" href="#"
-          style="display:flex;align-items:center;justify-content:center;gap:8px;
-          background:#f39c12;color:#fff;border-radius:12px;padding:0.85rem;
-          font-size:0.95rem;font-weight:700;text-decoration:none;">
-          📱 เปิดแอปธนาคาร (PromptPay)
-        </a>
-      </div>
-
-      <!-- QR สำรอง -->
-      <details style="margin-bottom:1rem;text-align:left;">
-        <summary style="font-size:0.82rem;color:#888;cursor:pointer;text-align:center;">หรือสแกน QR Code</summary>
-        <div style="text-align:center;margin-top:0.75rem;">
-          <div id="payment-qr-container" style="display:inline-block;padding:8px;background:#fff;border-radius:12px;border:1px solid #eee;"></div>
+      <!-- QR Image จาก API -->
+      <div style="margin-bottom:1rem;">
+        <img id="payment-qr-img" src="" alt="QR PromptPay"
+          style="width:220px;height:220px;border-radius:12px;border:1px solid #eee;background:#f9f9f9;"
+          onerror="this.src='';this.style.display='none';document.getElementById('qr-error').style.display='block'">
+        <div id="qr-error" style="display:none;color:#e74c3c;font-size:0.85rem;margin-top:0.5rem;">
+          ❌ โหลด QR ไม่ได้ — ลองใหม่อีกครั้ง
         </div>
-      </details>
+        <div id="payment-qr-container" style="display:none;"></div>
+      </div>
 
       <div id="payment-notify-area">
         <button id="btn-notify-paid" onclick="notifyPaid()"
@@ -2014,7 +1985,7 @@
       // อ่าน payment settings จาก Firebase
       const snap = await db.ref('badmintonState/paymentSettings').once('value');
       const settings = snap.val() || {};
-      const ppId  = settings.promptpay || '1348356484';
+      const ppId  = settings.promptpay || '0628801778';
       const price = settings.price     || 210;
 
       document.getElementById('payment-name').textContent  = name;
@@ -2034,23 +2005,14 @@
         correctLevel:  QRCode.CorrectLevel.M,
       });
 
-      // ตั้ง deep links สำหรับแต่ละธนาคาร
-      // PromptPay universal deep link
+      // Generate QR โดยใช้ promptpay.io API
       const ppNum = ppId.replace(/[^0-9]/g, '');
-      const encodedPayload = encodeURIComponent(promptPayPayload(ppId, price));
-
-      // KBank
-      document.getElementById('pay-kbank-link').href =
-        `kplus://payment/promptpay?target=${ppNum}&amount=${price}`;
-      // SCB
-      document.getElementById('pay-scb-link').href =
-        `scbeasy://payment/promptpay?target=${ppNum}&amount=${price}`;
-      // BBL
-      document.getElementById('pay-bbl-link').href =
-        `bblmobile://qrpay?data=${encodedPayload}`;
-      // Generic PromptPay
-      document.getElementById('pay-promptpay-link').href =
-        `promptpay://${ppNum}?amount=${price}`;
+      const qrImg = document.getElementById('payment-qr-img');
+      const qrErr = document.getElementById('qr-error');
+      qrErr.style.display = 'none';
+      qrImg.style.display = 'block';
+      // promptpay.io: GET /api/{phone_or_id}/{amount}
+      qrImg.src = `https://promptpay.io/${ppNum}/${price}.png`;
 
       document.getElementById('payment-modal').style.display = 'flex';
     }
