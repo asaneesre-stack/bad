@@ -1893,19 +1893,12 @@
           return;
         }
 
-        // ถ้าจบเกมแล้ว (isPlaying = false) และเคยแจ้งเตือนลงสนาม (key2 อยู่ใน alertShown)
-        // แสดงว่าเพิ่งจบเกม → ล้าง token และหยุดติดตาม
-        if (player && !player.isPlaying && !player.isCheckedIn === false && alertShown.has(key2)) {
-          // จบเกมแล้ว — ลบ token และหยุดติดตาม
+        // ถ้าจบเกมแล้ว → reset alertShown เพื่อรับแจ้งเตือนรอบหน้าได้
+        // ไม่ลบ watchedIds เพราะ user ควรติดตามชื่อตัวเองไว้ตลอด
+        if (player && !player.isPlaying && alertShown.has(key2)) {
           alertShown.delete(key1);
           alertShown.delete(key2);
-          watchedIds.delete(pid);
-          const did = localStorage.getItem('bb-device-id');
-          if (did) db.ref(`pushTokens/${pid}/${did}`).remove().catch(()=>{});
-          renderWatchBar();
-          updatePayBtn();
           syncStateToSW();
-          return;
         }
 
         if (pos >= 2) {
@@ -2367,24 +2360,10 @@
         const nowPlaying = !!player.isPlaying;
 
         if (wasPlaying && !nowPlaying) {
-          // เพิ่งจบเกม! ล้าง token และหยุดติดตาม
-          const did = localStorage.getItem('bb-device-id');
-          if (did) db.ref(`pushTokens/${pid}/${did}`).remove().catch(()=>{});
-          watchedIds.delete(pid);
-          _wasPlaying.delete(pid);
+          // จบเกม — reset alertShown เท่านั้น ไม่ลบ watchedIds
           alertShown.delete(`${pid}-next`);
           alertShown.delete(`${pid}-court`);
           syncStateToSW();
-          // แจ้งเตือนว่าจบเกมแล้ว
-          const overlay = document.getElementById('alert-overlay');
-          if (overlay) {
-            overlay.classList.remove('level2');
-            document.getElementById('alert-icon').textContent  = '🎉';
-            document.getElementById('alert-title').textContent = 'จบเกมแล้ว!';
-            document.getElementById('alert-name').textContent  = (player.name || '') + ' — หยุดติดตามคิวแล้ว';
-            overlay.classList.add('show');
-            setTimeout(() => overlay.classList.remove('show'), 3000);
-          }
         }
 
         // อัพเดทสถานะ
