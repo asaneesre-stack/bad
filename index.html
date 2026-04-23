@@ -1211,14 +1211,20 @@
                             <input type="text" id="court-name" required maxlength="50" placeholder="เช่น สนาม 7">
                         </div>
                         <div style="flex:1;min-width:100px;">
-                            <label for="court-open-time">เวลาเปิด (0-23:00):</label>
+                            <label for="court-open-time">เวลาเปิด:</label>
                             <input type="text" id="court-open-time" value="20:00" maxlength="5"
                                 placeholder="20:00" style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
                         </div>
                         <div style="flex:1;min-width:100px;">
-                            <label for="court-close-time">เวลาปิด (0-23:00):</label>
+                            <label for="court-close-time">เวลาปิด:</label>
                             <input type="text" id="court-close-time" value="23:00" maxlength="5"
                                 placeholder="23:00" style="width:100%;padding:0.8rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;">
+                        </div>
+                        <div style="flex:2;min-width:180px;">
+                            <label>วันที่เปิด:</label>
+                            <div style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.4rem;">
+                                <label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-sun" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">อา</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-mon" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">จ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-tue" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">อ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-wed" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">พ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-thu" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">พฤ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-fri" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">ศ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-sat" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">ส</span></label>
+                            </div>
                         </div>
                         <div>
                             <button type="submit" id="btn-add-court">เพิ่มสนาม</button>
@@ -1932,18 +1938,21 @@
 
     const CourtUtils = {
         getAvailable: () => {
-            const now = new Date();
-            const nowSec = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+            const now     = new Date();
+            const nowSec  = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
+            const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
+            const todayKey= dayKeys[now.getDay()];
             return appState.courts.filter(c => {
                 if (c.status !== 'free') return false;
-                // ถ้า autoSchedule เปิดอยู่ เช็คเวลาด้วย
-                if (c.autoSchedule && c.openTime && c.closeTime &&
-                    c.openTime !== '--:--' && c.closeTime !== '--:--') {
-                    const [oh,om] = c.openTime.split(':').map(Number);
-                    const [ch,cm] = c.closeTime.split(':').map(Number);
-                    const openSec  = oh*3600 + om*60;
-                    const closeSec = ch*3600 + cm*60;
-                    if (nowSec < openSec || nowSec >= closeSec) return false;
+                if (c.autoSchedule) {
+                    // เช็ควัน
+                    if (c.openDays && c.openDays.length > 0 && !c.openDays.includes(todayKey)) return false;
+                    // เช็คเวลา
+                    if (c.openTime && c.closeTime && c.openTime !== '--:--' && c.closeTime !== '--:--') {
+                        const [oh,om] = c.openTime.split(':').map(Number);
+                        const [ch,cm] = c.closeTime.split(':').map(Number);
+                        if (nowSec < oh*3600+om*60 || nowSec >= ch*3600+cm*60) return false;
+                    }
                 }
                 return true;
             });
@@ -2881,7 +2890,7 @@
         /**
          * Court management
          */
-        addCourt: function(name, openTime, closeTime, autoSchedule) {
+        addCourt: function(name, openTime, closeTime, autoSchedule, openDays) {
             const validation = validateCourtName(name);
             if (!validation.valid) {
                 showError(validation.error);
@@ -2896,6 +2905,7 @@
                 openTime:      openTime      || '',
                 closeTime:     closeTime     || '',
                 autoSchedule:  autoSchedule  !== undefined ? autoSchedule : true,
+                openDays:      openDays      || ['sun','mon','tue','wed','thu','fri','sat'],
             };
 
             appState.courts.push(newCourt);
@@ -2980,6 +2990,7 @@
                             <span style="font-weight:700;">${escapeHtml(court.name)}</span>
                             <span style="font-size:0.8rem;color:${statusColor};font-weight:bold;margin-left:6px;">(${statusText})</span>
                             ${countdownHtml ? `<span style="margin-left:8px;">${countdownHtml}</span>` : ''}
+                            ${autoEnabled && court.openDays ? `<span style="margin-left:6px;font-size:0.75rem;color:#888;">[${(court.openDays||[]).map(d=>({'sun':'อา','mon':'จ','tue':'อ','wed':'พ','thu':'พฤ','fri':'ศ','sat':'ส'})[d]||d).join(' ')}]</span>` : ''}
                         </div>
                         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
                             <label style="display:flex;align-items:center;gap:4px;font-size:0.82rem;cursor:pointer;">
@@ -2987,6 +2998,7 @@
                                     style="width:16px;height:16px;cursor:pointer;">
                                 auto
                             </label>
+                            ${autoEnabled ? `<div style="display:flex;gap:3px;">${['sun','mon','tue','wed','thu','fri','sat'].map(d=>{const th={'sun':'อา','mon':'จ','tue':'อ','wed':'พ','thu':'พฤ','fri':'ศ','sat':'ส'}[d];const on=(court.openDays||['sun','mon','tue','wed','thu','fri','sat']).includes(d);return '<label style="display:flex;align-items:center;gap:1px;cursor:pointer;font-size:0.75rem;"><input type="checkbox" '+(on?'checked':'')+ ' onchange="App.updateCourtDays('+court.id+',\''+d+'\',this.checked)" style="width:12px;height:12px;">'+th+'</label>';}).join('')}</div>` : ''}
                             <span style="font-size:0.82rem;color:#666;">
                                 <input type="text" value="${openTime !== '--:--' ? openTime : ''}" maxlength="5"
                                     placeholder="20:00"
@@ -3043,7 +3055,17 @@
             if (idx === -1) return;
             appState.courts[idx][field] = value;
             this.saveState();
-            showSuccess(`อัพเดทเวลา${field === 'openTime' ? 'เปิด' : 'ปิด'}สนามแล้ว`);
+            this.renderCourtList();
+        },
+
+        updateCourtDays: function(courtId, day, checked) {
+            const idx = appState.courts.findIndex(c => c.id === courtId);
+            if (idx === -1) return;
+            let days = [...(appState.courts[idx].openDays || ['sun','mon','tue','wed','thu','fri','sat'])];
+            if (checked && !days.includes(day)) days.push(day);
+            if (!checked) days = days.filter(d => d !== day);
+            appState.courts[idx].openDays = days;
+            this.saveState();
         },
 
         toggleCourtAuto: function(courtId, enabled) {
@@ -4434,10 +4456,17 @@ if (btnViewQueue) {
         const name      = document.getElementById('court-name').value.trim();
         const openTime  = document.getElementById('court-open-time')?.value.trim()  || '';
         const closeTime = document.getElementById('court-close-time')?.value.trim() || '';
-        if (App.addCourt(name, openTime, closeTime, true)) {
+        const openDays  = ['sun','mon','tue','wed','thu','fri','sat'].filter(d =>
+            document.getElementById('court-day-'+d)?.checked
+        );
+        if (App.addCourt(name, openTime, closeTime, true, openDays)) {
             document.getElementById('court-name').value = '';
             document.getElementById('court-open-time').value  = '20:00';
             document.getElementById('court-close-time').value = '23:00';
+            ['sun','mon','tue','wed','thu','fri','sat'].forEach(d => {
+                const el = document.getElementById('court-day-'+d);
+                if (el) el.checked = true;
+            });
         }
     }));
 
