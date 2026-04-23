@@ -1390,16 +1390,30 @@
         // เช็คว่ามี device อื่น token อยู่แล้วไหม
         const snap = await db.ref(`pushTokens/${pid}`).once('value');
         const existing = snap.val();
+        const TOKEN_TTL = 30 * 60 * 1000; // 30 นาที — เกินนี้ถือว่า kill app แล้ว
         if (existing && typeof existing === 'object') {
-          // มี device อื่น (ไม่ใช่ตัวเอง) ติดตามอยู่แล้ว
+          const now = Date.now();
+          // ลบ token ที่หมดอายุแล้ว (kill app แล้วไม่ได้ลบ)
+          const cleanupPromises = [];
+          Object.entries(existing).forEach(([devId, val]) => {
+            if (devId !== did) {
+              const age = now - (val.ts || 0);
+              if (age > TOKEN_TTL) {
+                // token เก่าเกิน 8 ชม ถือว่า stale ลบทิ้ง
+                cleanupPromises.push(db.ref(`pushTokens/${pid}/${devId}`).remove());
+                delete existing[devId];
+              }
+            }
+          });
+          if (cleanupPromises.length > 0) await Promise.all(cleanupPromises);
+
+          // เช็คอีกครั้งหลังลบ token เก่า
           const otherDevices = Object.keys(existing).filter(k => k !== did);
           if (otherDevices.length > 0) {
-            // แจ้ง user และยกเลิกการติดตาม
             const p = getPlayer(pid);
             const name = p ? p.name : '???';
             alert(`⚠️ ${name} กำลังถูกติดตามจากอุปกรณ์อื่นอยู่แล้ว
 ไม่สามารถติดตามซ้ำได้`);
-            // ยกเลิกออกจาก watchedIds
             watchedIds.delete(pid);
             renderWatchBar();
             return;
@@ -1451,7 +1465,7 @@
     const db = firebase.database();
 
     // ── State ─────────────────────────────────────────────────────
-    let state = { players:[], matches:[], matchQueues:[], courts:[] };
+    let state = { players:[], matches:[], matchQueues:[], courts:[], payments:{} };
 
     function fixArrays(data) {
       if (!data) return data;
@@ -1484,6 +1498,7 @@
       if (!raw) { syncStatus('⚠️ ยังไม่มีข้อมูล', '#e67e22'); return; }
       const { _savedBy, ...clean } = raw;
       state = fixArrays(clean);
+      if (!state.payments) state.payments = {};
       render();
       syncStatus('🔄 ข้อมูลล่าสุด', '#27ae60');
       setTimeout(() => syncStatus('☁️ เชื่อมต่อแล้ว', '#00a8cc'), 2000);
@@ -1839,9 +1854,31 @@
 
     function checkQueueAlerts() {
       watchedIds.forEach(pid => {
-        const pos = getQueuePosition(pid);
-        const key1 = `${pid}-next`;
-        const key2 = `${pid}-court`;
+        const player = getPlayer(pid);
+        const pos    = getQueuePosition(pid);
+        const key1   = `${pid}-next`;
+        const key2   = `${pid}-court`;
+
+        // ถ้ากำลังแข่งอยู่ และเคยแจ้งเตือนลงสนามแล้ว → รอจบเกม
+        if (player && player.isPlaying) {
+          // ยังไม่ทำอะไร รอจบเกมก่อน
+          return;
+        }
+
+        // ถ้าจบเกมแล้ว (isPlaying = false) และเคยแจ้งเตือนลงสนาม (key2 อยู่ใน alertShown)
+        // แสดงว่าเพิ่งจบเกม → ล้าง token และหยุดติดตาม
+        if (player && !player.isPlaying && !player.isCheckedIn === false && alertShown.has(key2)) {
+          // จบเกมแล้ว — ลบ token และหยุดติดตาม
+          alertShown.delete(key1);
+          alertShown.delete(key2);
+          watchedIds.delete(pid);
+          const did = localStorage.getItem('bb-device-id');
+          if (did) db.ref(`pushTokens/${pid}/${did}`).remove().catch(()=>{});
+          renderWatchBar();
+          updatePayBtn();
+          syncStateToSW();
+          return;
+        }
 
         if (pos >= 2) {
           alertShown.delete(key1);
@@ -1854,23 +1891,23 @@
           }
           if (!alertShown.has(key1)) {
             alertShown.add(key1);
-            if (!_justReturned) { // ไม่แสดงซ้ำเมื่อเปิดแอปกลับมา
+            if (!_justReturned) {
               const p = getPlayer(pid);
               triggerAlert(p ? p.name : '???', 1);
             }
           }
 
-        } else {
+        } else if (pos === 0) {
+          // อยู่นอกคิว ไม่ได้เล่น — อาจเพิ่งออกจากคิวหรือยังไม่ได้เข้าคิว
           if (alertShown.has(key1) && !alertShown.has(key2)) {
             alertShown.add(key2);
-            if (!_justReturned) { // ไม่แสดงซ้ำเมื่อเปิดแอปกลับมา
+            if (!_justReturned) {
               const p = getPlayer(pid);
               triggerAlert(p ? p.name : '???', 2);
             }
           }
         }
       });
-      // Sync state ไปหา SW ทุกครั้งที่ตรวจคิว (SW จะ poll ด้วยข้อมูลล่าสุด)
       syncStateToSW();
     }
 
@@ -2231,27 +2268,33 @@
       const btn = document.getElementById('pay-btn');
       if (!btn) return;
       if (watchedIds.size === 0) { btn.style.display = 'none'; return; }
-      // เช็คสถานะจ่ายจาก Firebase
       const pid = [...watchedIds][0];
-      db.ref(`badmintonState/payments/${pid}`).once('value').then(snap => {
-        const p = snap.val();
-        if (p && p.paid) {
-          btn.textContent  = '✅ ชำระแล้ว';
-          btn.style.background = 'linear-gradient(135deg,#27ae60,#219a52)';
-          btn.style.display = 'inline-flex';
-          btn.onclick = null;
-        } else if (p && p.pending) {
-          btn.textContent  = '⏳ รอยืนยัน...';
-          btn.style.background = 'linear-gradient(135deg,#e67e22,#d35400)';
-          btn.style.display = 'inline-flex';
-          btn.onclick = showPaymentQR;
-        } else {
-          btn.textContent  = '💳 จ่ายค่าสนาม';
-          btn.style.background = 'linear-gradient(135deg,#e74c3c,#c0392b)';
-          btn.style.display = 'inline-flex';
-          btn.onclick = showPaymentQR;
-        }
-      });
+      // ใช้ state ที่ sync มาแล้วแทน once() เพื่อความเร็ว
+      const p = (state.payments || {})[pid];
+      if (p && p.paid) {
+        btn.textContent  = '✅ ชำระแล้ว';
+        btn.style.background = 'linear-gradient(135deg,#27ae60,#219a52)';
+        btn.style.display = 'inline-flex';
+        btn.onclick = null;
+      } else if (p && p.pending) {
+        btn.textContent  = '⏳ รอยืนยัน...';
+        btn.style.background = 'linear-gradient(135deg,#e67e22,#d35400)';
+        btn.style.display = 'inline-flex';
+        btn.onclick = showPaymentQR;
+      } else {
+        btn.textContent  = '💳 จ่ายค่าสนาม';
+        btn.style.background = 'linear-gradient(135deg,#e74c3c,#c0392b)';
+        btn.style.display = 'inline-flex';
+        btn.onclick = showPaymentQR;
+      }
+
+      // reset ปุ่มใน modal ด้วย ถ้า admin ยกเลิกการจ่าย
+      const notifyBtn = document.getElementById('btn-notify-paid');
+      if (notifyBtn && !(p && p.pending) && !(p && p.paid)) {
+        notifyBtn.textContent = '💸 แจ้งจ่ายเงินแล้ว';
+        notifyBtn.style.background = 'linear-gradient(135deg,#27ae60,#1e8449)';
+        notifyBtn.disabled = false;
+      }
     }
 
 
@@ -2280,10 +2323,47 @@
     }
 
 
-        // Hook into render to update watch bar + alerts after every sync
+        // ติดตาม isPlaying ก่อนหน้า เพื่อตรวจจับตอนจบเกม
+    const _wasPlaying = new Set();
+
+    // Hook into render to update watch bar + alerts after every sync
     const _origRender = render;
     render = function() {
       _origRender();
+
+      // ตรวจจับตอนจบเกม — isPlaying เปลี่ยนจาก true → false
+      watchedIds.forEach(pid => {
+        const player = getPlayer(pid);
+        if (!player) return;
+        const wasPlaying = _wasPlaying.has(pid);
+        const nowPlaying = !!player.isPlaying;
+
+        if (wasPlaying && !nowPlaying) {
+          // เพิ่งจบเกม! ล้าง token และหยุดติดตาม
+          const did = localStorage.getItem('bb-device-id');
+          if (did) db.ref(`pushTokens/${pid}/${did}`).remove().catch(()=>{});
+          watchedIds.delete(pid);
+          _wasPlaying.delete(pid);
+          alertShown.delete(`${pid}-next`);
+          alertShown.delete(`${pid}-court`);
+          syncStateToSW();
+          // แจ้งเตือนว่าจบเกมแล้ว
+          const overlay = document.getElementById('alert-overlay');
+          if (overlay) {
+            overlay.classList.remove('level2');
+            document.getElementById('alert-icon').textContent  = '🎉';
+            document.getElementById('alert-title').textContent = 'จบเกมแล้ว!';
+            document.getElementById('alert-name').textContent  = (player.name || '') + ' — หยุดติดตามคิวแล้ว';
+            overlay.classList.add('show');
+            setTimeout(() => overlay.classList.remove('show'), 3000);
+          }
+        }
+
+        // อัพเดทสถานะ
+        if (nowPlaying) _wasPlaying.add(pid);
+        else _wasPlaying.delete(pid);
+      });
+
       renderWatchBar();
       highlightMyQueues();
       checkQueueAlerts();
