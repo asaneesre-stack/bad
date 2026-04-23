@@ -1934,7 +1934,7 @@
 
     const CourtUtils = {
         getAvailable: () => {
-            return appState.courts.filter(c => c.status === 'free');
+            return appState.courts.filter(c => c.status === 'free' || c.status === 'available');
         },
 
         getById: (id) => {
@@ -2926,12 +2926,34 @@
                 const closeTime   = court.closeTime || '--:--';
                 const autoEnabled = court.autoSchedule !== false; // default true
 
+                // คำนวณ countdown
+                function getCourtCountdown(openT, closeT) {
+                    if (!openT || !closeT || openT === '--:--' || closeT === '--:--') return '';
+                    const now = new Date();
+                    const [oh, om] = openT.split(':').map(Number);
+                    const [ch, cm] = closeT.split(':').map(Number);
+                    const nowMin  = now.getHours() * 60 + now.getMinutes();
+                    const openMin = oh * 60 + om;
+                    const closeMin= ch * 60 + cm;
+                    if (nowMin < openMin) {
+                        const diff = openMin - nowMin;
+                        return `<span style="color:#e67e22;font-size:0.78rem;font-weight:700;">⏳ เปิดใน ${diff} นาที</span>`;
+                    } else if (nowMin >= openMin && nowMin < closeMin) {
+                        const diff = closeMin - nowMin;
+                        return `<span style="color:#27ae60;font-size:0.78rem;font-weight:700;">✅ เปิดอยู่ — ปิดใน ${diff} นาที</span>`;
+                    } else {
+                        return `<span style="color:#999;font-size:0.78rem;">🔒 ปิดแล้ว</span>`;
+                    }
+                }
+                const countdownHtml = autoEnabled ? getCourtCountdown(openTime, closeTime) : '';
+
                 li.style.cssText = 'background:var(--light);padding:1rem;margin-bottom:0.75rem;border-radius:8px;';
                 li.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
                         <div>
                             <span style="font-weight:700;">${escapeHtml(court.name)}</span>
                             <span style="font-size:0.8rem;color:${statusColor};font-weight:bold;margin-left:6px;">(${statusText})</span>
+                            ${countdownHtml ? `<span style="margin-left:8px;">${countdownHtml}</span>` : ''}
                         </div>
                         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
                             <label style="display:flex;align-items:center;gap:4px;font-size:0.82rem;cursor:pointer;">
@@ -2940,13 +2962,15 @@
                                 auto
                             </label>
                             <span style="font-size:0.82rem;color:#666;">
-                                <input type="text" value="${openTime}" maxlength="5" placeholder="HH:MM"
-                                    style="font-size:0.82rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px;width:70px;text-align:center;"
-                                    onchange="App.updateCourtTime(${court.id},'openTime',this.value)">
+                                <input type="text" value="${openTime !== '--:--' ? openTime : ''}" maxlength="5"
+                                    placeholder="20:00"
+                                    style="font-size:0.82rem;padding:3px 6px;border:1px solid #ddd;border-radius:4px;width:68px;text-align:center;"
+                                    onblur="if(/^([01]\d|2[0-3]):[0-5]\d$/.test(this.value))App.updateCourtTime(${court.id},'openTime',this.value);else this.value='${openTime !== '--:--' ? openTime : ''}';App.renderCourtList();">
                                 –
-                                <input type="text" value="${closeTime}" maxlength="5" placeholder="HH:MM"
-                                    style="font-size:0.82rem;padding:2px 4px;border:1px solid #ddd;border-radius:4px;width:70px;text-align:center;"
-                                    onchange="App.updateCourtTime(${court.id},'closeTime',this.value)">
+                                <input type="text" value="${closeTime !== '--:--' ? closeTime : ''}" maxlength="5"
+                                    placeholder="23:00"
+                                    style="font-size:0.82rem;padding:3px 6px;border:1px solid #ddd;border-radius:4px;width:68px;text-align:center;"
+                                    onblur="if(/^([01]\d|2[0-3]):[0-5]\d$/.test(this.value))App.updateCourtTime(${court.id},'closeTime',this.value);else this.value='${closeTime !== '--:--' ? closeTime : ''}';App.renderCourtList();">
                             </span>
                             <button class="danger" style="padding:0.4rem 0.8rem;font-size:0.82rem;" onclick="App.deleteCourt(${court.id})">ลบ</button>
                         </div>
@@ -2959,6 +2983,12 @@
         renderSettings: function() {
             this.renderCourtList();
             this.updateShuttleDisplay();
+            // refresh countdown ทุก 1 นาที
+            if (!this._courtTimer) {
+                this._courtTimer = setInterval(() => {
+                    if (document.getElementById('court-list')) this.renderCourtList();
+                }, 60000);
+            }
         },
 
         updateCourtTime: function(courtId, field, value) {
