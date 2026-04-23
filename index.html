@@ -943,6 +943,57 @@
     </script>
 </head>
 <body>
+  <!-- Password Gate -->
+  <div id="pw-gate" style="display:none;position:fixed;inset:0;background:#1a2b47;
+    z-index:99999;display:flex;align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:20px;padding:2.5rem 2rem;max-width:320px;
+      width:90%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+      <div style="font-size:2.5rem;margin-bottom:0.5rem;">🔐</div>
+      <div style="font-size:1.2rem;font-weight:800;color:#1a2b47;margin-bottom:0.25rem;">ระบบจัดการสนาม</div>
+      <div style="font-size:0.85rem;color:#888;margin-bottom:1.5rem;">กรุณาใส่รหัสผ่านเพื่อเข้าใช้งาน</div>
+      <input type="password" id="pw-input" placeholder="รหัสผ่าน"
+        style="width:100%;padding:0.85rem;border:2px solid #e0e0e0;border-radius:10px;
+        font-size:1.1rem;text-align:center;letter-spacing:0.2em;margin-bottom:0.75rem;
+        outline:none;transition:border-color 0.2s;"
+        onkeydown="if(event.key==='Enter')checkPW()"
+        onfocus="this.style.borderColor='#00a8cc'"
+        onblur="this.style.borderColor='#e0e0e0'">
+      <div id="pw-error" style="color:#e74c3c;font-size:0.82rem;min-height:1.2em;margin-bottom:0.5rem;"></div>
+      <button onclick="checkPW()"
+        style="width:100%;padding:0.9rem;background:linear-gradient(135deg,#1a2b47,#00a8cc);
+        color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">
+        เข้าสู่ระบบ
+      </button>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const PW = '212540';
+      const KEY = 'bb_admin_auth';
+
+      function checkPW() {
+        const val = document.getElementById('pw-input').value;
+        if (val === PW) {
+          sessionStorage.setItem(KEY, '1');
+          document.getElementById('pw-gate').style.display = 'none';
+          document.getElementById('pw-input').value = '';
+        } else {
+          const errEl = document.getElementById('pw-error');
+          errEl.textContent = '❌ รหัสผ่านไม่ถูกต้อง';
+          document.getElementById('pw-input').value = '';
+          document.getElementById('pw-input').focus();
+          setTimeout(() => { errEl.textContent = ''; }, 2000);
+        }
+      }
+      window.checkPW = checkPW;
+
+      // ตรวจสอบทันทีที่โหลดหน้า
+      if (sessionStorage.getItem(KEY) !== '1') {
+        document.getElementById('pw-gate').style.display = 'flex';
+      }
+    })();
+  </script>
     <div class="toast-container" id="toast-container"></div>
 
     <header>
@@ -960,7 +1011,7 @@
         <button onclick="App.showView('active-matches')">สนามที่กำลังเล่น</button>
         <button onclick="App.showView('settings')">ตั้งค่า</button>
         <button onclick="App.showView('manager-tools')">หน้าผู้จัด</button>
-        <button onclick="window.open('display.html','_blank')" style="background:linear-gradient(135deg,#1a2b47,#00a8cc);color:white;border-radius:8px;">📺 หน้าจอสาธารณะ</button>
+        <button onclick="App.showView('summary')" style="background:linear-gradient(135deg,#27ae60,#1e8449);color:white;border-radius:8px;">📊 SUMMARY</button>
     </nav>
 
     <main class="container">
@@ -1375,12 +1426,13 @@
                     </div>
                 </form>
             </div>
+
         </section>
 
         <!-- MANAGER TOOLS VIEW -->
         <section id="manager-tools" class="view">
 
-            <!-- ส่งข้อความแจ้งเตือน -->
+                        <!-- ส่งข้อความแจ้งเตือน -->
             <div class="card">
                 <h2>📣 ส่งข้อความแจ้งเตือน</h2>
 
@@ -1711,6 +1763,8 @@
             matches: [],
             matchQueues: [],
             history: {},
+            playerPayMode: {},
+            priceSettings: {},
             shuttlecocks: {
                 newTotal: 0,
                 newInPlay: 0,
@@ -1784,6 +1838,8 @@
     function _fixFirebaseArrays(data) {
         if (!data || typeof data !== 'object') return data;
         const arrayFields = ['players', 'courts', 'matches', 'matchQueues', 'matchHistory'];
+        if (!data.playerPayMode) data.playerPayMode = {};
+        if (!data.priceSettings) data.priceSettings = {};
         arrayFields.forEach(field => {
             if (data[field] && !Array.isArray(data[field])) {
                 data[field] = Object.values(data[field]);
@@ -2184,6 +2240,10 @@
                     break;
                 case 'settings':
                     this.renderSettings();
+                    break;
+                case 'summary':
+                    this.loadPriceSettings();
+                    this.renderSummary();
                     break;
                 case 'manager-tools':
                     this.loadPaymentStatus();
@@ -3143,6 +3203,393 @@
             this.renderCheckInList();
             this.renderDashboard();
             showSuccess(`ยกเลิกเช็คอิน ${canUncheck.length} คนสำเร็จ`);
+        },
+
+        // ── Summary ──────────────────────────────────────────────────
+        savePriceSettings: function() {
+            const buffet    = parseFloat(document.getElementById('price-buffet')?.value) || 210;
+            const courtGame = parseFloat(document.getElementById('price-court-per-game')?.value) || 90;
+            const perGame   = parseFloat(document.getElementById('price-per-game')?.value) || 27;
+            const tubePr    = parseFloat(document.getElementById('shuttle-tube-price')?.value) || 960;
+            const perTube   = parseFloat(document.getElementById('shuttle-per-tube')?.value) || 12;
+            const used      = parseFloat(document.getElementById('shuttle-used')?.value) || 0;
+
+            // เก็บ court rows
+            const courtRows = [];
+            document.querySelectorAll('#court-cost-list > div').forEach(row => {
+                const price = parseFloat(row.querySelector('.court-price')?.value) || 170;
+                const hours = parseFloat(row.querySelector('.court-hours')?.value) || 3;
+                courtRows.push({ price, hours });
+            });
+
+            appState.priceSettings = { buffet, courtGame, perGame, tubePr, perTube, used, courtRows };
+            appState.paymentSettings = appState.paymentSettings || {};
+            appState.paymentSettings.price = buffet;
+            saveState();
+
+            const st = document.getElementById('price-save-status');
+            if (st) { st.textContent = '✅ บันทึกแล้ว'; st.style.color='#27ae60'; setTimeout(()=>st.textContent='',2000); }
+        },
+
+        loadPriceSettings: function() {
+            const s = appState.priceSettings || {};
+            const set = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) el.value = val; };
+            set('price-buffet',          s.buffet   || appState.paymentSettings?.price || 210);
+            set('price-court-per-game',  s.courtGame || 90);
+            set('price-per-game',        s.perGame   || 27);
+            set('shuttle-tube-price',    s.tubePr    || 960);
+            set('shuttle-per-tube',      s.perTube   || 12);
+            // restore court rows
+            if (s.courtRows && s.courtRows.length > 0) {
+                const list = document.getElementById('court-cost-list');
+                if (list) {
+                    list.innerHTML = '';
+                    this._courtCostRows = 0;
+                    s.courtRows.forEach(r => {
+                        this.addCourtCostRow(r.price, r.hours);
+                    });
+                }
+            } else {
+                this.initCostCalculator();
+            }
+            set('shuttle-used',          s.used      || 0);
+        },
+
+        renderCombinedPaymentList: function() {
+            const listEl = document.getElementById('combined-payment-list');
+            if (!listEl) return;
+            const checkedIn = (appState.players||[]).filter(p => p.isCheckedIn);
+            if (!checkedIn.length) {
+                listEl.innerHTML = '<div style="color:#aaa;font-size:0.85rem;padding:0.5rem;">ยังไม่มีผู้เล่นเช็คอิน</div>';
+                return;
+            }
+
+            const payments  = appState.payments  || {};
+            const payMode   = appState.playerPayMode || {};
+            const buffet    = parseFloat(document.getElementById('price-buffet')?.value) || 210;
+            const courtG    = parseFloat(document.getElementById('price-court-per-game')?.value) || 90;
+            const perG      = parseFloat(document.getElementById('price-per-game')?.value) || 27;
+
+            listEl.innerHTML = checkedIn.map(p => {
+                const mode   = payMode[p.id] || 'buffet';
+                const games  = this._countPlayerGamesToday(p.id);
+                const amt    = mode === 'buffet' ? buffet : courtG + perG * games;
+                const paid   = payments[p.id]?.paid;
+                const pending = payments[p.id]?.pending && !paid;
+
+                const bg     = paid ? 'rgba(39,174,96,0.08)' : pending ? 'rgba(230,126,34,0.08)' : '#fff';
+                const border = paid ? '#27ae60' : pending ? '#e67e22' : '#e0e0e0';
+
+                return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.55rem 0.85rem;
+                    background:${bg};border:1.5px solid ${border};border-radius:10px;flex-wrap:wrap;">
+
+                    <!-- ชื่อ + ยอด -->
+                    <div style="font-weight:700;min-width:80px;font-size:0.9rem;">${escapeHtml(p.name)}</div>
+                    <div style="font-size:0.85rem;color:#27ae60;font-weight:800;min-width:50px;">${amt}฿</div>
+
+                    <!-- เลือกโหมด -->
+                    <div style="display:flex;gap:0.3rem;flex:1;">
+                        <button onclick="App.setPayMode(${p.id},'buffet');App.renderCombinedPaymentList();App.renderSummary();"
+                            style="padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;cursor:pointer;min-height:unset;
+                            border:2px solid ${mode==='buffet'?'#1a2b47':'#ddd'};
+                            background:${mode==='buffet'?'#1a2b47':'#fff'};
+                            color:${mode==='buffet'?'#fff':'#888'};">
+                            บุฟเฟ่ ${buffet}฿
+                        </button>
+                        <button onclick="App.setPayMode(${p.id},'pergame');App.renderCombinedPaymentList();App.renderSummary();"
+                            style="padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;cursor:pointer;min-height:unset;
+                            border:2px solid ${mode==='pergame'?'#e67e22':'#ddd'};
+                            background:${mode==='pergame'?'#e67e22':'#fff'};
+                            color:${mode==='pergame'?'#fff':'#888'};">
+                            รายเกม (${games}ก = ${courtG+perG*games}฿)
+                        </button>
+                    </div>
+
+                    <!-- สถานะ + ปุ่มยืนยัน -->
+                    <div style="display:flex;align-items:center;gap:0.4rem;margin-left:auto;">
+                        ${paid
+                            ? `<span style="color:#27ae60;font-size:0.8rem;font-weight:700;">✅ จ่ายแล้ว</span>
+                               <button onclick="App.togglePayment(${p.id},false);App.renderCombinedPaymentList();App.renderSummary();"
+                                class="secondary" style="font-size:0.72rem;padding:2px 8px;min-height:unset;">ยกเลิก</button>`
+                            : pending
+                            ? `<span style="color:#e67e22;font-size:0.8rem;font-weight:700;">🔔 แจ้งจ่ายแล้ว</span>
+                               <button onclick="App.togglePayment(${p.id},true);App.renderCombinedPaymentList();App.renderSummary();"
+                                class="success" style="font-size:0.72rem;padding:2px 8px;min-height:unset;">✅ ยืนยัน</button>
+                               <button onclick="App.togglePayment(${p.id},false);App.renderCombinedPaymentList();App.renderSummary();"
+                                class="danger" style="font-size:0.72rem;padding:2px 8px;min-height:unset;">✕</button>`
+                            : `<button onclick="App.togglePayment(${p.id},true);App.renderCombinedPaymentList();App.renderSummary();"
+                                class="success" style="font-size:0.72rem;padding:2px 8px;min-height:unset;">✅ รับเงิน</button>`
+                        }
+                    </div>
+                </div>`;
+            }).join('');
+        },
+
+        renderPaymentModeList: function() {
+            const listEl = document.getElementById('payment-mode-list');
+            if (!listEl) return;
+            const checkedIn = (appState.players||[]).filter(p => p.isCheckedIn);
+            if (!checkedIn.length) { listEl.innerHTML = '<div style="color:#aaa;font-size:0.85rem;">ยังไม่มีผู้เล่นเช็คอิน</div>'; return; }
+
+            listEl.innerHTML = checkedIn.map(p => {
+                const mode = (appState.playerPayMode || {})[p.id] || 'buffet';
+                const games = this._countPlayerGamesToday(p.id);
+                const courtG = parseFloat(document.getElementById('price-court-per-game')?.value) || 90;
+                const perG   = parseFloat(document.getElementById('price-per-game')?.value) || 27;
+                const buffet = parseFloat(document.getElementById('price-buffet')?.value) || 210;
+                const gameAmt = courtG + perG * games;
+                const payments = appState.payments || {};
+                const paid = payments[p.id]?.paid;
+                const paidBg = paid ? 'rgba(39,174,96,0.08)' : '#fff';
+                const paidBorder = paid ? '#27ae60' : '#e0e0e0';
+
+                return `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.6rem 0.9rem;
+                    background:${paidBg};border:1px solid ${paidBorder};border-radius:10px;flex-wrap:wrap;">
+                    <div style="font-weight:700;min-width:80px;">${escapeHtml(p.name)}</div>
+                    <div style="display:flex;gap:0.4rem;">
+                        <button onclick="App.setPayMode(${p.id},'buffet')"
+                            style="padding:4px 12px;border-radius:20px;border:2px solid ${mode==='buffet'?'#1a2b47':'#ccc'};
+                            background:${mode==='buffet'?'#1a2b47':'#fff'};color:${mode==='buffet'?'#fff':'#555'};
+                            font-size:0.8rem;font-weight:700;cursor:pointer;min-height:unset;">
+                            บุฟเฟ่ ${buffet}฿
+                        </button>
+                        <button onclick="App.setPayMode(${p.id},'pergame')"
+                            style="padding:4px 12px;border-radius:20px;border:2px solid ${mode==='pergame'?'#e67e22':'#ccc'};
+                            background:${mode==='pergame'?'#e67e22':'#fff'};color:${mode==='pergame'?'#fff':'#555'};
+                            font-size:0.8rem;font-weight:700;cursor:pointer;min-height:unset;">
+                            รายเกม (${games}เกม = ${gameAmt}฿)
+                        </button>
+                    </div>
+                    ${paid ? '<span style="color:#27ae60;font-size:0.8rem;font-weight:700;">✅ จ่ายแล้ว</span>' : ''}
+                </div>`;
+            }).join('');
+        },
+
+        setPayMode: function(pid, mode) {
+            if (!appState.playerPayMode) appState.playerPayMode = {};
+            appState.playerPayMode[pid] = mode;
+            saveState();
+            this.renderPaymentModeList();
+        },
+
+        _countPlayerGamesToday: function(pid) {
+            const history = appState.history || {};
+            const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+            const ph = history[pid];
+            if (!ph?.games) return 0;
+            const games = Array.isArray(ph.games) ? ph.games : Object.values(ph.games);
+            return games.filter(g => g.endTime >= todayStart.getTime()).length;
+        },
+
+        _calcPlayerAmount: function(pid) {
+            const mode    = (appState.playerPayMode || {})[pid] || 'buffet';
+            const buffet  = parseFloat(document.getElementById('price-buffet')?.value) || 210;
+            const courtG  = parseFloat(document.getElementById('price-court-per-game')?.value) || 90;
+            const perG    = parseFloat(document.getElementById('price-per-game')?.value) || 27;
+            if (mode === 'buffet') return buffet;
+            const games = this._countPlayerGamesToday(pid);
+            return courtG + perG * games;
+        },
+
+        renderSummary: function() {
+            const players  = appState.players  || [];
+            const payments = appState.payments || {};
+            const history  = appState.history  || {};
+            const checkedIn = players.filter(p => p.isCheckedIn);
+
+            // ต้นทุนลูก
+            const tubePrice   = parseFloat(document.getElementById('shuttle-tube-price')?.value) || 960;
+            const perTube     = parseFloat(document.getElementById('shuttle-per-tube')?.value)   || 12;
+            const used        = parseFloat(document.getElementById('shuttle-used')?.value)       || 0;
+            const shuttleCost = (tubePrice / perTube) * used;
+
+            // ต้นทุนสนามจริง (บุฟเฟ่)
+            let courtCost = 0;
+            document.querySelectorAll('#court-cost-list > div').forEach(row => {
+                const p = parseFloat(row.querySelector('.court-price')?.value) || 0;
+                const h = parseFloat(row.querySelector('.court-hours')?.value) || 0;
+                courtCost += p * h;
+            });
+            const totalCost = courtCost + shuttleCost;
+
+            // นับเกมวันนี้
+            const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+            let gamesCount = 0;
+            const seen = new Set();
+            Object.values(history).forEach(ph => {
+                if (!ph?.games) return;
+                const games = Array.isArray(ph.games) ? ph.games : Object.values(ph.games);
+                games.forEach(g => {
+                    if (g.id && !seen.has(g.id) && g.endTime >= todayStart.getTime()) {
+                        seen.add(g.id); gamesCount++;
+                    }
+                });
+            });
+
+            // รายได้คาด (ทุกคน)
+            let estRevenue = 0;
+            checkedIn.forEach(p => { estRevenue += this._calcPlayerAmount(p.id); });
+
+            // รายได้จริง (ยืนยันแล้ว)
+            let realRevenue = 0, pendingRevenue = 0;
+            checkedIn.forEach(p => {
+                const amt = this._calcPlayerAmount(p.id);
+                if (payments[p.id]?.paid) realRevenue += amt;
+                else pendingRevenue += amt;
+            });
+
+            const paidCount   = checkedIn.filter(p => payments[p.id]?.paid).length;
+            const unpaidCount = checkedIn.length - paidCount;
+            const estProfit   = estRevenue  - totalCost;
+            const realProfit  = realRevenue - totalCost;
+
+            const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+            const setProfit = (id, val, hasCost) => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (!hasCost) { el.textContent = '—'; el.style.color='#888'; return; }
+                el.textContent = (val >= 0 ? '+' : '') + val.toLocaleString();
+                el.style.color = val >= 0 ? '#27ae60' : '#e74c3c';
+            };
+
+            set('sum-est-revenue',    estRevenue.toLocaleString());
+            set('sum-cost',           totalCost > 0 ? totalCost.toLocaleString() : '—');
+            set('sum-real-revenue',   realRevenue.toLocaleString());
+            set('sum-pending-revenue',pendingRevenue.toLocaleString());
+            set('sum-players',        checkedIn.length);
+            set('sum-games',          gamesCount);
+            set('sum-paid-count',     paidCount);
+            set('sum-unpaid-count',   unpaidCount);
+            setProfit('sum-est-profit',  estProfit,  totalCost > 0);
+            setProfit('sum-real-profit', realProfit, totalCost > 0);
+
+            // breakdown
+            const breakEl = document.getElementById('sum-breakdown');
+            if (breakEl && checkedIn.length > 0) {
+                const buffetCount  = checkedIn.filter(p => ((appState.playerPayMode||{})[p.id]||'buffet') === 'buffet').length;
+                const pergameCount = checkedIn.length - buffetCount;
+                breakEl.innerHTML = `
+                    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;">
+                        <span>👥 เช็คอิน <b>${checkedIn.length}</b> คน</span>
+                        <span>🟦 บุฟเฟ่ <b>${buffetCount}</b> คน</span>
+                        <span>🟧 รายเกม <b>${pergameCount}</b> คน</span>
+                        <span>💰 รายได้คาด <b style="color:#27ae60">${estRevenue.toLocaleString()}</b> ฿</span>
+                        ${courtCost > 0 ? `<span>🏟️ ค่าสนาม <b style="color:#e67e22">${courtCost.toLocaleString()}</b> ฿</span>` : ''}
+                        ${shuttleCost > 0 ? `<span>🏸 ค่าลูก <b style="color:#e67e22">${shuttleCost.toLocaleString()}</b> ฿</span>` : ''}
+                        ${totalCost > 0 ? `<span>📦 รวม <b style="color:#e74c3c">${totalCost.toLocaleString()}</b> ฿</span>` : ''}
+                    </div>`;
+            }
+
+            // อัพเดทรายการรวม
+            this.renderCombinedPaymentList();
+        },
+
+                _courtCostRows: 1,
+
+        initCostCalculator: function() {
+            // โหลด default 1 แถวสนาม
+            const list = document.getElementById('court-cost-list');
+            if (!list || list.children.length > 0) return;
+            this._courtCostRows = 0;
+            this.addCourtCostRow();
+        },
+
+        addCourtCostRow: function(defaultPrice, defaultHours) {
+            const list = document.getElementById('court-cost-list');
+            if (!list) return;
+            this._courtCostRows = (this._courtCostRows || 0) + 1;
+            const idx = this._courtCostRows;
+            const dp = defaultPrice || 170;
+            const dh = defaultHours || 3;
+            const row = document.createElement('div');
+            row.id = `court-row-${idx}`;
+            row.style.cssText = 'display:flex;gap:0.5rem;align-items:flex-end;flex-wrap:wrap;';
+            row.innerHTML = `
+                <div style="flex:2;min-width:100px;">
+                    <label style="font-size:0.8rem;font-weight:600;">ราคา/ชม (บาท):</label>
+                    <input type="number" class="court-price" value="${dp}" min="0"
+                        style="width:100%;padding:0.65rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;"
+                        oninput="App.calcCost()">
+                </div>
+                <div style="flex:2;min-width:80px;">
+                    <label style="font-size:0.8rem;font-weight:600;">จำนวนชั่วโมง:</label>
+                    <input type="number" class="court-hours" value="${dh}" min="0" step="0.5"
+                        style="width:100%;padding:0.65rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;"
+                        oninput="App.calcCost()">
+                </div>
+                <div style="flex:1;min-width:60px;text-align:center;">
+                    <label style="font-size:0.8rem;font-weight:600;">รวม:</label>
+                    <div class="court-subtotal" style="padding:0.65rem 0;font-weight:700;color:#1a2b47;font-size:1rem;">510</div>
+                </div>
+                ${idx > 1 ? `<button onclick="App.removeCourtRow(${idx})" class="danger"
+                    style="padding:0.5rem 0.75rem;min-height:unset;font-size:0.85rem;align-self:flex-end;margin-bottom:2px;">✕</button>` : ''}
+            `;
+            list.appendChild(row);
+            this.calcCost();
+        },
+
+        removeCourtRow: function(idx) {
+            const row = document.getElementById(`court-row-${idx}`);
+            if (row) row.remove();
+            this.calcCost();
+        },
+
+        calcCost: function() {
+            // คำนวณต้นทุนสนาม
+            let courtTotal = 0;
+            document.querySelectorAll('#court-cost-list > div').forEach(row => {
+                const price = parseFloat(row.querySelector('.court-price')?.value) || 0;
+                const hours = parseFloat(row.querySelector('.court-hours')?.value) || 0;
+                const sub = price * hours;
+                const subtotalEl = row.querySelector('.court-subtotal');
+                if (subtotalEl) subtotalEl.textContent = sub.toLocaleString();
+                courtTotal += sub;
+            });
+
+            // ต้นทุนลูก
+            const tubePrice  = parseFloat(document.getElementById('shuttle-tube-price')?.value) || 960;
+            const perTube    = parseFloat(document.getElementById('shuttle-per-tube')?.value)   || 12;
+            const used       = parseFloat(document.getElementById('shuttle-used')?.value)       || 0;
+            const pricePerBall = tubePrice / perTube;
+            const shuttleTotal = pricePerBall * used;
+
+            const grandTotal = courtTotal + shuttleTotal;
+            const playerCount = (appState.players || []).filter(p => p.isCheckedIn).length;
+            const perPerson  = playerCount > 0 ? Math.ceil(grandTotal / playerCount) : 0;
+
+            // อัพเดท UI
+            const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+            set('cost-court-total',   courtTotal.toLocaleString() + ' ฿');
+            set('cost-shuttle-total', shuttleTotal.toLocaleString() + ' ฿');
+            set('cost-grand-total',   grandTotal.toLocaleString() + ' ฿');
+            set('cost-player-count',  playerCount);
+            set('cost-per-person',    perPerson);
+
+            return perPerson;
+        },
+
+        applyCostPrice: function() {
+            // ใช้ราคาจาก sum-price-input
+            const inp = document.getElementById('sum-price-input');
+            const price = parseFloat(inp?.value) || this.calcCost();
+            if (price <= 0) {
+                showError('กรุณากรอกราคาต่อหัวก่อน');
+                return;
+            }
+            if (!appState.paymentSettings) appState.paymentSettings = {};
+            appState.paymentSettings.price = price;
+            saveState();
+
+            const priceInput = document.getElementById('payment-price');
+            if (priceInput) priceInput.value = price;
+
+            const statusEl = document.getElementById('cost-calc-status');
+            if (statusEl) {
+                statusEl.textContent = `✅ อัพเดทราคาเป็น ${perPerson} บาท/คน แล้ว`;
+                statusEl.style.color = '#27ae60';
+                setTimeout(() => { statusEl.textContent = ''; }, 3000);
+            }
+            showSuccess(`ราคาต่อหัว ${perPerson} บาท — QR พร้อมเพย์อัพเดทแล้ว`);
         },
 
         resetAllCheckIns: function() {
@@ -5608,6 +6055,179 @@ setInterval(updateWaitBadgeColors,1000);
 </script>
 
 <!-- ===== PUBLIC DISPLAY OVERLAY ===== -->
+<!-- SUMMARY VIEW -->
+<section id="summary" class="view" style="padding:1.5rem 0;">
+  <div class="container">
+
+    <!-- ── 1. ตั้งค่าราคา ── -->
+    <div class="card">
+      <h2>⚙️ ตั้งค่าราคา</h2>
+
+      <!-- บุฟเฟ่ -->
+      <div style="background:#f0f9ff;border:2px solid #00a8cc;border-radius:12px;padding:1.1rem;margin-bottom:1.25rem;">
+        <div style="font-size:0.82rem;font-weight:800;color:#00a8cc;margin-bottom:0.75rem;letter-spacing:0.04em;">🍽️ โหมดบุฟเฟ่</div>
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+          <div style="flex:1;min-width:140px;">
+            <label style="font-size:0.82rem;font-weight:600;">💵 ราคาต่อหัว (บาท):</label>
+            <input type="number" id="price-buffet" value="210" min="0"
+              style="width:100%;padding:0.7rem;border:1px solid #bee3f8;border-radius:8px;font-size:1.2rem;font-weight:800;color:#1a2b47;">
+          </div>
+          <div style="flex:2;min-width:200px;">
+            <div style="font-size:0.78rem;color:#555;line-height:1.6;">
+              ต้นทุนจริง = ค่าสนาม 170฿/ชม × ชั่วโมง + ค่าลูก<br>
+              <span style="color:#888;">คำนวณกำไรจากต้นทุนจริงด้านล่าง</span>
+            </div>
+          </div>
+        </div>
+        <!-- ต้นทุนจริงบุฟเฟ่ -->
+        <div style="margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #bee3f8;">
+          <div style="font-size:0.78rem;font-weight:700;color:#555;margin-bottom:0.5rem;">📐 ต้นทุนจริง (คำนวณกำไร)</div>
+          <div id="court-cost-list" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.5rem;"></div>
+          <button onclick="App.addCourtCostRow()" class="secondary" style="font-size:0.78rem;padding:3px 10px;min-height:unset;">➕ เพิ่มสนาม</button>
+        </div>
+      </div>
+
+      <!-- รายเกม -->
+      <div style="background:#fff8f0;border:2px solid #e67e22;border-radius:12px;padding:1.1rem;margin-bottom:1.25rem;">
+        <div style="font-size:0.82rem;font-weight:800;color:#e67e22;margin-bottom:0.75rem;letter-spacing:0.04em;">🎮 โหมดรายเกม (ที่เก็บจากผู้เล่น ≠ ต้นทุนจริง)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+          <div style="flex:1;min-width:140px;">
+            <label style="font-size:0.82rem;font-weight:600;">🏟️ ค่าสนาม/เกม (บาท):</label>
+            <input type="number" id="price-court-per-game" value="90" min="0"
+              style="width:100%;padding:0.7rem;border:1px solid #fad7a0;border-radius:8px;font-size:1rem;">
+          </div>
+          <div style="flex:1;min-width:140px;">
+            <label style="font-size:0.82rem;font-weight:600;">🎮 ค่าเกม/คน/เกม (บาท):</label>
+            <input type="number" id="price-per-game" value="27" min="0"
+              style="width:100%;padding:0.7rem;border:1px solid #fad7a0;border-radius:8px;font-size:1rem;">
+          </div>
+        </div>
+        <div style="font-size:0.78rem;color:#888;margin-top:0.5rem;">
+          ตัวอย่าง: เล่น 3 เกม = 90 + 27×3 = <b style="color:#e67e22;">171 บาท</b>
+        </div>
+      </div>
+
+      <!-- ลูกแบด (ต้นทุนร่วม) -->
+      <div style="background:#f8f9fa;border-radius:10px;padding:1rem;margin-bottom:1rem;">
+        <div style="font-size:0.82rem;font-weight:700;color:#555;margin-bottom:0.6rem;">🏸 ต้นทุนลูกแบด (ใช้คำนวณกำไรทุกโหมด)</div>
+        <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:flex-end;">
+          <div style="flex:1;min-width:110px;">
+            <label style="font-size:0.78rem;font-weight:600;">ราคาต่อหลอด:</label>
+            <input type="number" id="shuttle-tube-price" value="960" min="0"
+              style="width:100%;padding:0.65rem;border:1px solid #ced4da;border-radius:8px;font-size:0.95rem;">
+          </div>
+          <div style="flex:1;min-width:100px;">
+            <label style="font-size:0.78rem;font-weight:600;">ลูกต่อหลอด:</label>
+            <input type="number" id="shuttle-per-tube" value="12" min="1"
+              style="width:100%;padding:0.65rem;border:1px solid #ced4da;border-radius:8px;font-size:0.95rem;">
+          </div>
+          <div style="flex:1;min-width:100px;">
+            <label style="font-size:0.78rem;font-weight:600;">ใช้ไปกี่ลูก:</label>
+            <input type="number" id="shuttle-used" value="0" min="0"
+              style="width:100%;padding:0.65rem;border:1px solid #ced4da;border-radius:8px;font-size:0.95rem;">
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+        <button onclick="App.savePriceSettings()" class="success" style="flex:1;min-height:42px;">
+          💾 บันทึกราคา
+        </button>
+        <button onclick="App.applyCostPrice()" class="warning" style="flex:1;min-height:42px;">
+          ✅ อัพเดท QR พร้อมเพย์ (บุฟเฟ่)
+        </button>
+      </div>
+      <div id="price-save-status" style="font-size:0.82rem;color:#888;margin-top:0.5rem;min-height:1.2em;text-align:center;"></div>
+    </div>
+
+    <!-- ── 2. รายการชำระเงิน (รวมโหมด + สถานะ) ── -->
+    <div class="card">
+      <h2>💳 รายการชำระเงิน</h2>
+      <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">เลือกโหมดจ่าย และกด ✅ ยืนยันรับเงินได้ในแถวเดียว</p>
+      <div id="combined-payment-list" style="display:flex;flex-direction:column;gap:0.4rem;max-height:500px;overflow-y:auto;"></div>
+      <div style="display:flex;gap:0.75rem;margin-top:0.75rem;flex-wrap:wrap;">
+        <button onclick="App.renderCombinedPaymentList()" class="secondary" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:unset;">🔄 รีเฟรช</button>
+        <button onclick="App.resetAllPayments()" class="danger" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:unset;">🗑️ เคลียร์ทั้งหมด</button>
+      </div>
+    </div>
+
+    <!-- ── 3. สรุป ── -->
+    <div class="card">
+      <h2>📊 สรุปรายวัน</h2>
+
+      <!-- กำไรแบบคาด -->
+      <div style="margin-bottom:0.5rem;font-size:0.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.05em;">📐 แบบคาด (คนเช็คอินทั้งหมด)</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.6rem;margin-bottom:1.25rem;">
+        <div style="background:#e8f5e9;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#388e3c;font-weight:700;">💰 รายได้คาด</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#27ae60;" id="sum-est-revenue">0</div>
+          <div style="font-size:0.7rem;color:#888;">บาท</div>
+        </div>
+        <div style="background:#fff3e0;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#e65100;font-weight:700;">💸 ต้นทุน</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#e67e22;" id="sum-cost">—</div>
+          <div style="font-size:0.7rem;color:#888;">บาท</div>
+        </div>
+        <div style="background:#e3f2fd;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#1565c0;font-weight:700;">📈 กำไรคาด</div>
+          <div style="font-size:1.5rem;font-weight:900;" id="sum-est-profit">—</div>
+          <div style="font-size:0.7rem;color:#888;">บาท</div>
+        </div>
+      </div>
+
+      <!-- กำไรแบบจริง -->
+      <div style="margin-bottom:0.5rem;font-size:0.78rem;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.05em;">✅ แบบจริง (เฉพาะคนที่ยืนยันรับเงินแล้ว)</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.6rem;margin-bottom:1.25rem;">
+        <div style="background:#e8f5e9;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#388e3c;font-weight:700;">💰 รายได้จริง</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#27ae60;" id="sum-real-revenue">0</div>
+          <div style="font-size:0.7rem;color:#888;">บาท</div>
+        </div>
+        <div style="background:#fce4ec;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#880e4f;font-weight:700;">⏳ รอรับเงิน</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#e91e63;" id="sum-pending-revenue">0</div>
+          <div style="font-size:0.7rem;color:#888;">บาท</div>
+        </div>
+        <div style="background:#e3f2fd;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#1565c0;font-weight:700;">📈 กำไรจริง</div>
+          <div style="font-size:1.5rem;font-weight:900;" id="sum-real-profit">—</div>
+          <div style="font-size:0.7rem;color:#888;">บาท</div>
+        </div>
+      </div>
+
+      <!-- stats -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:0.6rem;margin-bottom:1.25rem;">
+        <div style="background:#f3e5f5;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#6a1b9a;font-weight:700;">👥 เช็คอิน</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#8e24aa;" id="sum-players">0</div>
+        </div>
+        <div style="background:#e8eaf6;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#283593;font-weight:700;">🏸 เกมวันนี้</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#3949ab;" id="sum-games">0</div>
+        </div>
+        <div style="background:#e8f5e9;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#1b5e20;font-weight:700;">✅ จ่ายแล้ว</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#2e7d32;" id="sum-paid-count">0</div>
+        </div>
+        <div style="background:#fff8e1;border-radius:10px;padding:0.9rem;text-align:center;">
+          <div style="font-size:0.72rem;color:#e65100;font-weight:700;">❌ ยังไม่จ่าย</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#f57c00;" id="sum-unpaid-count">0</div>
+        </div>
+      </div>
+
+      <!-- breakdown -->
+      <div id="sum-breakdown" style="background:#f8f9fa;border-radius:10px;padding:1rem;margin-bottom:1rem;font-size:0.88rem;color:#555;"></div>
+
+      <button onclick="App.renderSummary()" class="success" style="width:100%;padding:0.9rem;">
+        📊 คำนวณสรุป
+      </button>
+      <div id="cost-calc-status" style="font-size:0.85rem;color:#888;text-align:center;margin-top:0.5rem;min-height:1.2em;"></div>
+    </div>
+
+
+
+  </div>
+</section>
 <div id="public-display-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:#0a0f1e;font-family:'Segoe UI',sans-serif;overflow:hidden;">
 
   <!-- Animated background -->
