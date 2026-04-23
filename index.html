@@ -1554,6 +1554,7 @@
 
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:0.75rem;">
                     <button onclick="App.checkConnectedDevices()">📱 ดูเครื่องที่เชื่อมต่อ</button>
+                    <button class="warning" onclick="App.clearStaleTokens()">🧹 ลบ token เก่า (&gt;30 นาที)</button>
                     <button class="danger" onclick="App.clearAllPushTokens()">🔕 เคลียร์ token ทั้งหมด</button>
                     <button class="secondary" onclick="App.clearAlertState()">🔄 รีเซ็ต alert state</button>
                 </div>
@@ -3008,8 +3009,12 @@
             statusEl.style.color = '#e67e22';
 
             try {
-                const snap = await firebase.database().ref('pushTokens').once('value');
-                const data = snap.val();
+                const [tokenSnap, presenceSnap] = await Promise.all([
+                    firebase.database().ref('pushTokens').once('value'),
+                    firebase.database().ref('presence').once('value'),
+                ]);
+                const data     = tokenSnap.val();
+                const presence = presenceSnap.val() || {};
 
                 if (!data) {
                     statusEl.textContent = '📭 ไม่มีเครื่องเชื่อมต่ออยู่';
@@ -3048,8 +3053,20 @@
                         deviceCount = devices.length;
                         deviceRows = devices.map(([devId, d]) => {
                             const ago = d.ts ? Math.floor((now - d.ts) / 60000) : null;
+                            const isStale = ago !== null && ago > 30;
                             const agoStr = ago !== null ? (ago < 1 ? 'เพิ่งเชื่อมต่อ' : `${ago} นาทีที่แล้ว`) : '';
-                            return `<span style="font-size:0.72rem;color:#aaa;margin-left:1rem;">📲 ${devId.slice(0,8)}... — ${agoStr}</span>`;
+                            // เช็ค presence
+                            const isOnline = !!(presence[pidStr] && presence[pidStr][devId]?.online);
+                            const hasTokenButOffline = !isOnline; // มี token แต่ offline = น่าสงสัย
+                            const onlineBadge = isOnline
+                                ? `<span style="background:#27ae60;color:#fff;font-size:0.62rem;font-weight:700;padding:1px 5px;border-radius:6px;">🟢 Online</span>`
+                                : `<span style="background:#e74c3c;color:#fff;font-size:0.62rem;font-weight:700;padding:1px 5px;border-radius:6px;">🔴 Offline — token ค้าง</span>`;
+                            return `<div style="display:flex;align-items:center;gap:0.4rem;margin-top:2px;">
+                                <span style="font-size:0.72rem;color:${hasTokenButOffline?'#e74c3c':'#aaa'};">📲 ${devId.slice(0,8)}... — ${agoStr}</span>
+                                ${onlineBadge}
+                                ${hasTokenButOffline ? `<button onclick="firebase.database().ref('pushTokens/${pidStr}/${devId}').remove();App.checkConnectedDevices();"
+                                    class="danger" style="font-size:0.65rem;padding:1px 6px;min-height:unset;">🗑️ ลบ</button>` : ''}
+                            </div>`;
                         }).join('');
                     }
 
@@ -3079,6 +3096,35 @@
 
             } catch(e) {
                 statusEl.textContent = '❌ โหลดไม่สำเร็จ';
+                statusEl.style.color = '#e74c3c';
+            }
+        },
+
+        clearStaleTokens: async function() {
+            const statusEl = document.getElementById('clear-token-status');
+            statusEl.textContent = '⏳ กำลังตรวจสอบ...';
+            statusEl.style.color = '#e67e22';
+            try {
+                const snap = await firebase.database().ref('pushTokens').once('value');
+                const data = snap.val();
+                if (!data) { statusEl.textContent = '📭 ไม่มี token'; statusEl.style.color='#888'; return; }
+                const now = Date.now();
+                const TTL = 30 * 60 * 1000;
+                const removes = [];
+                Object.entries(data).forEach(([pid, deviceTokens]) => {
+                    if (typeof deviceTokens === 'object' && deviceTokens.token) return;
+                    Object.entries(deviceTokens || {}).forEach(([devId, d]) => {
+                        if (d?.ts && (now - d.ts) > TTL) {
+                            removes.push(firebase.database().ref(`pushTokens/${pid}/${devId}`).remove());
+                        }
+                    });
+                });
+                await Promise.all(removes);
+                statusEl.textContent = removes.length > 0 ? `✅ ลบ token เก่าแล้ว ${removes.length} รายการ` : '✅ ไม่มี token เก่า';
+                statusEl.style.color = '#27ae60';
+                this.checkConnectedDevices();
+            } catch(e) {
+                statusEl.textContent = '❌ เกิดข้อผิดพลาด';
                 statusEl.style.color = '#e74c3c';
             }
         },
