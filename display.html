@@ -1113,15 +1113,7 @@
 
         <!-- Buttons -->
         <div id="payment-notify-area">
-          <!-- Upload Slip -->
-          <label style="display:flex;align-items:center;justify-content:center;gap:8px;
-            background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;
-            border-radius:14px;padding:1rem;font-size:1rem;font-weight:700;
-            cursor:pointer;box-shadow:0 4px 15px rgba(39,174,96,0.3);margin-bottom:0.6rem;">
-            📎 อัพโหลดสลิป (ยืนยันอัตโนมัติ)
-            <input type="file" id="slip-upload" accept="image/*" style="display:none;"
-              onchange="uploadSlip(this)">
-          </label>
+
           <button id="btn-notify-paid" onclick="notifyPaid()"
             style="background:#f0f0f0;color:#666;border:none;
             border-radius:14px;padding:0.85rem;font-size:0.9rem;font-weight:600;
@@ -2166,7 +2158,7 @@
         // ส่งไปให้ Gemini อ่านสลิป (ฟรี 1,500 ครั้ง/วัน)
         const GEMINI_KEY = 'AIzaSyA9RazQ5RyDaYDF7ELv5gzeAYUJ9ccUkLU';
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${GEMINI_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-8b:generateContent?key=${GEMINI_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2303,7 +2295,6 @@
           statusEl.style.color = '#e67e22';
         }
         updatePayBtn();
-        }
       } catch(err) {
         statusEl.textContent = `❌ ${err.message || 'เกิดข้อผิดพลาด'}`;
         statusEl.style.color = '#e74c3c';
