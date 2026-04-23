@@ -3553,6 +3553,8 @@
         calcCost: function() {
             // คำนวณต้นทุนสนาม
             let courtTotal = 0;
+            let totalHours = 0;
+            let courtCount = 0;
             document.querySelectorAll('#court-cost-list > div').forEach(row => {
                 const price = parseFloat(row.querySelector('.court-price')?.value) || 0;
                 const hours = parseFloat(row.querySelector('.court-hours')?.value) || 0;
@@ -3560,7 +3562,18 @@
                 const subtotalEl = row.querySelector('.court-subtotal');
                 if (subtotalEl) subtotalEl.textContent = sub.toLocaleString();
                 courtTotal += sub;
+                totalHours += hours;
+                courtCount++;
             });
+
+            // อัพเดท summary bar
+            const summaryEl = document.getElementById('court-cost-summary');
+            if (summaryEl && courtCount > 0) {
+                summaryEl.style.display = 'block';
+                summaryEl.innerHTML = `🏟️ <b>${courtCount} สนาม</b> &nbsp;·&nbsp; ⏱ รวม <b>${totalHours} ชม.</b> &nbsp;·&nbsp; 💰 ค่าสนามรวม <b style="color:#e67e22;">${courtTotal.toLocaleString()} ฿</b>`;
+            } else if (summaryEl) {
+                summaryEl.style.display = 'none';
+            }
 
             // ต้นทุนลูก
             const tubePrice  = parseFloat(document.getElementById('shuttle-tube-price')?.value) || 960;
@@ -6102,6 +6115,7 @@ setInterval(updateWaitBadgeColors,1000);
           <div style="font-size:0.78rem;font-weight:700;color:#555;margin-bottom:0.5rem;">📐 ต้นทุนจริง (คำนวณกำไร)</div>
           <div id="court-cost-list" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.5rem;"></div>
           <button onclick="App.addCourtCostRow()" class="secondary" style="font-size:0.78rem;padding:3px 10px;min-height:unset;">➕ เพิ่มสนาม</button>
+          <div id="court-cost-summary" style="margin-top:0.5rem;padding:0.5rem 0.75rem;background:#e8f4fd;border-radius:8px;font-size:0.82rem;color:#1a2b47;display:none;"></div>
         </div>
       </div>
 
