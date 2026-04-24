@@ -3347,7 +3347,10 @@
                 courtRows.push({ price, hours });
             });
 
-            appState.priceSettings = { buffet, courtGame, perGame, tubePr, perTube, used, courtRows };
+            // เก็บ extra presets (อ่านจาก state ที่อัปเดตแบบ live อยู่แล้ว)
+            const extraPresets = this.getExtraPresets();
+
+            appState.priceSettings = { buffet, courtGame, perGame, tubePr, perTube, used, courtRows, extraPresets };
             appState.paymentSettings = appState.paymentSettings || {};
             appState.paymentSettings.price = buffet;
 
@@ -3382,6 +3385,8 @@
                 } else {
                     this.initCostCalculator();
                 }
+                // restore extra presets
+                this.renderExtraPresetList();
                 this.calcCost();
             });
         },
@@ -3426,12 +3431,19 @@
                 return getOrder(a) - getOrder(b);
             });
 
+            // helper: คนมีค่าเสริมไหม
+            const hasExtras = (pid) => {
+                const arr = (appState.playerPayExtra || {})[pid];
+                return Array.isArray(arr) && arr.some(e => (parseFloat(e?.amount) || 0) > 0);
+            };
+
             // กรอง
             const filtered = sorted.filter(p => {
                 const pay = payments[p.id];
                 if (filter === 'pending') return pay?.pending && !pay?.paid;
                 if (filter === 'unpaid')  return !pay?.paid && !pay?.pending;
                 if (filter === 'paid')    return pay?.paid;
+                if (filter === 'extra')   return hasExtras(p.id);
                 return true;
             });
 
@@ -3439,6 +3451,7 @@
             const cntPending = sorted.filter(p => payments[p.id]?.pending && !payments[p.id]?.paid).length;
             const cntUnpaid  = sorted.filter(p => !payments[p.id]?.paid && !payments[p.id]?.pending).length;
             const cntPaid    = sorted.filter(p => payments[p.id]?.paid).length;
+            const cntExtra   = sorted.filter(p => hasExtras(p.id)).length;
 
             // filter bar
             const filterBar = document.getElementById('payment-filter-bar');
@@ -3454,7 +3467,8 @@
                     btn('all',     'ทั้งหมด',       sorted.length, '#1a2b47') +
                     btn('pending', '🔔 แจ้งแล้ว',   cntPending,    '#e67e22') +
                     btn('unpaid',  '❌ ยังไม่จ่าย', cntUnpaid,     '#e74c3c') +
-                    btn('paid',    '✅ จ่ายแล้ว',   cntPaid,       '#27ae60');
+                    btn('paid',    '✅ จ่ายแล้ว',   cntPaid,       '#27ae60') +
+                    btn('extra',   '💰 มีค่าเสริม', cntExtra,      '#e91e63');
             }
 
             if (!filtered.length) {
@@ -3463,14 +3477,62 @@
             }
 
             listEl.innerHTML = filtered.map(p => {
-                const mode   = payMode[p.id] || 'buffet';
-                const games  = this._countPlayerGamesToday(p.id);
-                const amt    = mode === 'buffet' ? buffet : courtG + perG * games;
-                const paid   = payments[p.id]?.paid;
+                const mode    = payMode[p.id] || 'buffet';
+                const games   = PlayerUtils.getGameCount(p.id);
+                const base    = mode === 'pergame' ? courtG + perG * games : buffet;
+                const extras  = Array.isArray((appState.playerPayExtra || {})[p.id]) ? appState.playerPayExtra[p.id] : [];
+                const extraSum = extras.reduce((s, e) => s + (parseFloat(e?.amount) || 0), 0);
+                const amt     = base + extraSum;
+                const paid    = payments[p.id]?.paid;
                 const pending = payments[p.id]?.pending && !paid;
 
                 const bg     = paid ? 'rgba(39,174,96,0.08)' : pending ? 'rgba(230,126,34,0.08)' : '#fff';
                 const border = paid ? '#27ae60' : pending ? '#e67e22' : '#e0e0e0';
+
+                const presets = this.getExtraPresets();
+
+                // แถวค่าเสริม: preset chips + custom extras + ปุ่มเพิ่ม
+                const presetChips = presets.map((pr, prIdx) => {
+                    const active = this._isPresetActive(p.id, prIdx);
+                    return `<button onclick="App.togglePlayerExtraPreset(${p.id}, ${prIdx});App.renderCombinedPaymentList();App.renderSummary();"
+                        title="${active ? 'คลิกเพื่อเอาออก' : 'คลิกเพื่อเพิ่ม'}"
+                        style="padding:2px 9px;border-radius:14px;font-size:0.72rem;font-weight:700;cursor:pointer;min-height:unset;
+                        border:1.5px solid ${active ? '#e91e63' : '#f8bbd0'};
+                        background:${active ? '#e91e63' : '#fff'};
+                        color:${active ? '#fff' : '#e91e63'};">
+                        ${active ? '✓' : '+'} ${escapeHtml(pr.label || '?')} ${pr.amount||0}฿
+                    </button>`;
+                }).join('');
+
+                // custom extras (ที่ไม่ได้มาจาก preset → แสดงเป็น inline input ให้แก้ได้)
+                const customExtras = extras.map((ex, exIdx) => {
+                    if (typeof ex.presetIdx === 'number') return ''; // preset ไม่แสดงตรงนี้ (แสดงผ่าน chip แทน)
+                    return `<div style="display:flex;gap:0.25rem;align-items:center;background:#fff;border:1px dashed #f8bbd0;border-radius:14px;padding:1px 4px 1px 8px;">
+                        <input type="text" value="${escapeHtml(ex.label || '')}" placeholder="ชื่อ"
+                            onchange="App.updatePlayerExtra(${p.id}, ${exIdx}, 'label', this.value);App.renderCombinedPaymentList();App.renderSummary();"
+                            style="width:70px;padding:2px 4px;border:none;font-size:0.72rem;background:transparent;outline:none;">
+                        <input type="number" value="${ex.amount || 0}" min="0"
+                            onchange="App.updatePlayerExtra(${p.id}, ${exIdx}, 'amount', this.value);App.renderCombinedPaymentList();App.renderSummary();"
+                            style="width:48px;padding:2px 4px;border:none;font-size:0.72rem;font-weight:800;color:#e91e63;background:transparent;outline:none;">
+                        <span style="font-size:0.7rem;color:#e91e63;">฿</span>
+                        <button onclick="App.removePlayerExtra(${p.id}, ${exIdx});"
+                            style="padding:0 5px;border:none;background:transparent;color:#e74c3c;cursor:pointer;font-size:0.75rem;font-weight:700;">✕</button>
+                    </div>`;
+                }).join('');
+
+                const extrasRow = (presets.length || extras.length) ? `
+                    <div style="display:flex;gap:0.35rem;align-items:center;flex-wrap:wrap;width:100%;margin-top:0.35rem;padding:0.4rem 0.5rem;background:rgba(233,30,99,0.06);border-radius:8px;">
+                        <span style="font-size:0.72rem;color:#e91e63;font-weight:700;">💰 ค่าเสริม:</span>
+                        ${presetChips}
+                        ${customExtras}
+                        <button onclick="App.addPlayerExtraCustom(${p.id});"
+                            title="เพิ่มค่าเสริมแบบพิมพ์เอง"
+                            style="padding:2px 9px;border-radius:14px;font-size:0.72rem;font-weight:700;cursor:pointer;min-height:unset;
+                            border:1.5px dashed #aaa;background:#fff;color:#666;">
+                            ➕ custom
+                        </button>
+                        ${extraSum > 0 ? `<span style="margin-left:auto;font-size:0.75rem;color:#e91e63;font-weight:800;">+${extraSum}฿</span>` : ''}
+                    </div>` : '';
 
                 return `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.55rem 0.85rem;
                     background:${bg};border:1.5px solid ${border};border-radius:10px;flex-wrap:wrap;">
@@ -3480,7 +3542,7 @@
                     <div style="font-size:0.85rem;color:#27ae60;font-weight:800;min-width:50px;">${amt}฿</div>
 
                     <!-- เลือกโหมด -->
-                    <div style="display:flex;gap:0.3rem;flex:1;">
+                    <div style="display:flex;gap:0.3rem;flex:1;flex-wrap:wrap;">
                         <button onclick="App.setPayMode(${p.id},'buffet');App.renderCombinedPaymentList();App.renderSummary();"
                             style="padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;cursor:pointer;min-height:unset;
                             border:2px solid ${mode==='buffet'?'#1a2b47':'#ddd'};
@@ -3513,6 +3575,7 @@
                                 class="success" style="font-size:0.72rem;padding:2px 8px;min-height:unset;">✅ รับเงิน</button>`
                         }
                     </div>
+                    ${extrasRow}
                 </div>`;
             }).join('');
         },
@@ -3525,7 +3588,7 @@
 
             listEl.innerHTML = checkedIn.map(p => {
                 const mode = (appState.playerPayMode || {})[p.id] || 'buffet';
-                const games = this._countPlayerGamesToday(p.id);
+                const games = PlayerUtils.getGameCount(p.id);
                 const courtG = parseFloat(document.getElementById('price-court-per-game')?.value) || 90;
                 const perG   = parseFloat(document.getElementById('price-per-game')?.value) || 27;
                 const buffet = parseFloat(document.getElementById('price-buffet')?.value) || 210;
@@ -3559,11 +3622,74 @@
 
         setPayMode: function(pid, mode) {
             if (!appState.playerPayMode) appState.playerPayMode = {};
+            // รองรับเฉพาะ 2 โหมดหลัก (ค่าเสริมแยกเป็น playerPayExtra array)
+            if (mode !== 'buffet' && mode !== 'pergame') mode = 'buffet';
             appState.playerPayMode[pid] = mode;
             saveState();
             this.renderPaymentModeList();
         },
 
+        // ==================== PER-PLAYER EXTRAS (array) ====================
+        _getPlayerExtras: function(pid) {
+            if (!appState.playerPayExtra) appState.playerPayExtra = {};
+            if (!Array.isArray(appState.playerPayExtra[pid])) appState.playerPayExtra[pid] = [];
+            return appState.playerPayExtra[pid];
+        },
+
+        // ใช้ preset → toggle เข้า/ออก (ถ้ามีอยู่แล้ว = ลบออก, ถ้ายังไม่มี = เพิ่ม)
+        togglePlayerExtraPreset: function(pid, presetIdx) {
+            const presets = this.getExtraPresets();
+            const pr = presets[presetIdx];
+            if (!pr) return;
+            const extras = this._getPlayerExtras(pid);
+            // หา index ของ extra ที่มาจาก preset เดียวกัน (ใช้ label+amount จับคู่)
+            const matchIdx = extras.findIndex(e => e.presetIdx === presetIdx || (e.label === (pr.label||'') && e.amount === (pr.amount||0)));
+            if (matchIdx >= 0) {
+                extras.splice(matchIdx, 1); // toggle off
+            } else {
+                extras.push({ label: pr.label || '', amount: pr.amount || 0, presetIdx });
+            }
+            appState.playerPayExtra[pid] = extras;
+            saveState();
+        },
+
+        addPlayerExtraCustom: function(pid) {
+            const extras = this._getPlayerExtras(pid);
+            extras.push({ label: '', amount: 0 }); // เพิ่มแถวว่างให้ผู้ใช้กรอก
+            appState.playerPayExtra[pid] = extras;
+            saveState();
+            this.renderCombinedPaymentList();
+            this.renderSummary();
+        },
+
+        updatePlayerExtra: function(pid, extraIdx, key, val) {
+            const extras = this._getPlayerExtras(pid);
+            if (!extras[extraIdx]) return;
+            if (key === 'amount') val = parseFloat(val) || 0;
+            if (key === 'label')  val = String(val || '');
+            extras[extraIdx][key] = val;
+            // ถ้าแก้ค่าเอง = ไม่ถือว่าเป็น preset อีกต่อไป (ปลดล็อก link)
+            if (key === 'amount' || key === 'label') delete extras[extraIdx].presetIdx;
+            appState.playerPayExtra[pid] = extras;
+            saveState();
+        },
+
+        removePlayerExtra: function(pid, extraIdx) {
+            const extras = this._getPlayerExtras(pid);
+            extras.splice(extraIdx, 1);
+            appState.playerPayExtra[pid] = extras;
+            saveState();
+            this.renderCombinedPaymentList();
+            this.renderSummary();
+        },
+
+        _isPresetActive: function(pid, presetIdx) {
+            const extras = (appState.playerPayExtra || {})[pid];
+            if (!Array.isArray(extras)) return false;
+            return extras.some(e => e.presetIdx === presetIdx);
+        },
+
+        // เก็บไว้เผื่อในอนาคต — ปัจจุบันใช้ PlayerUtils.getGameCount() แทน เพื่อให้ Summary กับ Payment ตรงกัน
         _countPlayerGamesToday: function(pid) {
             const history = appState.history || {};
             const todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -3578,9 +3704,16 @@
             const buffet  = parseFloat(document.getElementById('price-buffet')?.value) || 210;
             const courtG  = parseFloat(document.getElementById('price-court-per-game')?.value) || 90;
             const perG    = parseFloat(document.getElementById('price-per-game')?.value) || 27;
-            if (mode === 'buffet') return buffet;
-            const games = this._countPlayerGamesToday(pid);
-            return courtG + perG * games;
+            // ค่าหลัก
+            const base = (mode === 'pergame')
+                ? courtG + perG * PlayerUtils.getGameCount(pid)
+                : buffet;
+            // ค่าเสริม (array) — รวมทุกรายการ
+            const extras = (appState.playerPayExtra || {})[pid];
+            const extraSum = Array.isArray(extras)
+                ? extras.reduce((s, e) => s + (parseFloat(e?.amount) || 0), 0)
+                : 0;
+            return base + extraSum;
         },
 
         renderSummary: function() {
@@ -3724,6 +3857,64 @@
             const row = document.getElementById(`court-row-${idx}`);
             if (row) row.remove();
             this.calcCost();
+        },
+
+        // ==================== EXTRA PRESETS ====================
+        getExtraPresets: function() {
+            return (appState.priceSettings && Array.isArray(appState.priceSettings.extraPresets))
+                ? appState.priceSettings.extraPresets
+                : [];
+        },
+
+        renderExtraPresetList: function() {
+            const list = document.getElementById('extra-preset-list');
+            if (!list) return;
+            const presets = this.getExtraPresets();
+            if (!presets.length) {
+                list.innerHTML = '<div style="color:#aaa;font-size:0.8rem;padding:0.4rem;">ยังไม่มี preset — กดเพิ่มด้านล่าง</div>';
+                return;
+            }
+            list.innerHTML = presets.map((p, i) => `
+                <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+                    <div style="flex:2;min-width:100px;">
+                        <label style="font-size:0.75rem;font-weight:600;color:#555;">ชื่อ:</label>
+                        <input type="text" class="extra-preset-label" value="${escapeHtml(p.label || '')}" placeholder="เช่น ค่าเช่าไม้"
+                            style="width:100%;padding:0.55rem;border:1px solid #f8bbd0;border-radius:8px;font-size:0.9rem;"
+                            oninput="App._updateExtraPreset(${i}, 'label', this.value)">
+                    </div>
+                    <div style="flex:1;min-width:80px;">
+                        <label style="font-size:0.75rem;font-weight:600;color:#555;">ราคา (บาท):</label>
+                        <input type="number" class="extra-preset-amount" value="${p.amount || 0}" min="0"
+                            style="width:100%;padding:0.55rem;border:1px solid #f8bbd0;border-radius:8px;font-size:0.9rem;font-weight:700;"
+                            oninput="App._updateExtraPreset(${i}, 'amount', parseFloat(this.value)||0)">
+                    </div>
+                    <button onclick="App.removeExtraPreset(${i})" class="danger"
+                        style="padding:0.45rem 0.7rem;min-height:unset;font-size:0.8rem;align-self:flex-end;margin-bottom:2px;">✕</button>
+                </div>
+            `).join('');
+        },
+
+        addExtraPreset: function() {
+            if (!appState.priceSettings) appState.priceSettings = {};
+            if (!Array.isArray(appState.priceSettings.extraPresets)) appState.priceSettings.extraPresets = [];
+            appState.priceSettings.extraPresets.push({ label: '', amount: 60 });
+            this.renderExtraPresetList();
+        },
+
+        removeExtraPreset: function(idx) {
+            const presets = this.getExtraPresets();
+            presets.splice(idx, 1);
+            appState.priceSettings.extraPresets = presets;
+            this.renderExtraPresetList();
+        },
+
+        _updateExtraPreset: function(idx, key, val) {
+            const presets = this.getExtraPresets();
+            if (!presets[idx]) return;
+            presets[idx][key] = val;
+            appState.priceSettings.extraPresets = presets;
+            // re-render payment list to reflect label/amount changes immediately
+            if (typeof this.renderCombinedPaymentList === 'function') this.renderCombinedPaymentList();
         },
 
         calcCost: function() {
@@ -6429,6 +6620,14 @@ setInterval(updateWaitBadgeColors,1000);
         <div style="font-size:0.78rem;color:#888;margin-top:0.5rem;" id="game-example">
           ตัวอย่าง: เล่น 3 เกม = 90 + 27×3 = <b style="color:#e67e22;">171 บาท</b>
         </div>
+      </div>
+
+      <!-- ค่าเสริม (custom) -->
+      <div style="background:#fff5f7;border:2px solid #e91e63;border-radius:12px;padding:1.1rem;margin-bottom:1.25rem;">
+        <div style="font-size:0.82rem;font-weight:800;color:#e91e63;margin-bottom:0.4rem;letter-spacing:0.04em;">💰 โหมดค่าเสริม (แทนค่าบุฟเฟ่/รายเกม สำหรับบางคน)</div>
+        <div style="font-size:0.75rem;color:#888;margin-bottom:0.75rem;">กำหนด preset ราคา (ชื่อ+จำนวน) เพื่อให้กดเลือกได้เร็วในหน้าคิดเงิน หรือพิมพ์ราคาเองก็ได้</div>
+        <div id="extra-preset-list" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.5rem;"></div>
+        <button onclick="App.addExtraPreset()" class="secondary" style="font-size:0.78rem;padding:3px 10px;min-height:unset;">➕ เพิ่ม preset</button>
       </div>
 
       <!-- ลูกแบด (ต้นทุนร่วม) -->

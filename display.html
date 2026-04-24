@@ -1211,7 +1211,10 @@
 
         <!-- ราคา -->
         <div style="font-size:2.5rem;font-weight:900;color:#e74c3c;line-height:1;" id="payment-price-display"></div>
-        <div style="font-size:0.78rem;color:#aaa;margin-top:4px;margin-bottom:1.25rem;">บาท · พร้อมเพย์ · นาย อัสนี ศรีวงษ์รักษ์</div>
+        <div style="font-size:0.78rem;color:#aaa;margin-top:4px;margin-bottom:0.9rem;">บาท · พร้อมเพย์ · นาย อัสนี ศรีวงษ์รักษ์</div>
+
+        <!-- breakdown -->
+        <div id="payment-breakdown" style="font-size:0.85rem;color:#555;background:#f8f9fa;border-radius:10px;padding:0.7rem 0.9rem;margin-bottom:1rem;text-align:left;line-height:1.8;"></div>
 
         <!-- QR -->
         <div style="display:inline-block;padding:12px;background:#fff;border-radius:16px;
@@ -1559,6 +1562,11 @@
       render();
       syncStatus('🔄 ข้อมูลล่าสุด', '#27ae60');
       setTimeout(() => syncStatus('☁️ เชื่อมต่อแล้ว', '#00a8cc'), 2000);
+      // re-render payment modal ถ้าเปิดอยู่ (ยอดอาจเปลี่ยนเพราะ admin แก้ค่าเสริม/โหมด/เกมจบเพิ่ม)
+      const modal = document.getElementById('payment-modal');
+      if (modal && modal.style.display === 'flex') {
+        try { showPaymentQR(); } catch(e) {}
+      }
       // re-register token และ presence สำหรับ watchedIds ที่โหลดจาก localStorage
       if (_pushGranted && watchedIds.size > 0) {
         watchedIds.forEach(pid => { setupPresence(pid); registerFCMToken(pid); });
@@ -2319,24 +2327,77 @@
       }, 1500);
     }
 
+    // helper: คำนวณยอดจ่ายของผู้เล่นตามโหมดและ extras
+    function _calcDisplayAmount(pid) {
+      const ps = state.priceSettings || {};
+      const buffet = parseFloat(ps.buffet)    || 210;
+      const courtG = parseFloat(ps.courtGame) || 90;
+      const perG   = parseFloat(ps.perGame)   || 27;
+      const mode   = (state.playerPayMode || {})[pid] || 'buffet';
+      // นับเกมจาก history
+      let games = 0;
+      const ph = (state.history || {})[pid];
+      if (ph && ph.games) {
+        games = Array.isArray(ph.games) ? ph.games.length : Object.keys(ph.games).length;
+      }
+      const base = (mode === 'pergame') ? (courtG + perG * games) : buffet;
+      // ค่าเสริม
+      const extras = (state.playerPayExtra || {})[pid];
+      const extraArr = Array.isArray(extras) ? extras : [];
+      const extraSum = extraArr.reduce((s, e) => s + (parseFloat(e?.amount) || 0), 0);
+      return { base, extraSum, total: base + extraSum, mode, games, courtG, perG, buffet, extras: extraArr };
+    }
+
+    // ผู้เล่นที่กำลังดู (คนแรกใน watchedIds)
+    function _currentWatchedPid() {
+      if (!watchedIds || !watchedIds.size) return null;
+      const pid = [...watchedIds][0];
+      const p = (state.players || []).find(x => x.id === pid);
+      return p ? p.id : null;
+    }
+
     async function showPaymentQR() {
-      const watchedPlayer = (state.players||[]).find(p => watchedIds.has(p.id));
+      const pid  = _currentWatchedPid();
+      const watchedPlayer = (state.players||[]).find(p => p.id === pid);
       const name = watchedPlayer ? watchedPlayer.name : 'ผู้เล่น';
 
-      // อ่าน payment settings จาก Firebase
+      // อ่าน promptpay ID จาก Firebase
       const snap = await db.ref('badmintonState/paymentSettings').once('value');
       const settings = snap.val() || {};
       const ppId  = settings.promptpay || '0628801778';
-      const price = settings.price     || 210;
 
+      // คำนวณยอดรายคน (อ้างอิงตามที่ admin ตั้งไว้ — read-only)
+      const info = _calcDisplayAmount(pid);
+      const price = info.total;
+
+      // อัปเดตชื่อและยอด
       document.getElementById('payment-name').textContent  = name;
       document.getElementById('payment-price-display').textContent = `฿${price} บาท`;
 
-      // Generate QR using qrcodejs
+      // อัปเดต breakdown (โชว์เฉพาะโหมดที่ admin เลือกไว้)
+      const bdEl = document.getElementById('payment-breakdown');
+      if (bdEl) {
+        const rows = [];
+        if (info.mode === 'pergame') {
+          rows.push(`<div style="display:flex;justify-content:space-between;"><span>🎮 รายเกม (${info.courtG} + ${info.perG}×${info.games})</span><b>${info.base}฿</b></div>`);
+        } else {
+          rows.push(`<div style="display:flex;justify-content:space-between;"><span>🍽️ บุฟเฟ่</span><b>${info.base}฿</b></div>`);
+        }
+        info.extras.forEach(e => {
+          const amt = parseFloat(e?.amount) || 0;
+          if (amt > 0) {
+            const lbl = (e?.label || 'ค่าเสริม').replace(/[<>]/g,'');
+            rows.push(`<div style="display:flex;justify-content:space-between;color:#e91e63;"><span>💰 ${lbl}</span><b>+${amt}฿</b></div>`);
+          }
+        });
+        rows.push(`<div style="display:flex;justify-content:space-between;margin-top:0.4rem;padding-top:0.4rem;border-top:1px dashed #ddd;font-weight:800;color:#1a2b47;"><span>รวม</span><span>${info.total}฿</span></div>`);
+        bdEl.innerHTML = rows.join('');
+      }
+
+      // Generate QR ด้วยยอดรายคน
       const payload  = promptPayPayload(ppId, price);
       const container = document.getElementById('payment-qr-container');
-      container.innerHTML = ''; // clear old QR
-
+      container.innerHTML = '';
       new QRCode(container, {
         text:          payload,
         width:         220,
@@ -2346,16 +2407,14 @@
         correctLevel:  QRCode.CorrectLevel.M,
       });
 
-      // Generate QR โดยใช้ promptpay.io API
+      // Fallback image from promptpay.io
       const ppNum = ppId.replace(/[^0-9]/g, '');
       const qrImg = document.getElementById('payment-qr-img');
       const qrErr = document.getElementById('qr-error');
       qrErr.style.display = 'none';
       qrImg.style.display = 'block';
-      // promptpay.io: GET /api/{phone_or_id}/{amount}
       qrImg.src = `https://promptpay.io/${ppNum}/${price}.png`;
 
-      // เก็บค่าไว้ให้ openPromptPayPage ใช้
       window._ppNum   = ppNum;
       window._ppPrice = price;
 
