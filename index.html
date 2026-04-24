@@ -3323,6 +3323,14 @@
         },
 
         // ── Summary ──────────────────────────────────────────────────
+        updateGameExample: function() {
+            const courtG = parseFloat(document.getElementById('price-court-per-game')?.value) || 0;
+            const perG   = parseFloat(document.getElementById('price-per-game')?.value) || 0;
+            const total  = courtG + perG * 3;
+            const el = document.getElementById('game-example');
+            if (el) el.innerHTML = `ตัวอย่าง: เล่น 3 เกม = ${courtG} + ${perG}×3 = <b style="color:#e67e22;">${total} บาท</b>`;
+        },
+
         savePriceSettings: function() {
             const buffet    = parseFloat(document.getElementById('price-buffet')?.value) || 210;
             const courtGame = parseFloat(document.getElementById('price-court-per-game')?.value) || 90;
@@ -3342,34 +3350,40 @@
             appState.priceSettings = { buffet, courtGame, perGame, tubePr, perTube, used, courtRows };
             appState.paymentSettings = appState.paymentSettings || {};
             appState.paymentSettings.price = buffet;
-            saveState();
+
+            // save ตรงไป Firebase เพื่อป้องกัน debounce overwrite
+            firebase.database().ref('badmintonState/priceSettings').set(appState.priceSettings);
+            firebase.database().ref('badmintonState/paymentSettings').set(appState.paymentSettings);
 
             const st = document.getElementById('price-save-status');
             if (st) { st.textContent = '✅ บันทึกแล้ว'; st.style.color='#27ae60'; setTimeout(()=>st.textContent='',2000); }
         },
 
         loadPriceSettings: function() {
-            const s = appState.priceSettings || {};
-            const set = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) el.value = val; };
-            set('price-buffet',          s.buffet   || appState.paymentSettings?.price || 210);
-            set('price-court-per-game',  s.courtGame || 90);
-            set('price-per-game',        s.perGame   || 27);
-            set('shuttle-tube-price',    s.tubePr    || 960);
-            set('shuttle-per-tube',      s.perTube   || 12);
-            // restore court rows
-            if (s.courtRows && s.courtRows.length > 0) {
-                const list = document.getElementById('court-cost-list');
-                if (list) {
-                    list.innerHTML = '';
-                    this._courtCostRows = 0;
-                    s.courtRows.forEach(r => {
-                        this.addCourtCostRow(r.price, r.hours);
-                    });
+            // ดึงจาก Firebase โดยตรงเสมอ เพื่อให้ได้ค่าล่าสุด
+            firebase.database().ref('badmintonState/priceSettings').once('value').then(snap => {
+                const s = snap.val() || appState.priceSettings || {};
+                if (Object.keys(s).length > 0) appState.priceSettings = s;
+                const set = (id, val) => { const el = document.getElementById(id); if(el && val !== undefined) el.value = val; };
+                set('price-buffet',         s.buffet   || appState.paymentSettings?.price || 210);
+                set('price-court-per-game', s.courtGame || 90);
+                set('price-per-game',       s.perGame   || 27);
+                set('shuttle-tube-price',   s.tubePr    || 960);
+                set('shuttle-per-tube',     s.perTube   || 12);
+                set('shuttle-used',         s.used      || 0);
+                // restore court rows
+                if (s.courtRows && s.courtRows.length > 0) {
+                    const list = document.getElementById('court-cost-list');
+                    if (list) {
+                        list.innerHTML = '';
+                        this._courtCostRows = 0;
+                        s.courtRows.forEach(r => this.addCourtCostRow(r.price, r.hours));
+                    }
+                } else {
+                    this.initCostCalculator();
                 }
-            } else {
-                this.initCostCalculator();
-            }
-            set('shuttle-used',          s.used      || 0);
+                this.calcCost();
+            });
         },
 
         _payFilter: 'all',
@@ -6391,15 +6405,17 @@ setInterval(updateWaitBadgeColors,1000);
           <div style="flex:1;min-width:140px;">
             <label style="font-size:0.82rem;font-weight:600;">🏟️ ค่าสนาม/เกม (บาท):</label>
             <input type="number" id="price-court-per-game" value="90" min="0"
+              oninput="App.updateGameExample()"
               style="width:100%;padding:0.7rem;border:1px solid #fad7a0;border-radius:8px;font-size:1rem;">
           </div>
           <div style="flex:1;min-width:140px;">
             <label style="font-size:0.82rem;font-weight:600;">🎮 ค่าเกม/คน/เกม (บาท):</label>
             <input type="number" id="price-per-game" value="27" min="0"
+              oninput="App.updateGameExample()"
               style="width:100%;padding:0.7rem;border:1px solid #fad7a0;border-radius:8px;font-size:1rem;">
           </div>
         </div>
-        <div style="font-size:0.78rem;color:#888;margin-top:0.5rem;">
+        <div style="font-size:0.78rem;color:#888;margin-top:0.5rem;" id="game-example">
           ตัวอย่าง: เล่น 3 เกม = 90 + 27×3 = <b style="color:#e67e22;">171 บาท</b>
         </div>
       </div>
