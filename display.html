@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🏸 สนามแบดมินตัน — หน้าจอสาธารณะ</title>
+  <title>B&B Badminton v24/04 19:38</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Teko:wght@600;700&display=swap" rel="stylesheet">
   <link rel="manifest" href="manifest.json">
@@ -1344,7 +1344,10 @@
         setTimeout(() => { _justReturned = false; }, 3000);
         // re-register token เพราะอาจถูกลบตอน bfcache หรือ pagehide
         if (_pushGranted && watchedIds.size > 0) {
-          watchedIds.forEach(pid => registerFCMToken(pid));
+          watchedIds.forEach(pid => {
+            setupPresence(pid);
+            registerFCMToken(pid);
+          });
         }
       }
     });
@@ -1446,6 +1449,7 @@
             alert(`⚠️ ${name} กำลังถูกติดตามจากอุปกรณ์อื่นอยู่แล้ว
 ไม่สามารถติดตามซ้ำได้`);
             watchedIds.delete(pid);
+            saveWatchedIds();
             renderWatchBar();
             return;
           }
@@ -1555,6 +1559,10 @@
       render();
       syncStatus('🔄 ข้อมูลล่าสุด', '#27ae60');
       setTimeout(() => syncStatus('☁️ เชื่อมต่อแล้ว', '#00a8cc'), 2000);
+      // re-register token และ presence สำหรับ watchedIds ที่โหลดจาก localStorage
+      if (_pushGranted && watchedIds.size > 0) {
+        watchedIds.forEach(pid => { setupPresence(pid); registerFCMToken(pid); });
+      }
     }, () => syncStatus('❌ เชื่อมต่อไม่ได้', '#e74c3c'));
 
     // ── Clock ─────────────────────────────────────────────────────
@@ -1846,7 +1854,13 @@
     render();
 
     // ── Watch My Queue ─────────────────────────────────────────
-    const watchedIds = new Set(); // player ids being watched
+    // โหลด watchedIds จาก localStorage — persist ข้ามการเปิดแอป
+    const _savedWatched = localStorage.getItem('bb-watched-ids');
+    const watchedIds = new Set(_savedWatched ? JSON.parse(_savedWatched) : []);
+
+    function saveWatchedIds() {
+      try { localStorage.setItem('bb-watched-ids', JSON.stringify([...watchedIds])); } catch(e) {}
+    }
     let prevQueueFirst = null;    // track who was first in queue last render
     let alertShown = new Set();   // avoid repeated alerts for same position
 
@@ -2153,6 +2167,7 @@
       if (watchedIds.has(pid)) {
         // ปิดติดตาม
         watchedIds.delete(pid);
+        saveWatchedIds();
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
         clearPresence();
@@ -2170,6 +2185,7 @@
         watchedIds.clear();
         // เพิ่มคนใหม่
         watchedIds.add(pid);
+        saveWatchedIds();
         setupPresence(pid);
         if (_pushGranted) {
           registerFCMToken(pid);
