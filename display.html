@@ -1437,10 +1437,12 @@
     // When page is closed, FCM delivers directly via SW push event
     function sendPushNotification(title, body, tag) {
       if (!_swRegistration) return;
+      if (!document.hidden) return; // เปิดแอปอยู่ overlay แสดงแล้ว ไม่ต้อง push ซ้ำ
       try {
         _swRegistration.showNotification(title, {
           body,
-          tag,
+          tag,          // tag เดียวกัน = replace notification เดิม ไม่สะสม
+          renotify: false,
           icon: 'apple-touch-icon.png',
           badge: 'apple-touch-icon.png',
           vibrate: [200, 80, 200],
@@ -1935,14 +1937,11 @@
       overlay.classList.add('show');
       level === 2 ? playBeep2() : playBeep1();
 
-      // ส่ง push notification เฉพาะตอนพับจอเท่านั้น
-      // ถ้าเปิดแอปค้างไว้ overlay แสดงอยู่แล้ว ไม่ต้องส่งซ้ำ
-      if (document.hidden) {
-        if (level === 2) {
-          sendPushNotification('✅ สนามว่างแล้ว!', name + ' — ลงสนามได้เลย!', 'court-' + name);
-        } else {
-          sendPushNotification('🏸 ถึงคิวของคุณแล้ว!', name + ' — เตรียมพร้อม!', 'queue-' + name);
-        }
+      // ส่ง push notification (sendPushNotification จะเช็ค document.hidden เอง)
+      if (level === 2) {
+        sendPushNotification('✅ สนามว่างแล้ว!', name + ' — ลงสนามได้เลย!', 'court-' + name);
+      } else {
+        sendPushNotification('🏸 ถึงคิวของคุณแล้ว!', name + ' — เตรียมพร้อม!', 'queue-' + name);
       }
 
       // Auto-close after 8s
