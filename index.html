@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบจัดการสนามแบดมินตัน</title>
+    <title>B&B Admin v24/04 10:00</title>
     <style>
         :root {
             --primary: #1a2b47;
@@ -1180,7 +1180,31 @@
 
             <div class="card">
                 <h2>รายชื่อผู้เล่นทั้งหมด</h2>
-                <input type="text" id="player-search" class="search-bar" placeholder="ค้นหาผู้เล่น...">
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.75rem;">
+                    <input type="text" id="player-search" class="search-bar"
+                        placeholder="🔍 ค้นหาชื่อ..." style="flex:1;min-width:150px;margin:0;">
+                </div>
+                <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.75rem;" id="skill-filter-bar">
+                    <button onclick="App.setSkillFilter('')" id="sf-all"
+                        style="padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;min-height:unset;
+                        border:2px solid #1a2b47;background:#1a2b47;color:#fff;">ทั้งหมด</button>
+                    <button onclick="App.setSkillFilter('BG')" id="sf-BG"
+                        style="padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;min-height:unset;
+                        border:2px solid #ddd;background:#fff;color:#888;">BG</button>
+                    <button onclick="App.setSkillFilter('N-')" id="sf-N-"
+                        style="padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;min-height:unset;
+                        border:2px solid #ddd;background:#fff;color:#888;">N-</button>
+                    <button onclick="App.setSkillFilter('N')" id="sf-N"
+                        style="padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;min-height:unset;
+                        border:2px solid #ddd;background:#fff;color:#888;">N</button>
+                    <button onclick="App.setSkillFilter('N+')" id="sf-N+"
+                        style="padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;min-height:unset;
+                        border:2px solid #ddd;background:#fff;color:#888;">N+</button>
+                    <button onclick="App.setSkillFilter('P')" id="sf-P"
+                        style="padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;min-height:unset;
+                        border:2px solid #ddd;background:#fff;color:#888;">P</button>
+                </div>
+                <div id="player-count" style="font-size:0.82rem;color:#888;margin-bottom:0.5rem;"></div>
                 <div style="overflow-x: auto;">
                     <table>
                         <thead>
@@ -1223,10 +1247,35 @@
             <div class="card">
                 <h2>เช็คอินผู้เล่น</h2>
                 <p>กดที่ชื่อผู้เล่นเพื่อเช็คอิน (ผู้เล่นที่เช็คอินแล้วจะยังคงสถานะนั้นหลังจบเกม 🏸 ผู้เล่นที่กำลังลงเล่นจะมีไอคอน 🏸)</p>
+                <!-- Search + Filter -->
+                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
+                    <input type="text" id="checkin-search" placeholder="🔍 ค้นหาชื่อ..."
+                        oninput="App.filterCheckInList()"
+                        style="flex:1;min-width:160px;padding:0.6rem 0.9rem;border:1.5px solid #ced4da;
+                        border-radius:8px;font-size:0.95rem;outline:none;">
+                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;">
+                        <button id="ci-filter-all" onclick="App.setCheckInFilter('all')"
+                            style="padding:5px 12px;border-radius:20px;font-size:0.8rem;font-weight:700;cursor:pointer;
+                            min-height:unset;border:2px solid #1a2b47;background:#1a2b47;color:#fff;">
+                            ทั้งหมด
+                        </button>
+                        <button id="ci-filter-in" onclick="App.setCheckInFilter('in')"
+                            style="padding:5px 12px;border-radius:20px;font-size:0.8rem;font-weight:700;cursor:pointer;
+                            min-height:unset;border:2px solid #ddd;background:#fff;color:#888;">
+                            ✅ เช็คอินแล้ว
+                        </button>
+                        <button id="ci-filter-out" onclick="App.setCheckInFilter('out')"
+                            style="padding:5px 12px;border-radius:20px;font-size:0.8rem;font-weight:700;cursor:pointer;
+                            min-height:unset;border:2px solid #ddd;background:#fff;color:#888;">
+                            ❌ ยังไม่เช็คอิน
+                        </button>
+                    </div>
+                </div>
                 <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
                     <button class="success" onclick="App.checkInAll()" style="min-height:40px;font-size:0.9rem;">✅ เช็คอินทั้งหมด</button>
                     <button class="secondary" onclick="App.uncheckInAll()" style="min-height:40px;font-size:0.9rem;">❌ ยกเลิกเช็คอินทั้งหมด</button>
                 </div>
+                <div id="checkin-count" style="font-size:0.82rem;color:#888;margin-bottom:0.5rem;"></div>
                 <div id="check-in-list" class="check-in-grid"></div>
 
             </div>
@@ -2483,17 +2532,41 @@
             return { success: true, player: newPlayer };
         },
 
+        _skillFilter: '',
+
+        setSkillFilter: function(skill) {
+            this._skillFilter = skill;
+            // อัพเดทสีปุ่ม
+            const allSkills = ['', 'BG', 'N-', 'N', 'N+', 'P'];
+            allSkills.forEach(s => {
+                const id = s === '' ? 'sf-all' : `sf-${s}`;
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                const active = s === skill;
+                btn.style.background = active ? '#1a2b47' : '#fff';
+                btn.style.borderColor = active ? '#1a2b47' : '#ddd';
+                btn.style.color = active ? '#fff' : '#888';
+            });
+            this.renderPlayerList(uiState.currentFilter);
+        },
+
         renderPlayerList: function(filter = '') {
             uiState.currentFilter = filter;
             const listEl = document.getElementById('player-list');
             const bulkEditListEl = document.getElementById('bulk-edit-list');
             listEl.innerHTML = '';
             bulkEditListEl.innerHTML = '';
+            const skillF = this._skillFilter || '';
 
-            const filteredPlayers = appState.players.filter(p =>
-                p.name.toLowerCase().includes(filter.toLowerCase()) ||
-                p.id.toString().includes(filter)
-            );
+            const filteredPlayers = appState.players.filter(p => {
+                const matchName = p.name.toLowerCase().includes(filter.toLowerCase()) || p.id.toString().includes(filter);
+                const matchSkill = !skillF || p.skill === skillF;
+                return matchName && matchSkill;
+            });
+
+            // แสดงจำนวน
+            const countEl = document.getElementById('player-count');
+            if (countEl) countEl.textContent = `แสดง ${filteredPlayers.length} จาก ${appState.players.length} คน`;
 
             if (filteredPlayers.length === 0 && filter.length > 0) {
                 listEl.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #888;">ไม่พบผู้เล่นที่ตรงกัน</td></tr>';
@@ -3718,6 +3791,46 @@
             }
         },
 
+        _ciFilter: 'all',
+
+        setCheckInFilter: function(f) {
+            this._ciFilter = f;
+            // อัพเดทสีปุ่ม
+            ['all','in','out'].forEach(k => {
+                const btn = document.getElementById(`ci-filter-${k}`);
+                if (!btn) return;
+                const active = k === f;
+                const colors = {all:'#1a2b47', in:'#27ae60', out:'#e74c3c'};
+                btn.style.background = active ? colors[k] : '#fff';
+                btn.style.borderColor = active ? colors[k] : '#ddd';
+                btn.style.color = active ? '#fff' : '#888';
+            });
+            this.filterCheckInList();
+        },
+
+        filterCheckInList: function() {
+            const q = (document.getElementById('checkin-search')?.value || '').toLowerCase();
+            const f = this._ciFilter;
+            const cards = document.querySelectorAll('#check-in-list .check-in-card');
+            let shown = 0;
+            cards.forEach(card => {
+                const pid = parseInt(card.dataset.playerId);
+                const player = appState.players.find(p => p.id === pid);
+                if (!player) return;
+                const matchName = player.name.toLowerCase().includes(q);
+                const matchFilter = f === 'all' || (f === 'in' && player.isCheckedIn) || (f === 'out' && !player.isCheckedIn);
+                const show = matchName && matchFilter;
+                card.style.display = show ? '' : 'none';
+                if (show) shown++;
+            });
+            const countEl = document.getElementById('checkin-count');
+            if (countEl) {
+                const total = appState.players.length;
+                const checkedIn = appState.players.filter(p => p.isCheckedIn).length;
+                countEl.textContent = `แสดง ${shown} จาก ${total} คน | เช็คอินแล้ว ${checkedIn} คน`;
+            }
+        },
+
         renderCheckInList: function() {
             const listEl = document.getElementById('check-in-list');
             listEl.innerHTML = '';
@@ -3782,6 +3895,8 @@
                 `;
                 listEl.appendChild(card);
             });
+            // apply search + filter หลัง render
+            this.filterCheckInList();
         },
 
         /**
@@ -4470,6 +4585,36 @@ if (btnViewQueue) {
             this.renderManualSelectionGrid(checkedInPlayers);
         },
 
+        _manualSkillFilter: '',
+
+        setManualSkillFilter: function(skill) {
+            this._manualSkillFilter = skill;
+            ['','BG','N-','N','N+','P'].forEach(s => {
+                const id = `msf-${s||'all'}`;
+                const btn = document.getElementById(id);
+                if (!btn) return;
+                const active = s === skill;
+                btn.style.background = active ? '#1a2b47' : '#fff';
+                btn.style.borderColor = active ? '#1a2b47' : '#ddd';
+                btn.style.color = active ? '#fff' : '#888';
+            });
+            this.filterManualGrid();
+        },
+
+        filterManualGrid: function() {
+            const q = (document.getElementById('manual-search')?.value || '').toLowerCase();
+            const sf = this._manualSkillFilter || '';
+            const cards = document.querySelectorAll('#manual-selection-grid .check-in-card');
+            cards.forEach(card => {
+                const pid = parseInt(card.dataset.playerId);
+                const p = appState.players.find(pl => pl.id === pid);
+                if (!p) return;
+                const matchName = p.name.toLowerCase().includes(q);
+                const matchSkill = !sf || p.skill === sf;
+                card.style.display = matchName && matchSkill ? '' : 'none';
+            });
+        },
+
         renderManualSelectionGrid: function(players) {
             const gridEl = document.getElementById('manual-selection-grid');
             const statusEl = document.getElementById('selection-status');
@@ -4545,6 +4690,8 @@ if (btnViewQueue) {
                     ? (uiState._fabMode === 'queue' ? '✅ เพิ่มเข้าคิว (4/4)' : '✅ ยืนยันลงสนาม (4/4)')
                     : `✅ เพิ่มเข้าคิว (${count}/4)`;
             }
+            // apply search + filter
+            this.filterManualGrid();
         },
 
         toggleManualSelection: function(playerId, players) {
@@ -4715,6 +4862,26 @@ if (btnViewQueue) {
             setupContentEl.innerHTML = `
                 <h3>🧩 จัดคิวเอง (เลือกผู้เล่น 4 คน)</h3>
                 <p>แตะเลือกผู้เล่น 4 คนตามลำดับ (1-2 ทีม 1, 3-4 ทีม 2) <span id="selection-status" style="font-weight: bold; color: var(--secondary);">: เลือกคนที่ 1</span></p>
+
+                <!-- Search + Skill Filter -->
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;margin-bottom:0.5rem;">
+                    <input type="text" id="manual-search" placeholder="🔍 ค้นหาชื่อ..."
+                        oninput="App.filterManualGrid()"
+                        style="flex:1;min-width:150px;padding:0.55rem 0.9rem;border:1.5px solid #ced4da;
+                        border-radius:8px;font-size:0.9rem;outline:none;">
+                    <div style="display:flex;gap:0.3rem;flex-wrap:wrap;">
+                        ${['','BG','N-','N','N+','P'].map(s => `
+                        <button onclick="App.setManualSkillFilter('${s}')" id="msf-${s||'all'}"
+                            style="padding:3px 10px;border-radius:16px;font-size:0.75rem;font-weight:700;
+                            cursor:pointer;min-height:unset;
+                            border:2px solid ${s===''?'#1a2b47':'#ddd'};
+                            background:${s===''?'#1a2b47':'#fff'};
+                            color:${s===''?'#fff':'#888'};">
+                            ${s||'ทั้งหมด'}
+                        </button>`).join('')}
+                    </div>
+                </div>
+
                 <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:0.75rem;
   padding:0.6rem 0.9rem;background:#f8f9fa;border-radius:8px;font-size:0.8rem;align-items:center;">
   <span style="color:#888;font-weight:600;">⏳ เวลารอ:</span>
