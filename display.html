@@ -1887,45 +1887,26 @@
         const key1   = `${pid}-next`;
         const key2   = `${pid}-court`;
 
-        // ถ้ากำลังแข่งอยู่ และเคยแจ้งเตือนลงสนามแล้ว → รอจบเกม
-        if (player && player.isPlaying) {
-          // ยังไม่ทำอะไร รอจบเกมก่อน
-          return;
-        }
-
-        // ถ้าจบเกมแล้ว → reset alertShown เพื่อรับแจ้งเตือนรอบหน้าได้
-        // ไม่ลบ watchedIds เพราะ user ควรติดตามชื่อตัวเองไว้ตลอด
-        if (player && !player.isPlaying && alertShown.has(key2)) {
-          alertShown.delete(key1);
-          alertShown.delete(key2);
-          syncStateToSW();
-        }
+        // กำลังเล่นอยู่ → ไม่ทำอะไร
+        if (player && player.isPlaying) return;
 
         if (pos >= 2) {
+          // ถอยออกจากคิวต้นๆ → reset
           alertShown.delete(key1);
           alertShown.delete(key2);
 
         } else if (pos === 1) {
-          if (alertShown.has(key2)) {
-            alertShown.delete(key1);
-            alertShown.delete(key2);
-          }
+          // คิวถัดไป → แจ้งเตือนครั้งเดียว
           if (!alertShown.has(key1)) {
             alertShown.add(key1);
-            if (!_justReturned) {
-              const p = getPlayer(pid);
-              triggerAlert(p ? p.name : '???', 1);
-            }
+            if (!_justReturned) triggerAlert(player ? player.name : '???', 1);
           }
 
         } else if (pos === 0) {
-          // อยู่นอกคิว ไม่ได้เล่น — อาจเพิ่งออกจากคิวหรือยังไม่ได้เข้าคิว
+          // ลงสนามแล้ว (ออกจากคิว) → แจ้งเตือนครั้งเดียว
           if (alertShown.has(key1) && !alertShown.has(key2)) {
             alertShown.add(key2);
-            if (!_justReturned) {
-              const p = getPlayer(pid);
-              triggerAlert(p ? p.name : '???', 2);
-            }
+            if (!_justReturned) triggerAlert(player ? player.name : '???', 2);
           }
         }
       });
@@ -2344,30 +2325,25 @@
     }
 
 
-        // ติดตาม isPlaying ก่อนหน้า เพื่อตรวจจับตอนจบเกม
-    const _wasPlaying = new Set();
-
     // Hook into render to update watch bar + alerts after every sync
     const _origRender = render;
+    const _wasPlaying = new Set();
     render = function() {
       _origRender();
 
       // ตรวจจับตอนจบเกม — isPlaying เปลี่ยนจาก true → false
+      // reset alertShown เพื่อรับแจ้งเตือนคิวรอบหน้าได้
+      // ไม่ลบ watchedIds — user ยังติดตามชื่อตัวเองต่อ
       watchedIds.forEach(pid => {
-        const player = getPlayer(pid);
+        const player   = getPlayer(pid);
         if (!player) return;
-        const wasPlaying = _wasPlaying.has(pid);
-        const nowPlaying = !!player.isPlaying;
-
-        if (wasPlaying && !nowPlaying) {
-          // จบเกม — reset alertShown เท่านั้น ไม่ลบ watchedIds
+        const wasPlay  = _wasPlaying.has(pid);
+        const nowPlay  = !!player.isPlaying;
+        if (wasPlay && !nowPlay) {
           alertShown.delete(`${pid}-next`);
           alertShown.delete(`${pid}-court`);
-          syncStateToSW();
         }
-
-        // อัพเดทสถานะ
-        if (nowPlaying) _wasPlaying.add(pid);
+        if (nowPlay) _wasPlaying.add(pid);
         else _wasPlaying.delete(pid);
       });
 

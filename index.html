@@ -3871,11 +3871,14 @@
                 li.style.cssText = 'background:var(--light);padding:1rem;margin-bottom:0.75rem;border-radius:8px;';
                 li.innerHTML = `
                     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
-                        <div>
-                            <span style="font-weight:700;">${escapeHtml(court.name)}</span>
-                            <span style="font-size:0.8rem;color:${statusColor};font-weight:bold;margin-left:6px;">(${statusText})</span>
-                            ${countdownHtml ? `<span style="margin-left:8px;">${countdownHtml}</span>` : ''}
-                            ${autoEnabled && court.openDays ? `<span style="margin-left:6px;font-size:0.75rem;color:#888;">[${(court.openDays||[]).map(d=>({'sun':'อา','mon':'จ','tue':'อ','wed':'พ','thu':'พฤ','fri':'ศ','sat':'ส'})[d]||d).join(' ')}]</span>` : ''}
+                        <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+                            <input type="text" value="${escapeHtml(court.name)}"
+                                style="font-weight:700;font-size:1rem;padding:3px 8px;border:1.5px solid #ddd;border-radius:6px;width:120px;background:#fff;"
+                                onblur="App.updateCourtName(${court.id}, this.value)"
+                                onkeydown="if(event.key==='Enter')this.blur()">
+                            <span style="font-size:0.8rem;color:${statusColor};font-weight:bold;">(${statusText})</span>
+                            ${countdownHtml ? `<span>${countdownHtml}</span>` : ''}
+                            ${autoEnabled && court.openDays ? `<span style="font-size:0.75rem;color:#888;">[${(court.openDays||[]).map(d=>({'sun':'อา','mon':'จ','tue':'อ','wed':'พ','thu':'พฤ','fri':'ศ','sat':'ส'})[d]||d).join(' ')}]</span>` : ''}
                         </div>
                         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;">
                             <label style="display:flex;align-items:center;gap:4px;font-size:0.82rem;cursor:pointer;">
@@ -3939,6 +3942,23 @@
                     });
                 }, 1000);
             }
+        },
+
+        updateCourtName: function(courtId, newName) {
+            const name = newName.trim();
+            if (!name) { showError('ชื่อสนามห้ามว่าง'); this.renderCourtSettings(); return; }
+            const court = CourtUtils.getById(courtId);
+            if (!court) return;
+            if (court.name === name) return; // ไม่เปลี่ยน
+            // เช็คชื่อซ้ำ
+            if (appState.courts.some(c => c.id !== courtId && c.name.toLowerCase() === name.toLowerCase())) {
+                showError('ชื่อสนามซ้ำกับสนามอื่น'); this.renderCourtSettings(); return;
+            }
+            court.name = name;
+            saveState();
+            showSuccess(`เปลี่ยนชื่อเป็น "${name}" แล้ว`);
+            this.renderCourtSettings();
+            this.renderCourtList();
         },
 
         updateCourtTime: function(courtId, field, value) {
