@@ -1379,6 +1379,24 @@
     }
 
     // Get FCM token and save to Firebase under pushTokens/<pid>
+    // ── Firebase Presence ────────────────────────────────────────
+    // ถ้า connection ขาด (kill app) → Firebase ลบ presence อัตโนมัติ
+    let _presenceRef = null;
+
+    function setupPresence(pid) {
+      const did = localStorage.getItem('bb-device-id');
+      if (!did) return;
+      if (_presenceRef) { _presenceRef.remove().catch(()=>{}); }
+      const ref = db.ref(`presence/${pid}/${did}`);
+      _presenceRef = ref;
+      ref.onDisconnect().remove();
+      ref.set({ online: true, ts: Date.now() });
+    }
+
+    function clearPresence() {
+      if (_presenceRef) { _presenceRef.remove().catch(()=>{}); _presenceRef = null; }
+    }
+
     async function registerFCMToken(pid) {
       if (!_swRegistration || !_pushGranted) return;
       try {
@@ -2094,6 +2112,7 @@
         watchedIds.delete(pid);
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
+        clearPresence();
         const _did1 = localStorage.getItem('bb-device-id');
         if (_did1) db.ref(`pushTokens/${pid}/${_did1}`).remove().catch(()=>{});
         db.ref('alertState/' + pid).remove().catch(()=>{});
@@ -2108,6 +2127,7 @@
         watchedIds.clear();
         // เพิ่มคนใหม่
         watchedIds.add(pid);
+        setupPresence(pid);
         if (_pushGranted) {
           registerFCMToken(pid);
         } else {
