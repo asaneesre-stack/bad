@@ -1,4 +1,4 @@
-// sw.js — B&B Badminton Service Worker v10
+// sw.js — B&B Badminton Service Worker v11
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -14,24 +14,29 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// Background message — SW ต้องแสดง notification เอง
-// iOS Web Push ไม่ใช่ APNs native ต้องให้ SW showNotification
 messaging.onBackgroundMessage(payload => {
-  const data        = payload.data || {};
-  const title       = data.title  || payload.notification?.title || '🏸 B&B Badminton';
-  const body        = data.body   || payload.notification?.body  || 'มีการแจ้งเตือนใหม่';
-  const tag         = data.tag    || 'bb-notify';
-  const url         = data.url    || './display.html';
+  const data  = payload.data || {};
+  const title = data.title  || payload.notification?.title || '🏸 B&B Badminton';
+  const body  = data.body   || payload.notification?.body  || 'มีการแจ้งเตือนใหม่';
+  const tag   = data.tag    || 'bb-notify';
+  const url   = data.url    || './display.html';
 
-  return self.registration.showNotification(title, {
-    body,
-    tag,
-    renotify:            true,
-    icon:                './apple-touch-icon.png',
-    badge:               './apple-touch-icon.png',
-    vibrate:             [200, 80, 200],
-    requireInteraction:  true,
-    data:                { url },
+  // เช็คว่า display.html เปิดอยู่ไหม
+  // ถ้าเปิดอยู่ = display.html จัดการแสดงแล้ว ไม่ต้อง showNotification ซ้ำ
+  return clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    const isOpen = list.some(c => c.url.includes('display.html') && !c.hidden);
+    if (isOpen) return; // page เปิดอยู่ ไม่แสดงซ้ำ
+
+    return self.registration.showNotification(title, {
+      body,
+      tag,
+      renotify:           true,
+      icon:               './apple-touch-icon.png',
+      badge:              './apple-touch-icon.png',
+      vibrate:            [200, 80, 200],
+      requireInteraction: true,
+      data:               { url },
+    });
   });
 });
 
