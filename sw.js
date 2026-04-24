@@ -1,7 +1,4 @@
-// sw.js — B&B Badminton Service Worker v9
-// ส่ง notification ปกติผ่าน APNs + apns-collapse-id
-// SW suppress onBackgroundMessage ป้องกัน duplicate
-
+// sw.js — B&B Badminton Service Worker v10
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -17,12 +14,25 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
-// APNs แสดง notification เองจาก payload แล้ว 1 ครั้ง
-// onBackgroundMessage ต้องมี (FCM SDK บังคับ) แต่ไม่ showNotification
-// เพราะถ้า showNotification จะเป็น 2 ครั้ง
+// Background message — SW ต้องแสดง notification เอง
+// iOS Web Push ไม่ใช่ APNs native ต้องให้ SW showNotification
 messaging.onBackgroundMessage(payload => {
-  // ไม่ทำอะไร — APNs จัดการแสดงให้แล้ว
-  return Promise.resolve();
+  const data        = payload.data || {};
+  const title       = data.title  || payload.notification?.title || '🏸 B&B Badminton';
+  const body        = data.body   || payload.notification?.body  || 'มีการแจ้งเตือนใหม่';
+  const tag         = data.tag    || 'bb-notify';
+  const url         = data.url    || './display.html';
+
+  return self.registration.showNotification(title, {
+    body,
+    tag,
+    renotify:            true,
+    icon:                './apple-touch-icon.png',
+    badge:               './apple-touch-icon.png',
+    vibrate:             [200, 80, 200],
+    requireInteraction:  true,
+    data:                { url },
+  });
 });
 
 self.addEventListener('install',  () => self.skipWaiting());
@@ -30,7 +40,6 @@ self.addEventListener('activate', e  => e.waitUntil(clients.claim()));
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  // ลบ notification ที่เหลือทั้งหมด
   self.registration.getNotifications().then(ns => ns.forEach(n => n.close()));
   const url = event.notification.data?.url || './display.html';
   event.waitUntil(
