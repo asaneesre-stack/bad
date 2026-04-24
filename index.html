@@ -3049,7 +3049,18 @@
                         deviceRows = devices.map(([devId, d]) => {
                             const ago = d.ts ? Math.floor((now - d.ts) / 60000) : null;
                             const agoStr = ago !== null ? (ago < 1 ? 'เพิ่งเชื่อมต่อ' : `${ago} นาทีที่แล้ว`) : '';
-                            return `<span style="font-size:0.72rem;color:#aaa;margin-left:1rem;">📲 ${devId.slice(0,8)}... — ${agoStr}</span>`;
+                            const deviceInfo = d.device || 'Unknown';
+                            const isOnline = !!(presence[pidStr] && presence[pidStr][devId]?.online);
+                            const onlineBadge = isOnline
+                                ? `<span style="background:#27ae60;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">🟢 Online</span>`
+                                : `<span style="background:#e74c3c;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">🔴 Offline</span>`;
+                            return `<div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-top:2px;">
+                                <span style="font-size:0.75rem;font-weight:600;">📱 ${escapeHtml(deviceInfo)}</span>
+                                <span style="font-size:0.7rem;color:#aaa;">${agoStr}</span>
+                                ${onlineBadge}
+                                ${!isOnline ? `<button onclick="firebase.database().ref('pushTokens/${pidStr}/${devId}').remove();App.checkConnectedDevices();"
+                                    class="danger" style="font-size:0.6rem;padding:1px 5px;min-height:unset;">🗑️</button>` : ''}
+                            </div>`;
                         }).join('');
                     }
 

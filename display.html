@@ -1428,7 +1428,24 @@
         });
         if (token) {
           _fcmToken = token;
-          await db.ref(`pushTokens/${pid}/${did}`).set({ token, ts: Date.now() });
+          // เก็บ device info ด้วยเพื่อให้ admin ดูได้
+          const ua = navigator.userAgent;
+          let deviceInfo = 'Unknown';
+          if (/iPhone/.test(ua)) {
+            const match = ua.match(/iPhone OS ([\d_]+)/);
+            deviceInfo = 'iPhone iOS ' + (match ? match[1].replace(/_/g,'.') : '');
+          } else if (/iPad/.test(ua)) {
+            deviceInfo = 'iPad';
+          } else if (/Android/.test(ua)) {
+            const match = ua.match(/Android ([\d.]+)/);
+            const brand = ua.match(/;\s*([^;]+)\s+Build/) ? ua.match(/;\s*([^;]+)\s+Build/)[1].trim() : '';
+            deviceInfo = 'Android ' + (match ? match[1] : '') + (brand ? ' ' + brand : '');
+          } else if (/Macintosh/.test(ua)) {
+            deviceInfo = 'Mac';
+          } else if (/Windows/.test(ua)) {
+            deviceInfo = 'Windows';
+          }
+          await db.ref(`pushTokens/${pid}/${did}`).set({ token, ts: Date.now(), device: deviceInfo });
           console.log('[FCM] token saved pid', pid);
         }
       } catch(e) { console.warn('[FCM] getToken failed', e); }
