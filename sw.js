@@ -1,4 +1,4 @@
-// sw.js — B&B Badminton Service Worker v11
+// sw.js — B&B Badminton Service Worker v12
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -21,12 +21,22 @@ messaging.onBackgroundMessage(payload => {
   const tag   = data.tag    || 'bb-notify';
   const url   = data.url    || './display.html';
 
-  // เช็คว่า display.html เปิดอยู่ไหม
-  // ถ้าเปิดอยู่ = display.html จัดการแสดงแล้ว ไม่ต้อง showNotification ซ้ำ
+  // visibilityState ไม่มีใน SW — เช็คแค่ว่า client มีอยู่ไหม
+  // ถ้า display.html เปิด = foreground แล้วจัดการเองผ่าน triggerAlert
+  // ถ้าไม่มี client = background/killed → SW ต้องแสดงเอง
   return clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    const isOpen = list.some(c => c.url.includes('display.html') && !c.hidden);
-    if (isOpen) return; // page เปิดอยู่ ไม่แสดงซ้ำ
+    const displayOpen = list.some(c => c.url.includes('display.html'));
+    if (displayOpen) {
+      // page เปิดอยู่ — ส่ง message ให้ page จัดการแทน ไม่ showNotification ซ้ำ
+      list.forEach(c => {
+        if (c.url.includes('display.html')) {
+          c.postMessage({ type: 'FCM_BACKGROUND', payload });
+        }
+      });
+      return;
+    }
 
+    // page ปิด/พับจอ — SW แสดง notification เอง
     return self.registration.showNotification(title, {
       body,
       tag,
