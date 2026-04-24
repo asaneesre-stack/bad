@@ -2263,6 +2263,22 @@
                             if (document.getElementById('payment-status-list')) this.loadPaymentStatus();
                         });
                     }
+                    // Realtime listener สำหรับ presence + pushTokens
+                    if (!this._deviceListener) {
+                        this._deviceListener = true;
+                        // listener presence
+                        firebase.database().ref('presence').on('value', () => {
+                            if (document.getElementById('connected-devices-body')?.closest('#connected-devices-list')?.style.display !== 'none') {
+                                this.checkConnectedDevices();
+                            }
+                        });
+                        // listener pushTokens
+                        firebase.database().ref('pushTokens').on('value', () => {
+                            if (document.getElementById('connected-devices-body')?.closest('#connected-devices-list')?.style.display !== 'none') {
+                                this.checkConnectedDevices();
+                            }
+                        });
+                    }
                     break;
             }
         },
