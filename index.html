@@ -1547,13 +1547,12 @@
                 <p style="color:#888;font-size:0.85rem;">ใช้ตอนทดสอบ หรือเมื่อต้องการหยุดแจ้งเตือนทุกเครื่องทันที</p>
 
                 <!-- Connected devices -->
-                <div id="connected-devices-list" style="margin:0.75rem 0;display:none;">
+                <div id="connected-devices-list" style="margin:0.75rem 0;display:block;">
                     <div style="font-size:0.8rem;font-weight:700;color:var(--primary);margin-bottom:0.5rem;">📱 เครื่องที่เชื่อมต่ออยู่:</div>
                     <div id="connected-devices-body" style="display:flex;flex-direction:column;gap:0.4rem;max-height:240px;overflow-y:auto;"></div>
                 </div>
 
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:0.75rem;">
-                    <button onclick="App.checkConnectedDevices()">📱 ดูเครื่องที่เชื่อมต่อ</button>
                     <button class="danger" onclick="App.clearAllPushTokens()">🔕 เคลียร์ token ทั้งหมด</button>
                     <button class="secondary" onclick="App.clearAlertState()">🔄 รีเซ็ต alert state</button>
                 </div>
@@ -2256,6 +2255,7 @@
                     break;
                 case 'manager-tools':
                     this.loadPaymentStatus();
+                    this.checkConnectedDevices();
                     if (!this._paymentListener) {
                         this._paymentListener = true;
                         firebase.database().ref('badmintonState/payments').on('value', snap => {
@@ -3034,12 +3034,11 @@
                 if (!data) {
                     statusEl.textContent = '📭 ไม่มีเครื่องเชื่อมต่ออยู่';
                     statusEl.style.color = '#888';
-                    listEl.style.display = 'none';
+                    bodyEl.innerHTML = '<div style="color:#aaa;font-size:0.82rem;">ไม่มีเครื่องเชื่อมต่ออยู่</div>';
                     return;
                 }
 
                 statusEl.textContent = '';
-                listEl.style.display = 'block';
 
                 let totalDevices = 0;
                 let rows = '';
