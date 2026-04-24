@@ -2327,17 +2327,17 @@
     // Hook into render to update watch bar + alerts after every sync
     const _origRender = render;
     const _wasPlaying = new Set();
+    let _alertDebounce = null;  // ป้องกัน checkQueueAlerts ยิงซ้ำ
+
     render = function() {
       _origRender();
 
       // ตรวจจับตอนจบเกม — isPlaying เปลี่ยนจาก true → false
-      // reset alertShown เพื่อรับแจ้งเตือนคิวรอบหน้าได้
-      // ไม่ลบ watchedIds — user ยังติดตามชื่อตัวเองต่อ
       watchedIds.forEach(pid => {
-        const player   = getPlayer(pid);
+        const player = getPlayer(pid);
         if (!player) return;
-        const wasPlay  = _wasPlaying.has(pid);
-        const nowPlay  = !!player.isPlaying;
+        const wasPlay = _wasPlaying.has(pid);
+        const nowPlay = !!player.isPlaying;
         if (wasPlay && !nowPlay) {
           alertShown.delete(`${pid}-next`);
           alertShown.delete(`${pid}-court`);
@@ -2348,7 +2348,14 @@
 
       renderWatchBar();
       highlightMyQueues();
-      checkQueueAlerts();
+
+      // debounce checkQueueAlerts 500ms
+      // ป้องกันกรณี Firebase trigger render หลายครั้งติดกัน
+      if (_alertDebounce) clearTimeout(_alertDebounce);
+      _alertDebounce = setTimeout(() => {
+        _alertDebounce = null;
+        checkQueueAlerts();
+      }, 500);
     };
 
     // ── Player History Modal ─────────────────────────────────────
