@@ -1982,7 +1982,15 @@
         const key1   = `${pid}-next`;
         const key2   = `${pid}-court`;
 
-        // กำลังเล่นอยู่ → ไม่ทำอะไร
+        // ลงสนามแล้ว (pos=0 หรือ isPlaying=true) → แจ้งเตือน level 2 ครั้งเดียว
+        // ต้องเช็คก่อน isPlaying guard เพราะ isPlaying=true เกิดพร้อมกับออกจากคิว
+        if ((pos === 0 || (player && player.isPlaying)) && alertShown.has(key1) && !alertShown.has(key2)) {
+          alertShown.add(key2);
+          if (!_justReturned) triggerAlert(player ? player.name : '???', 2);
+          return;
+        }
+
+        // กำลังเล่นอยู่แล้ว ไม่ต้องทำอะไรเพิ่ม
         if (player && player.isPlaying) return;
 
         if (pos >= 2) {
@@ -1995,13 +2003,6 @@
           if (!alertShown.has(key1)) {
             alertShown.add(key1);
             if (!_justReturned) triggerAlert(player ? player.name : '???', 1);
-          }
-
-        } else if (pos === 0) {
-          // ลงสนามแล้ว (ออกจากคิว) → แจ้งเตือนครั้งเดียว
-          if (alertShown.has(key1) && !alertShown.has(key2)) {
-            alertShown.add(key2);
-            if (!_justReturned) triggerAlert(player ? player.name : '???', 2);
           }
         }
       });
