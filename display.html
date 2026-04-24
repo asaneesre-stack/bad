@@ -1281,9 +1281,21 @@
 
       <!-- Waiting -->
       <div class="waiting-section">
-        <div class="waiting-title">รอจัดคู่</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
+          <div class="waiting-title" style="margin-bottom:0;">รอจัดคู่</div>
+          <button id="btn-show-all" onclick="toggleShowAll()"
+            style="font-size:0.65rem;padding:2px 8px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);
+            background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);cursor:pointer;min-height:unset;">
+            👥 ดูทั้งหมด
+          </button>
+        </div>
         <div class="waiting-chips-grid" id="waiting-chips"></div>
         <div id="waiting-empty" style="display:none;font-size:0.82rem;color:var(--muted);font-style:italic;">ไม่มีผู้เล่นรอ</div>
+        <!-- all players list (hidden by default) -->
+        <div id="all-players-panel" style="display:none;margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid rgba(255,255,255,0.1);">
+          <div style="font-size:0.65rem;color:var(--muted);font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">รายชื่อทั้งหมด</div>
+          <div class="waiting-chips-grid" id="all-players-chips"></div>
+        </div>
       </div>
     </div>
 
@@ -1770,6 +1782,37 @@
     }
 
     // ── Waiting ───────────────────────────────────────────────────
+    let _showAll = false;
+
+    window.toggleShowAll = function() {
+      _showAll = !_showAll;
+      const panel = document.getElementById('all-players-panel');
+      const btn   = document.getElementById('btn-show-all');
+      if (panel) panel.style.display = _showAll ? 'block' : 'none';
+      if (btn)   btn.style.background = _showAll ? 'rgba(0,168,204,0.25)' : 'rgba(255,255,255,0.08)';
+      if (_showAll) renderAllPlayers(state.players || []);
+    };
+
+    function renderAllPlayers(players) {
+      const el = document.getElementById('all-players-chips');
+      if (!el) return;
+      const sorted = [...players].sort((a,b) => (a.isCheckedIn === b.isCheckedIn ? 0 : a.isCheckedIn ? -1 : 1));
+      el.innerHTML = sorted.map(p => {
+        const checked = p.isCheckedIn;
+        const playing = p.isPlaying;
+        const style = checked
+          ? playing
+            ? 'background:rgba(39,174,96,0.2);border:1px solid rgba(39,174,96,0.5);'
+            : 'background:rgba(0,168,204,0.15);border:1px solid rgba(0,168,204,0.4);'
+          : 'opacity:0.4;border:1px solid rgba(255,255,255,0.15);';
+        const icon = playing ? '🏸' : checked ? '✅' : '';
+        return `<div class="waiting-chip" style="${style}cursor:default;">
+          <span class="waiting-chip-name">${icon} ${esc(p.name)}</span>
+          <span class="skill-badge-sm" style="background:${skillColor(p.skill)}">${esc(p.skill)}</span>
+        </div>`;
+      }).join('');
+    }
+
     function renderWaiting(queues, players) {
       const inQ = new Set(queues.flatMap(q => [...q.team1, ...q.team2]));
       const waiting = players.filter(p => p.isCheckedIn && !p.isPlaying && !inQ.has(p.id));
@@ -2386,6 +2429,7 @@
 
       renderWatchBar();
       highlightMyQueues();
+      if (_showAll) renderAllPlayers(state.players || []);
 
       // debounce checkQueueAlerts 500ms
       // ป้องกันกรณี Firebase trigger render หลายครั้งติดกัน
