@@ -1488,8 +1488,20 @@
     // Send via SW showNotification (works when page is open)
     // When page is closed, FCM delivers directly via SW push event
     function sendPushNotification(title, body, tag) {
-      // SW จัดการแสดง notification ตอน background แล้ว
-      // ตอน foreground overlay แสดงอยู่แล้ว ไม่ต้องทำอะไรเพิ่ม
+      if (!_swRegistration) return;
+      if (!document.hidden) return;
+      try {
+        _swRegistration.showNotification(title, {
+          body,
+          tag,
+          renotify: false,
+          icon: 'apple-touch-icon.png',
+          badge: 'apple-touch-icon.png',
+          vibrate: [200, 80, 200],
+          requireInteraction: true,
+          data: { url: './display.html' },
+        });
+      } catch(e) {}
     }
 
     // ── Firebase ──────────────────────────────────────────────────

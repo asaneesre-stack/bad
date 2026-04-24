@@ -1,4 +1,7 @@
-// sw.js — B&B Badminton Service Worker v12
+// sw.js — B&B Badminton Service Worker v9
+// ส่ง notification ปกติผ่าน APNs + apns-collapse-id
+// SW suppress onBackgroundMessage ป้องกัน duplicate
+
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
@@ -14,40 +17,12 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// APNs แสดง notification เองจาก payload แล้ว 1 ครั้ง
+// onBackgroundMessage ต้องมี (FCM SDK บังคับ) แต่ไม่ showNotification
+// เพราะถ้า showNotification จะเป็น 2 ครั้ง
 messaging.onBackgroundMessage(payload => {
-  const data  = payload.data || {};
-  const title = data.title  || payload.notification?.title || '🏸 B&B Badminton';
-  const body  = data.body   || payload.notification?.body  || 'มีการแจ้งเตือนใหม่';
-  const tag   = data.tag    || 'bb-notify';
-  const url   = data.url    || './display.html';
-
-  // visibilityState ไม่มีใน SW — เช็คแค่ว่า client มีอยู่ไหม
-  // ถ้า display.html เปิด = foreground แล้วจัดการเองผ่าน triggerAlert
-  // ถ้าไม่มี client = background/killed → SW ต้องแสดงเอง
-  return clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-    const displayOpen = list.some(c => c.url.includes('display.html'));
-    if (displayOpen) {
-      // page เปิดอยู่ — ส่ง message ให้ page จัดการแทน ไม่ showNotification ซ้ำ
-      list.forEach(c => {
-        if (c.url.includes('display.html')) {
-          c.postMessage({ type: 'FCM_BACKGROUND', payload });
-        }
-      });
-      return;
-    }
-
-    // page ปิด/พับจอ — SW แสดง notification เอง
-    return self.registration.showNotification(title, {
-      body,
-      tag,
-      renotify:           true,
-      icon:               './apple-touch-icon.png',
-      badge:              './apple-touch-icon.png',
-      vibrate:            [200, 80, 200],
-      requireInteraction: true,
-      data:               { url },
-    });
-  });
+  // ไม่ทำอะไร — APNs จัดการแสดงให้แล้ว
+  return Promise.resolve();
 });
 
 self.addEventListener('install',  () => self.skipWaiting());
@@ -55,6 +30,7 @@ self.addEventListener('activate', e  => e.waitUntil(clients.claim()));
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
+  // ลบ notification ที่เหลือทั้งหมด
   self.registration.getNotifications().then(ns => ns.forEach(n => n.close()));
   const url = event.notification.data?.url || './display.html';
   event.waitUntil(
