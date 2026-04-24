@@ -3396,6 +3396,17 @@
                 listEl.innerHTML = '<div style="color:#aaa;font-size:0.85rem;padding:0.5rem;">ยังไม่มีผู้เล่นเช็คอิน</div>';
                 return;
             }
+            // sync history ล่าสุดจาก Firebase ก่อน render
+            firebase.database().ref('badmintonState/history').once('value').then(snap => {
+                const h = snap.val();
+                if (h) appState.history = _fixFirebaseArrays({ history: h, players: appState.players || [] }).history || appState.history;
+                this._renderCombinedPaymentListInner(checkedIn);
+            }).catch(() => this._renderCombinedPaymentListInner(checkedIn));
+        },
+
+        _renderCombinedPaymentListInner: function(checkedIn) {
+            const listEl = document.getElementById('combined-payment-list');
+            if (!listEl) return;
 
             const payments  = appState.payments  || {};
             const payMode   = appState.playerPayMode || {};
