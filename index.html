@@ -3008,8 +3008,12 @@
             statusEl.style.color = '#e67e22';
 
             try {
-                const snap = await firebase.database().ref('pushTokens').once('value');
-                const data = snap.val();
+                const [tokenSnap, presenceSnap] = await Promise.all([
+                    firebase.database().ref('pushTokens').once('value'),
+                    firebase.database().ref('presence').once('value'),
+                ]);
+                const data     = tokenSnap.val();
+                const presence = presenceSnap.val() || {};
 
                 if (!data) {
                     statusEl.textContent = '📭 ไม่มีเครื่องเชื่อมต่ออยู่';
