@@ -1346,6 +1346,16 @@
 
     // เมื่อพับจอ → sync state แล้ว start polling ใน SW
     let _justReturned = false; // flag ป้องกันแจ้งเตือนซ้ำเมื่อเปิดแอปกลับมา
+    // touch timestamp ของ token ตัวเอง — บอก server ว่ายังใช้งานอยู่ (ไม่ต้อง re-register)
+    function touchMyTokens() {
+      const did = localStorage.getItem('bb-device-id');
+      if (!did) return;
+      const now = Date.now();
+      watchedIds.forEach(pid => {
+        try { db.ref(`pushTokens/${pid}/${did}/ts`).set(now); } catch(e) {}
+      });
+    }
+
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         syncStateToSW();
@@ -1357,35 +1367,23 @@
           _swRegistration.getNotifications().then(ns => ns.forEach(n => n.close())).catch(()=>{});
         }
         setTimeout(() => { _justReturned = false; }, 3000);
-        // re-register token เพราะอาจถูกลบตอน bfcache หรือ pagehide
+        // touch timestamp ของ token (ไม่ re-register เต็ม) — แค่ยืนยันว่ายังใช้อยู่
         if (_pushGranted && watchedIds.size > 0) {
-          watchedIds.forEach(pid => {
-            setupPresence(pid);
-            registerFCMToken(pid);
-          });
+          touchMyTokens();
+          // re-setup presence (lightweight) — ไม่ลบ token เดิม
+          watchedIds.forEach(pid => setupPresence(pid));
         }
       }
     });
 
-    // ลบ token ทั้งหมดเมื่อ slide ออก / ปิดแอป
-    function removeAllMyTokens() {
-      const did = localStorage.getItem('bb-device-id');
-      if (!did) return;
-      watchedIds.forEach(pid => {
-        try { db.ref(`pushTokens/${pid}/${did}`).remove(); } catch(e) {}
-      });
-    }
-
-    // page ปิด / slide ออก
+    // page ปิด / slide ออก / kill app — token ยังคงอยู่ตามที่ user ตั้งไว้
+    // (จะถูกลบเฉพาะเมื่อ user กดเลิกติดตามเองผ่าน toggleWatch)
     window.addEventListener('pagehide', (e) => {
-      if (!e.persisted) {
-        // ปิดจริง ไม่ใช่ bfcache — ลบ token ทันที
-        removeAllMyTokens();
-      } else {
-        // bfcache (พับจอ) — token ยังคงอยู่ SW รับแทน
+      // sync state ให้ SW เพื่อรับ push ต่อ ไม่ลบ token
+      try {
         syncStateToSW();
         startSWPoll();
-      }
+      } catch(_) {}
     });
 
     async function initPWA() {
@@ -1398,6 +1396,14 @@
       } catch(e) { console.warn('[SW] register failed', e); }
     }
     initPWA();
+
+    // Heartbeat ทุก 6 ชั่วโมง — touch timestamp ให้ token ดูสด ไม่โดน TTL ลบ
+    // (ทำงานเฉพาะเมื่อแอปเปิดอยู่ ถ้าปิดนานเกิน 7 วันจริงๆ ก็ตามนั้น)
+    setInterval(() => {
+      if (_pushGranted && watchedIds.size > 0) {
+        touchMyTokens();
+      }
+    }, 6 * 60 * 60 * 1000); // 6 ชั่วโมง
 
     async function requestPushPermission() {
       if (!('Notification' in window)) return false;
@@ -1439,16 +1445,17 @@
         // เช็คว่ามี device อื่น token อยู่แล้วไหม
         const snap = await db.ref(`pushTokens/${pid}`).once('value');
         const existing = snap.val();
-        const TOKEN_TTL = 30 * 60 * 1000; // 30 นาที — เกินนี้ถือว่า kill app แล้ว
+        // TTL ยาว 7 วัน — token จะถูกลบก็ต่อเมื่อ user เลิกติดตามเอง หรือเก่ามากจริงๆ
+        // (ไม่ลบเพราะปิดแอป/swipe out/หน้าจอดับ)
+        const TOKEN_TTL = 7 * 24 * 60 * 60 * 1000; // 7 วัน
         if (existing && typeof existing === 'object') {
           const now = Date.now();
-          // ลบ token ที่หมดอายุแล้ว (kill app แล้วไม่ได้ลบ)
+          // ลบเฉพาะ token ที่เก่าเกิน 7 วัน (ปลอดภัยสมมติว่า user ลืมแล้ว)
           const cleanupPromises = [];
           Object.entries(existing).forEach(([devId, val]) => {
             if (devId !== did) {
               const age = now - (val.ts || 0);
               if (age > TOKEN_TTL) {
-                // token เก่าเกิน 8 ชม ถือว่า stale ลบทิ้ง
                 cleanupPromises.push(db.ref(`pushTokens/${pid}/${devId}`).remove());
                 delete existing[devId];
               }
