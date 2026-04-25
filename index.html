@@ -9,8 +9,8 @@
       script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com https://*.googleapis.com;
       style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
-      img-src 'self' data: blob: https://promptpay.io https://*.firebaseapp.com;
-      connect-src 'self' https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com wss://*.firebaseio.com https://fcmregistrations.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com;
+      img-src 'self' data: blob: https://promptpay.io https://*.firebaseapp.com https://firebasestorage.googleapis.com https://*.firebasestorage.app;
+      connect-src 'self' https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com wss://*.firebaseio.com https://fcmregistrations.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app;
       frame-src 'none';
       object-src 'none';
       base-uri 'self';
@@ -937,6 +937,7 @@
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-auth-compat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-storage-compat.min.js"></script>
     <script>
     const firebaseConfig = {
         apiKey: "AIzaSyCwdZT7tzwXyapCfg3wbjRuhiEDeXapghA",
@@ -1027,6 +1028,17 @@
           setAttempts({ count: 0, lockedUntil: 0 });
           document.getElementById('pw-gate').style.display = 'none';
           document.getElementById('pw-input').value = '';
+          // Mark current Anonymous user as admin in Firebase (สำหรับ Rules)
+          try {
+            const user = firebase.auth().currentUser;
+            if (user && user.uid) {
+              await firebase.database().ref('adminUsers/' + user.uid).set({
+                ts: Date.now(),
+                device: navigator.userAgent.substring(0, 100)
+              });
+              console.log('[Auth] Admin flag set for', user.uid);
+            }
+          } catch(e) { console.warn('[Auth] Failed to set admin flag:', e); }
         } else {
           const newCount = (att.count || 0) + 1;
           if (newCount >= MAX_ATTEMPTS) {
@@ -1046,6 +1058,24 @@
       // ตรวจสอบทันทีที่โหลดหน้า
       if (sessionStorage.getItem(KEY) !== '1') {
         document.getElementById('pw-gate').style.display = 'flex';
+      } else {
+        // Session ยัง valid — รอให้ Auth พร้อมแล้ว mark admin (กัน uid เปลี่ยน)
+        const ensureAdminFlag = () => {
+          try {
+            const user = firebase.auth().currentUser;
+            if (user && user.uid) {
+              firebase.database().ref('adminUsers/' + user.uid).set({
+                ts: Date.now(),
+                device: navigator.userAgent.substring(0, 100)
+              }).catch(()=>{});
+            }
+          } catch(e) {}
+        };
+        // ลองทันที + รออีกครั้งหลัง auth state พร้อม
+        setTimeout(ensureAdminFlag, 1500);
+        if (typeof firebase !== 'undefined' && firebase.auth) {
+          firebase.auth().onAuthStateChanged(u => { if (u) ensureAdminFlag(); });
+        }
       }
     })();
   </script>
@@ -3396,6 +3426,100 @@
             }).join('');
         },
 
+        // ── Slip Viewer / Cleanup ────────────────────────────────────
+        viewSlip: function(pid) {
+            const pay = (appState.payments || {})[pid];
+            if (!pay?.slipUrl) { showError('ไม่มีสลิปสำหรับผู้เล่นนี้'); return; }
+            const player = PlayerUtils.getById(+pid);
+            const name = player ? player.name : '?';
+            const amt = this._calcPlayerAmount(+pid);
+            const slipTime = pay.slipTs ? new Date(pay.slipTs).toLocaleString('th-TH') : '-';
+
+            // สร้าง modal แสดงสลิป
+            let modal = document.getElementById('slip-viewer-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'slip-viewer-modal';
+                modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:10000;display:none;align-items:center;justify-content:center;padding:1rem;';
+                modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+                document.body.appendChild(modal);
+            }
+            modal.innerHTML = `
+                <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;max-height:90vh;overflow:auto;">
+                    <div style="padding:1rem 1.25rem;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <div style="font-weight:800;font-size:1rem;">📷 สลิปของ ${escapeHtml(name)}</div>
+                            <div style="font-size:0.78rem;color:#888;margin-top:2px;">ยอด ${amt}฿ · ส่งเมื่อ ${slipTime}</div>
+                        </div>
+                        <button onclick="document.getElementById('slip-viewer-modal').style.display='none'"
+                            style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#999;">✕</button>
+                    </div>
+                    <div style="padding:1rem;text-align:center;">
+                        <img src="${escapeHtml(pay.slipUrl)}" style="max-width:100%;border-radius:8px;border:1px solid #ddd;" alt="สลิป">
+                    </div>
+                    <div style="padding:0.75rem 1.25rem;border-top:1px solid #eee;display:flex;gap:0.5rem;flex-wrap:wrap;">
+                        <a href="${escapeHtml(pay.slipUrl)}" target="_blank" rel="noopener"
+                            style="flex:1;text-align:center;padding:0.55rem;border-radius:8px;background:#3498db;color:#fff;text-decoration:none;font-weight:700;font-size:0.85rem;">
+                            🔍 ดูใหญ่
+                        </a>
+                        <button onclick="App.togglePayment(${pid}, true); document.getElementById('slip-viewer-modal').style.display='none'; App.renderCombinedPaymentList();"
+                            class="success" style="flex:1;font-size:0.85rem;font-weight:700;">
+                            ✅ ยืนยันรับเงิน
+                        </button>
+                    </div>
+                    <div style="padding:0 1.25rem 0.85rem;font-size:0.72rem;color:#aaa;text-align:center;">
+                        ⚠️ ตรวจสอบยอดเงิน + เวลา + ชื่อบัญชีจริงในแอปธนาคารก่อนยืนยัน
+                    </div>
+                </div>
+            `;
+            modal.style.display = 'flex';
+            auditLog('view_slip', { pid: +pid, name });
+        },
+
+        clearAllSlips: async function() {
+            if (!confirm('ลบสลิปทั้งหมดในระบบ?\n\n⚠️ จะลบสลิปจาก Storage และล้าง slipUrl ใน payment ทุกคน\nการกระทำนี้ไม่สามารถถอยกลับได้')) return;
+
+            try {
+                const payments = appState.payments || {};
+                const toDelete = [];
+                Object.entries(payments).forEach(([pid, pay]) => {
+                    if (pay?.slipPath) toDelete.push({ pid: +pid, path: pay.slipPath });
+                });
+
+                if (toDelete.length === 0) {
+                    showSuccess('ไม่มีสลิปที่ต้องลบ');
+                    return;
+                }
+
+                showSuccess(`⏳ กำลังลบ ${toDelete.length} สลิป...`);
+
+                // ลบไฟล์จาก Storage ทีละอัน
+                let deleted = 0, failed = 0;
+                for (const item of toDelete) {
+                    try {
+                        await firebase.storage().ref(item.path).delete();
+                        // ลบ slipUrl + slipPath + slipTs ใน payment
+                        await firebase.database().ref(`badmintonState/payments/${item.pid}`).update({
+                            slipUrl:  null,
+                            slipPath: null,
+                            slipTs:   null,
+                        });
+                        deleted++;
+                    } catch (e) {
+                        console.warn('delete slip failed:', item.path, e);
+                        failed++;
+                    }
+                }
+
+                auditLog('clear_all_slips', { deleted, failed });
+                showSuccess(`✅ ลบสำเร็จ ${deleted} ใบ${failed > 0 ? ` (ล้มเหลว ${failed})` : ''}`);
+                this.renderCombinedPaymentList();
+            } catch (e) {
+                console.error('clearAllSlips failed:', e);
+                showError('เกิดข้อผิดพลาด: ' + (e.message || e));
+            }
+        },
+
         togglePayment: function(pid, paid) {
             // ป้องกัน path injection: pid ต้องเป็น integer
             const pidNum = +pid;
@@ -3927,7 +4051,12 @@
                     </div>
 
                     <!-- สถานะ + ปุ่มยืนยัน -->
-                    <div style="display:flex;align-items:center;gap:0.4rem;margin-left:auto;">
+                    <div style="display:flex;align-items:center;gap:0.4rem;margin-left:auto;flex-wrap:wrap;">
+                        ${(payments[p.id]?.slipUrl)
+                            ? `<button onclick="App.viewSlip(${p.id})" title="ดูสลิป"
+                                style="font-size:0.72rem;padding:2px 8px;min-height:unset;background:#3498db;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;">📷 สลิป</button>`
+                            : ''
+                        }
                         ${paid
                             ? `<span style="color:#27ae60;font-size:0.8rem;font-weight:700;">✅ จ่ายแล้ว</span>
                                <button onclick="App.togglePayment(${p.id},false);App.renderCombinedPaymentList();App.renderSummary();"
@@ -7059,6 +7188,7 @@ setInterval(updateWaitBadgeColors,1000);
       <div style="display:flex;gap:0.75rem;margin-top:0.75rem;flex-wrap:wrap;">
         <button onclick="App.renderCombinedPaymentList()" class="secondary" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:unset;">🔄 รีเฟรช</button>
         <button onclick="App.resetAllPayments()" class="danger" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:unset;">🗑️ เคลียร์ทั้งหมด</button>
+        <button onclick="App.clearAllSlips()" class="warning" style="font-size:0.82rem;padding:0.4rem 0.9rem;min-height:unset;">📷 ลบสลิปทั้งหมด</button>
       </div>
     </div>
 

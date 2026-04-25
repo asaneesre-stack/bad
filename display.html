@@ -9,8 +9,8 @@
     script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com https://*.googleapis.com;
     style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
-    img-src 'self' data: blob: https://promptpay.io https://api.qrserver.com https://*.firebaseapp.com;
-    connect-src 'self' https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com wss://*.firebaseio.com https://fcmregistrations.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com;
+    img-src 'self' data: blob: https://promptpay.io https://api.qrserver.com https://*.firebaseapp.com https://firebasestorage.googleapis.com https://*.firebasestorage.app;
+    connect-src 'self' https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com wss://*.firebaseio.com https://fcmregistrations.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firebasestorage.googleapis.com https://*.firebasestorage.app;
     frame-src 'none';
     object-src 'none';
     base-uri 'self';
@@ -28,6 +28,7 @@
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-messaging-compat.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-auth-compat.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-storage-compat.min.js"></script>
   <style>
     :root {
       --bg: #080d1a;
@@ -1244,6 +1245,34 @@
 
         <!-- Buttons -->
         <div id="payment-notify-area">
+          <!-- Slip upload section -->
+          <div style="background:#f8f9fa;border:2px dashed #d4d8e0;border-radius:12px;padding:0.85rem;margin-bottom:0.8rem;">
+            <div style="font-size:0.78rem;color:#666;margin-bottom:0.5rem;text-align:center;">
+              📸 อัปโหลดสลิปการโอน (ไม่บังคับ)
+            </div>
+            <input type="file" id="slip-file-input" accept="image/*" style="display:none;"
+                   onchange="handleSlipFileSelect(event)">
+            <div id="slip-preview-area" style="display:none;margin-bottom:0.5rem;">
+              <img id="slip-preview-img" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;border:1px solid #ddd;">
+              <div style="font-size:0.7rem;color:#aaa;text-align:center;margin-top:4px;" id="slip-preview-info"></div>
+            </div>
+            <div style="display:flex;gap:0.4rem;">
+              <button id="btn-pick-slip" onclick="document.getElementById('slip-file-input').click()"
+                style="flex:1;padding:0.6rem;border-radius:10px;border:none;
+                background:#3498db;color:#fff;font-size:0.85rem;font-weight:700;cursor:pointer;">
+                📷 เลือกรูปสลิป
+              </button>
+              <button id="btn-upload-slip" onclick="uploadSlip()" disabled
+                style="flex:1;padding:0.6rem;border-radius:10px;border:none;
+                background:#95a5a6;color:#fff;font-size:0.85rem;font-weight:700;cursor:not-allowed;opacity:0.6;">
+                ⬆️ ส่งสลิป
+              </button>
+            </div>
+            <div style="font-size:0.68rem;color:#e67e22;text-align:center;margin-top:0.4rem;">
+              ⚠️ ห้ามใช้สลิปปลอม — admin ตรวจสอบทุกใบ
+            </div>
+          </div>
+
           <button id="btn-notify-paid" onclick="notifyPaid()"
             style="display:flex;align-items:center;justify-content:center;gap:8px;
             background:linear-gradient(135deg,#27ae60,#1e8449);color:#fff;border:none;
@@ -2486,6 +2515,153 @@
     }
 
 
+
+    // ============================================================
+    // Slip Upload — อัปโหลดสลิปการโอนเงิน
+    // ============================================================
+    let _selectedSlipFile = null;
+    let _selectedSlipBlob = null; // หลังบีบอัด
+
+    function handleSlipFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // ตรวจ type
+      if (!file.type.startsWith('image/')) {
+        alert('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+        return;
+      }
+      // ตรวจ size ก่อนบีบอัด — ไม่เกิน 10 MB (รูปดิบ)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('รูปภาพใหญ่เกิน 10 MB กรุณาเลือกรูปอื่น');
+        return;
+      }
+
+      _selectedSlipFile = file;
+      const previewImg = document.getElementById('slip-preview-img');
+      const previewArea = document.getElementById('slip-preview-area');
+      const previewInfo = document.getElementById('slip-preview-info');
+      const uploadBtn = document.getElementById('btn-upload-slip');
+
+      // บีบอัดและ preview
+      previewInfo.textContent = '⏳ กำลังบีบอัด...';
+      previewArea.style.display = 'block';
+      compressImage(file, 1200, 0.75).then(blob => {
+        _selectedSlipBlob = blob;
+        const url = URL.createObjectURL(blob);
+        previewImg.src = url;
+        const sizeKB = Math.round(blob.size / 1024);
+        previewInfo.textContent = `📦 ขนาดหลังบีบอัด: ${sizeKB} KB`;
+        // เปิดปุ่ม upload
+        uploadBtn.disabled = false;
+        uploadBtn.style.background = '#27ae60';
+        uploadBtn.style.cursor = 'pointer';
+        uploadBtn.style.opacity = '1';
+      }).catch(err => {
+        console.error('compress failed:', err);
+        previewInfo.textContent = '❌ บีบอัดไม่สำเร็จ ลองรูปอื่น';
+      });
+    }
+
+    // บีบอัดรูป — resize + JPEG quality
+    function compressImage(file, maxSize = 1200, quality = 0.75) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            // คำนวณขนาดใหม่
+            let { width, height } = img;
+            if (width > maxSize || height > maxSize) {
+              const ratio = Math.min(maxSize / width, maxSize / height);
+              width  = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              blob => blob ? resolve(blob) : reject(new Error('toBlob failed')),
+              'image/jpeg',
+              quality
+            );
+          };
+          img.onerror = () => reject(new Error('image load failed'));
+          img.src = e.target.result;
+        };
+        reader.onerror = () => reject(new Error('file read failed'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // อัปโหลดสลิปไป Firebase Storage
+    let _lastUploadAt = 0;
+    async function uploadSlip() {
+      const pid = _currentWatchedPid();
+      if (!pid) { alert('กรุณาเลือกผู้เล่นที่ติดตามก่อน'); return; }
+      if (!_selectedSlipBlob) { alert('กรุณาเลือกรูปสลิปก่อน'); return; }
+
+      // Rate limit: 30 วินาที/ครั้ง
+      const now = Date.now();
+      if (now - _lastUploadAt < 30000) {
+        const wait = Math.ceil((30000 - (now - _lastUploadAt)) / 1000);
+        alert(`กรุณารอ ${wait} วินาที ก่อนอัปโหลดอีกครั้ง`);
+        return;
+      }
+
+      const btn = document.getElementById('btn-upload-slip');
+      const info = document.getElementById('slip-preview-info');
+      btn.disabled = true;
+      btn.textContent = '⏳ กำลังส่ง...';
+      btn.style.background = '#95a5a6';
+
+      try {
+        // path: slips/{YYYY-MM-DD}/{pid}_{timestamp}.jpg
+        const dateKey = new Date().toISOString().slice(0, 10);
+        const filename = `${pid}_${now}.jpg`;
+        const path = `slips/${dateKey}/${filename}`;
+
+        const ref = firebase.storage().ref(path);
+        const snapshot = await ref.put(_selectedSlipBlob, {
+          contentType: 'image/jpeg',
+          customMetadata: { pid: String(pid), uploadedAt: String(now) }
+        });
+        const url = await snapshot.ref.getDownloadURL();
+
+        // เก็บ URL + path ใน payment record
+        await db.ref(`badmintonState/payments/${pid}`).update({
+          slipUrl:  url,
+          slipPath: path,
+          slipTs:   now,
+          pending:  true,
+          paid:     false,
+        });
+
+        _lastUploadAt = now;
+        info.textContent = '✅ ส่งสลิปสำเร็จ — รอ admin ตรวจสอบ';
+        btn.textContent = '✅ ส่งแล้ว';
+        btn.style.background = '#27ae60';
+        // ปิด modal หลัง 2 วินาที
+        setTimeout(() => {
+          document.getElementById('payment-modal').style.display = 'none';
+          // reset state
+          _selectedSlipFile = null;
+          _selectedSlipBlob = null;
+          document.getElementById('slip-preview-area').style.display = 'none';
+          document.getElementById('slip-file-input').value = '';
+        }, 2000);
+      } catch (e) {
+        console.error('upload failed:', e);
+        info.textContent = '❌ ส่งไม่สำเร็จ: ' + (e.message || e.code || 'unknown');
+        btn.disabled = false;
+        btn.textContent = '⬆️ ลองใหม่';
+        btn.style.background = '#e67e22';
+        btn.style.cursor = 'pointer';
+        btn.style.opacity = '1';
+      }
+    }
 
     async function notifyPaid() {
       const pid = [...watchedIds][0];
