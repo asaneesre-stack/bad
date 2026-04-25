@@ -1605,6 +1605,32 @@
                 <div id="broadcast-status" style="margin-top:0.75rem;font-size:0.85rem;color:#888;"></div>
             </div>
 
+            <!-- Audit Log -->
+            <div class="card">
+                <h2>📋 ประวัติการแก้ไข</h2>
+                <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">บันทึกการกระทำสำคัญในระบบ (เก็บย้อนหลัง 30 วัน)</p>
+
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;align-items:center;">
+                    <input type="date" id="audit-date" style="padding:0.5rem;border:1.5px solid #ced4da;border-radius:8px;font-size:0.9rem;">
+                    <button onclick="App.loadAuditLog()" class="success" style="font-size:0.85rem;padding:0.45rem 0.9rem;min-height:unset;">🔍 ดู</button>
+                    <select id="audit-filter" onchange="App.loadAuditLog()" style="padding:0.5rem;border:1.5px solid #ced4da;border-radius:8px;font-size:0.9rem;">
+                        <option value="">ทุกประเภท</option>
+                        <option value="add_player">เพิ่มผู้เล่น</option>
+                        <option value="delete_player">ลบผู้เล่น</option>
+                        <option value="record_match">บันทึกผลเกม</option>
+                        <option value="payment_confirm">ยืนยันรับเงิน</option>
+                        <option value="payment_cancel">ยกเลิกรับเงิน</option>
+                        <option value="reset_all_payments">เคลียร์ payment</option>
+                        <option value="clear_all_players">ลบผู้เล่นทั้งหมด</option>
+                        <option value="clear_all_history">ล้างประวัติ</option>
+                    </select>
+                </div>
+
+                <div id="audit-log-list" style="max-height:400px;overflow-y:auto;border:1px solid #eee;border-radius:8px;">
+                    <div style="text-align:center;color:#aaa;padding:1rem;font-size:0.85rem;">เลือกวันที่แล้วกด "ดู"</div>
+                </div>
+            </div>
+
             <!-- Firebase Usage -->
             <div class="card">
                 <h2>📊 ตรวจสอบการใช้งาน Firebase</h2>
@@ -1969,13 +1995,108 @@
         });
 
         // Global payment listener — ทำงานตลอด ไม่ขึ้นกับแท็บที่เปิด
+        // เก็บ snapshot เก่าเพื่อเทียบหา pending ใหม่
+        let _lastPaymentSnapshot = null;
         firebase.database().ref('badmintonState/payments').on('value', snap => {
-            appState.payments = snap.val() || {};
+            const newPayments = snap.val() || {};
+
+            // ตรวจหา pending ใหม่ (เพื่อแจ้งเตือน admin)
+            if (_lastPaymentSnapshot !== null) {
+                Object.entries(newPayments).forEach(([pid, pay]) => {
+                    if (!pay) return;
+                    const isPendingNow  = pay.pending && !pay.paid;
+                    const wasPendingBefore = _lastPaymentSnapshot[pid]?.pending && !_lastPaymentSnapshot[pid]?.paid;
+                    // pending ใหม่ที่เพิ่งโผล่มา (ไม่ใช่ pending เก่าที่ค้างอยู่)
+                    if (isPendingNow && !wasPendingBefore) {
+                        notifyAdminPaymentPending(pid, pay);
+                    }
+                });
+            }
+            _lastPaymentSnapshot = JSON.parse(JSON.stringify(newPayments));
+            appState.payments = newPayments;
             // update UI ถ้าเปิดอยู่
             if (document.getElementById('combined-payment-list')) App.renderCombinedPaymentList();
             if (document.getElementById('payment-status-list')) App.loadPaymentStatus();
         });
     }
+
+    // แจ้งเตือน admin เมื่อมีคนกดแจ้งจ่าย
+    function notifyAdminPaymentPending(pid, payData) {
+        try {
+            const player = (appState.players || []).find(p => p.id === +pid);
+            const name   = player ? player.name : (payData.name || '?');
+            const amt    = (typeof App !== 'undefined' && App._calcPlayerAmount)
+                ? App._calcPlayerAmount(+pid)
+                : 0;
+            const title  = '💸 มีคนแจ้งโอนเงินแล้ว';
+            const body   = `${name} แจ้งโอน ${amt}฿ — กดเพื่อดูรายละเอียด`;
+
+            // 1) Toast ในหน้าแอป (ใช้ showInfo ถ้ามี ไม่งั้น showSuccess)
+            if (typeof showInfo === 'function') {
+                showInfo(`💸 ${name} แจ้งโอนเงินแล้ว (${amt}฿)`);
+            } else if (typeof showSuccess === 'function') {
+                showSuccess(`💸 ${name} แจ้งโอนเงินแล้ว (${amt}฿)`);
+            }
+
+            // 2) เสียงเตือน (beep) — ดังเฉพาะตอนแอปเปิดอยู่
+            try { playPaymentAlert(); } catch(_) {}
+
+            // 3) Browser notification ถ้าได้รับอนุญาต (ทำงานทั้งตอนแอปเปิด/พับ)
+            if ('Notification' in window && Notification.permission === 'granted') {
+                const n = new Notification(title, {
+                    body: body,
+                    icon: '/icon-192.png',
+                    badge: '/icon-192.png',
+                    tag: `payment-${pid}`,
+                    requireInteraction: false,
+                    silent: false,
+                });
+                n.onclick = () => {
+                    window.focus();
+                    if (App && App.showView) App.showView('manager-tools');
+                    n.close();
+                };
+                // ปิดอัตโนมัติหลัง 10 วินาที
+                setTimeout(() => n.close(), 10000);
+            }
+        } catch(e) {
+            console.warn('notifyAdminPaymentPending failed:', e);
+        }
+    }
+
+    // เสียงเตือน — สร้างด้วย Web Audio API (ไม่ต้อง load file)
+    let _audioCtx = null;
+    function playPaymentAlert() {
+        try {
+            if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const ctx = _audioCtx;
+            // 2 beep สั้นๆ
+            [0, 0.15].forEach(delay => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 880; // A5
+                osc.type = 'sine';
+                const now = ctx.currentTime + delay;
+                gain.gain.setValueAtTime(0, now);
+                gain.gain.linearRampToValueAtTime(0.3, now + 0.02);
+                gain.gain.linearRampToValueAtTime(0, now + 0.12);
+                osc.start(now);
+                osc.stop(now + 0.13);
+            });
+        } catch(e) { /* silent */ }
+    }
+
+    // ขอ permission notification ตอนเข้าระบบ (ครั้งแรกเท่านั้น)
+    function requestAdminNotificationPermission() {
+        if (!('Notification' in window)) return;
+        if (Notification.permission === 'default') {
+            Notification.requestPermission().catch(()=>{});
+        }
+    }
+    // เรียกหลัง 3 วินาที (ให้ user เห็นหน้าก่อน)
+    setTimeout(requestAdminNotificationPermission, 3000);
 
     function loadState() {
         const ref = getDbRef();
@@ -2299,6 +2420,81 @@
     // APP NAMESPACE - Main Application Controller
     // ============================================================
 
+    // ============================================================
+    // Audit Log — บันทึกประวัติการแก้ไขสำคัญ
+    // ============================================================
+    function auditLog(action, details = {}) {
+        try {
+            const today = new Date();
+            const dateKey = today.toISOString().slice(0, 10); // YYYY-MM-DD
+            const entry = {
+                ts: Date.now(),
+                action: String(action),
+                device: _deviceId || 'unknown',
+                details: details
+            };
+            // สั้น compact ตอนเขียน — Firebase auto-create id
+            firebase.database().ref(`auditLog/${dateKey}`).push(entry).catch(() => {});
+        } catch(e) { /* silent */ }
+    }
+    window.auditLog = auditLog;
+
+    // Auto-cleanup audit log เก่ากว่า 30 วัน (ทำงานครั้งเดียวตอนโหลดหน้า)
+    function _cleanupOldAuditLogs() {
+        try {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - 30);
+            const cutoffKey = cutoff.toISOString().slice(0, 10);
+            firebase.database().ref('auditLog').once('value').then(snap => {
+                const val = snap.val() || {};
+                const toDelete = [];
+                Object.keys(val).forEach(dateKey => {
+                    if (dateKey < cutoffKey) toDelete.push(dateKey);
+                });
+                toDelete.forEach(k => firebase.database().ref(`auditLog/${k}`).remove().catch(()=>{}));
+            }).catch(()=>{});
+        } catch(e) {}
+    }
+    // เรียกหลัง 5 วินาที (ไม่ block initial load)
+    setTimeout(_cleanupOldAuditLogs, 5000);
+
+    // ============================================================
+    // Rate Limit Helper — ป้องกันกดปุ่มรัวๆ
+    // ============================================================
+    const _rateLimitMap = new Map(); // key -> last call timestamp
+    function rateLimit(key, cooldownMs = 1000) {
+        const now = Date.now();
+        const last = _rateLimitMap.get(key) || 0;
+        if (now - last < cooldownMs) return false; // block
+        _rateLimitMap.set(key, now);
+        return true; // allow
+    }
+    // ทำให้ปุ่มไม่กดได้ระหว่าง cooldown — จับจาก event
+    function disableButtonBriefly(btn, ms = 1000) {
+        if (!btn || btn.disabled) return;
+        btn.disabled = true;
+        const oldOpacity = btn.style.opacity;
+        btn.style.opacity = '0.5';
+        btn.style.cursor = 'not-allowed';
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.style.opacity = oldOpacity || '';
+            btn.style.cursor = '';
+        }, ms);
+    }
+    // wrap ปุ่ม onclick — disable + check rate limit
+    function guarded(key, btn, fn, cooldownMs = 1000) {
+        if (!rateLimit(key, cooldownMs)) {
+            // กดเร็วเกิน — แสดง toast เตือนนิดหน่อย (เฉพาะถ้ามี window.showError)
+            if (typeof showError === 'function') showError('⏳ กรุณารอสักครู่...');
+            return;
+        }
+        if (btn) disableButtonBriefly(btn, cooldownMs);
+        try { fn(); } catch(e) { console.error(e); }
+    }
+    window.guarded = guarded;
+    window.rateLimit = rateLimit;
+
     const App = {
         /**
          * Show specific view
@@ -2578,6 +2774,7 @@
 
             appState.players.push(newPlayer);
             appState.history[newPlayer.id] = { games: [] };
+            auditLog('add_player', { id: newPlayer.id, name: newPlayer.name, skill: newPlayer.skill });
             return { success: true, player: newPlayer };
         },
 
@@ -2608,7 +2805,11 @@
             const skillF = this._skillFilter || '';
 
             const filteredPlayers = appState.players.filter(p => {
-                const matchName = p.name.toLowerCase().includes(filter.toLowerCase()) || p.id.toString().includes(filter);
+                const q = filter.toLowerCase();
+                const matchName = !q
+                    || p.name.toLowerCase().includes(q)
+                    || (p.realName || '').toLowerCase().includes(q)
+                    || p.id.toString().includes(q);
                 const matchSkill = !skillF || p.skill === skillF;
                 return matchName && matchSkill;
             });
@@ -2725,6 +2926,7 @@
                 appState.players = appState.players.filter(p => p.id !== id);
                 appState.matches = appState.matches.filter(m => !m.team1.includes(id) && !m.team2.includes(id));
                 delete appState.history[id];
+                auditLog('delete_player', { id: player.id, name: player.name, gameCount });
                 saveState();
                 this.renderPlayerList(uiState.currentFilter);
                 this.renderActiveMatches();
@@ -2733,6 +2935,79 @@
         },
 
 
+
+        // ── Audit Log Viewer ────────────────────────────────────
+        loadAuditLog: async function() {
+            const listEl = document.getElementById('audit-log-list');
+            const dateEl = document.getElementById('audit-date');
+            const filterEl = document.getElementById('audit-filter');
+            if (!listEl) return;
+
+            // default = วันนี้
+            let dateKey = dateEl?.value;
+            if (!dateKey) {
+                dateKey = new Date().toISOString().slice(0, 10);
+                if (dateEl) dateEl.value = dateKey;
+            }
+            const filter = filterEl?.value || '';
+
+            listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:1rem;font-size:0.85rem;">⏳ กำลังโหลด...</div>';
+
+            try {
+                const snap = await firebase.database().ref(`auditLog/${dateKey}`).once('value');
+                const data = snap.val() || {};
+                let entries = Object.values(data);
+                // sort: ล่าสุดบนสุด
+                entries.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+                // กรองตามประเภท
+                if (filter) entries = entries.filter(e => e.action === filter);
+
+                if (entries.length === 0) {
+                    listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:1rem;font-size:0.85rem;">ไม่มีรายการในวันนี้</div>';
+                    return;
+                }
+
+                const actionLabel = {
+                    add_player:           ['➕', '#27ae60', 'เพิ่มผู้เล่น'],
+                    delete_player:        ['🗑️', '#e74c3c', 'ลบผู้เล่น'],
+                    record_match:         ['🏸', '#3498db', 'บันทึกผลเกม'],
+                    payment_confirm:      ['✅', '#27ae60', 'ยืนยันรับเงิน'],
+                    payment_cancel:       ['↩️', '#f39c12', 'ยกเลิกรับเงิน'],
+                    reset_all_payments:   ['💸', '#e67e22', 'เคลียร์ payment'],
+                    clear_all_players:    ['💥', '#c0392b', 'ลบผู้เล่นทั้งหมด'],
+                    clear_all_history:    ['🧹', '#9b59b6', 'ล้างประวัติ'],
+                };
+
+                const formatDetails = (entry) => {
+                    const d = entry.details || {};
+                    if (entry.action === 'add_player')      return `<b>${escapeHtml(d.name||'')}</b> (${escapeHtml(d.skill||'')}) #${d.id||'?'}`;
+                    if (entry.action === 'delete_player')   return `<b>${escapeHtml(d.name||'')}</b> #${d.id||'?'} (เกมสะสม ${d.gameCount||0} เกม)`;
+                    if (entry.action === 'payment_confirm') return `<b>${escapeHtml(d.name||'')}</b> ${d.amount||0}฿`;
+                    if (entry.action === 'payment_cancel')  return `<b>${escapeHtml(d.name||'')}</b>`;
+                    if (entry.action === 'record_match')    return `Match #${d.matchId||'?'} → ${d.winner===0?'เสมอ':'ทีม '+d.winner+' ชนะ'}`;
+                    if (entry.action === 'reset_all_payments') return `เคลียร์ ${d.cleared||0} รายการ`;
+                    if (entry.action === 'clear_all_players')  return 'ลบผู้เล่นทุกคน';
+                    if (entry.action === 'clear_all_history')  return 'ล้างประวัติทุกคน';
+                    return JSON.stringify(d);
+                };
+
+                listEl.innerHTML = entries.map(e => {
+                    const [icon, color, label] = actionLabel[e.action] || ['📌', '#888', e.action];
+                    const time = e.ts ? new Date(e.ts).toLocaleTimeString('th-TH', {hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '?';
+                    const dev = (e.device || '').slice(0, 8);
+                    return `<div style="display:flex;gap:0.5rem;padding:0.5rem 0.75rem;border-bottom:1px solid #f0f0f0;align-items:center;font-size:0.85rem;">
+                        <span style="font-size:1rem;">${icon}</span>
+                        <span style="color:#888;font-family:monospace;font-size:0.78rem;min-width:65px;">${time}</span>
+                        <span style="color:${color};font-weight:700;min-width:120px;">${label}</span>
+                        <span style="flex:1;color:#333;">${formatDetails(e)}</span>
+                        <span style="color:#bbb;font-size:0.7rem;font-family:monospace;" title="${escapeHtml(e.device||'')}">${dev}…</span>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                listEl.innerHTML = '<div style="text-align:center;color:#e74c3c;padding:1rem;font-size:0.85rem;">❌ โหลดไม่สำเร็จ</div>';
+                console.warn('audit log load failed:', e);
+            }
+        },
 
         // ── Firebase Usage Check ────────────────────────────────────
         checkFirebaseUsage: async function() {
@@ -3121,16 +3396,25 @@
             if (!Number.isInteger(pidNum) || pidNum < 0) {
                 showError('รหัสผู้เล่นไม่ถูกต้อง'); return;
             }
+            // Rate limit: กันกดรัวๆ — 1 วินาทีต่อคนต่อ action
+            if (!rateLimit(`pay-${pidNum}-${paid}`, 1000)) {
+                showError('⏳ กรุณารอสักครู่...'); return;
+            }
             if (!appState.payments) appState.payments = {};
             const ref = firebase.database().ref(`badmintonState/payments/${pidNum}`);
+            const player = PlayerUtils.getById(pidNum);
+            const playerName = player ? player.name : '?';
             if (paid) {
                 const existing = appState.payments[pidNum] || {};
                 const data = { ...existing, paid: true, pending: false, paidTs: Date.now() };
                 appState.payments[pidNum] = data;
                 ref.set(data);
+                const amt = this._calcPlayerAmount(pidNum);
+                auditLog('payment_confirm', { pid: pidNum, name: playerName, amount: amt });
             } else {
                 delete appState.payments[pidNum];
                 ref.remove();
+                auditLog('payment_cancel', { pid: pidNum, name: playerName });
             }
             // ไม่ saveState() เพื่อป้องกัน overwrite payment ของ user
             this.loadPaymentStatus();
@@ -3140,6 +3424,8 @@
 
         resetAllPayments: function() {
             if (!confirm('เคลียร์สถานะการจ่ายทั้งหมด?')) return;
+            const cnt = Object.keys(appState.payments || {}).length;
+            auditLog('reset_all_payments', { cleared: cnt });
             appState.payments = {};
             firebase.database().ref('badmintonState/payments').remove();
             this.loadPaymentStatus();
@@ -3300,6 +3586,7 @@
             if (confirm(`คุณแน่ใจว่าต้องการลบข้อมูลผู้เล่นทั้งหมด?\n⚠️ การกระทำนี้ไม่สามารถถอยกลับได้`)) {
                 appState.players = [];
                 appState.nextId.player = 1;
+                auditLog('clear_all_players');
                 saveState();
                 this.renderDashboard();
                 this.renderPlayerList();
@@ -3321,6 +3608,7 @@
             }
           }
           appState.matches = [];
+          auditLog('clear_all_history');
           if (typeof saveState === "function") saveState();
           if (typeof this.renderDashboard === "function") this.renderDashboard();
           if (typeof this.renderPlayerList === "function") this.renderPlayerList();
@@ -3501,9 +3789,18 @@
                 return Array.isArray(arr) && arr.some(e => (parseFloat(e?.amount) || 0) > 0);
             };
 
+            // search query
+            const searchQ = (document.getElementById('payment-search')?.value || '').toLowerCase().trim();
+
             // กรอง
             const filtered = sorted.filter(p => {
                 const pay = payments[p.id];
+                // กรองตาม search query (ชื่อเล่น/ชื่อจริง)
+                if (searchQ) {
+                    const matchSearch = p.name.toLowerCase().includes(searchQ)
+                        || (p.realName || '').toLowerCase().includes(searchQ);
+                    if (!matchSearch) return false;
+                }
                 if (filter === 'pending') return pay?.pending && !pay?.paid;
                 if (filter === 'unpaid')  return !pay?.paid && !pay?.pending;
                 if (filter === 'paid')    return pay?.paid;
@@ -4097,7 +4394,9 @@
                 const pid = parseInt(card.dataset.playerId);
                 const player = appState.players.find(p => p.id === pid);
                 if (!player) return;
-                const matchName = player.name.toLowerCase().includes(q);
+                const matchName = !q
+                    || player.name.toLowerCase().includes(q)
+                    || (player.realName || '').toLowerCase().includes(q);
                 const matchFilter = f === 'all' || (f === 'in' && player.isCheckedIn) || (f === 'out' && !player.isCheckedIn);
                 const show = matchName && matchFilter;
                 card.style.display = show ? '' : 'none';
@@ -5387,6 +5686,10 @@ if (btnViewQueue) {
         },
 
         recordMatchResult: function(matchId, winningTeam) {
+            // Rate limit แรงๆ — 3 วินาที (กันการบันทึกซ้ำที่ทำให้เกมขึ้น 2 ครั้ง)
+            if (!rateLimit(`record-${matchId}`, 3000)) {
+                showError('⏳ กำลังบันทึก กรุณารอสักครู่...'); return;
+            }
             const match = appState.matches.find(m => m.id === matchId);
             if (!match) {
                 showError('ไม่พบข้อมูลเกม');
@@ -5418,6 +5721,14 @@ if (btnViewQueue) {
                     appState.history[playerId] = { games: [] };
                 }
                 appState.history[playerId].games.push(gameResult);
+            });
+
+            auditLog('record_match', {
+                matchId: matchId,
+                winner: winningTeam,
+                team1: match.team1,
+                team2: match.team2,
+                courtId: match.courtId
             });
 
             this.endMatch(matchId);
@@ -6731,7 +7042,12 @@ setInterval(updateWaitBadgeColors,1000);
     <div class="card">
       <h2>💳 รายการชำระเงิน</h2>
       <p style="color:#888;font-size:0.85rem;margin-bottom:0.75rem;">เลือกโหมดจ่าย และกด ✅ ยืนยันรับเงินได้ในแถวเดียว</p>
-      <!-- filter bar -->
+      <!-- search + filter bar -->
+      <div style="display:flex;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+        <input type="text" id="payment-search" placeholder="🔍 ค้นหาชื่อ..."
+            oninput="App.renderCombinedPaymentList()"
+            style="flex:1;min-width:140px;padding:0.5rem 0.8rem;border:1.5px solid #ced4da;border-radius:8px;font-size:0.9rem;outline:none;">
+      </div>
       <div id="payment-filter-bar" style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.75rem;"></div>
       <div id="combined-payment-list" style="display:flex;flex-direction:column;gap:0.4rem;max-height:500px;overflow-y:auto;"></div>
       <div style="display:flex;gap:0.75rem;margin-top:0.75rem;flex-wrap:wrap;">
