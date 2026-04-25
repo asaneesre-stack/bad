@@ -10,7 +10,7 @@
       style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
       img-src 'self' data: blob: https://promptpay.io https://*.firebaseapp.com;
-      connect-src 'self' https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com wss://*.firebaseio.com https://fcmregistrations.googleapis.com;
+      connect-src 'self' https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com wss://*.firebaseio.com https://fcmregistrations.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com;
       frame-src 'none';
       object-src 'none';
       base-uri 'self';
@@ -936,6 +936,7 @@
     <!-- Firebase SDK -->
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-app-compat.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-database-compat.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/firebase@10.12.0/firebase-auth-compat.min.js"></script>
     <script>
     const firebaseConfig = {
         apiKey: "AIzaSyCwdZT7tzwXyapCfg3wbjRuhiEDeXapghA",
@@ -949,6 +950,11 @@
     try {
         firebase.initializeApp(firebaseConfig);
         console.log("Firebase initialized OK");
+        // Anonymous sign-in — ใช้กับ Firebase Security Rules (auth != null)
+        // ทำงานเงียบๆ ไม่กระทบ UX ผู้ใช้
+        firebase.auth().signInAnonymously()
+            .then(() => console.log("[Auth] Anonymous sign-in OK"))
+            .catch(e => console.warn("[Auth] Sign-in failed:", e.code, e.message));
     } catch(e) {
         console.warn("Firebase init error:", e);
     }
