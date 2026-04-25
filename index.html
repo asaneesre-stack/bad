@@ -3,6 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Content Security Policy (Report-Only mode: log warnings ใน console แต่ไม่ block จริง — ใช้ทดสอบก่อน) -->
+    <meta http-equiv="Content-Security-Policy-Report-Only" content="
+      default-src 'self' https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com wss://*.firebaseio.com;
+      script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://www.gstatic.com https://*.googleapis.com;
+      style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com;
+      img-src 'self' data: blob: https://promptpay.io https://*.firebaseapp.com;
+      connect-src 'self' https://*.firebaseio.com https://*.firebaseapp.com https://*.googleapis.com wss://*.firebaseio.com https://fcmregistrations.googleapis.com;
+      frame-src 'none';
+      object-src 'none';
+      base-uri 'self';
+    ">
     <title>B&B Admin v24/04 10:00</title>
     <style>
         :root {
@@ -969,21 +981,58 @@
 
   <script>
     (function() {
-      const PW = '212540';
+      // SHA-256 hash ของรหัส (แทนที่จะ hardcode รหัสตรงๆ ใน source)
+      // แม้ผู้โจมตีดึง hash นี้ไป ก็ยังต้อง brute force หา preimage
+      const PW_HASH = 'a467089cfb6baf8faff82e288ae882342ee1bd328880a2b9d5ad1458d445f345';
       const KEY = 'bb_admin_auth';
+      const LOCKOUT_KEY = 'bb_pw_attempts';
+      const MAX_ATTEMPTS = 5;
+      const LOCKOUT_MS = 60 * 1000; // 1 นาที
 
-      function checkPW() {
+      async function sha256Hex(text) {
+        const buf = new TextEncoder().encode(text);
+        const hash = await crypto.subtle.digest('SHA-256', buf);
+        return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2,'0')).join('');
+      }
+
+      function getAttempts() {
+        try {
+          const raw = sessionStorage.getItem(LOCKOUT_KEY);
+          return raw ? JSON.parse(raw) : { count: 0, lockedUntil: 0 };
+        } catch(e) { return { count: 0, lockedUntil: 0 }; }
+      }
+      function setAttempts(a) {
+        try { sessionStorage.setItem(LOCKOUT_KEY, JSON.stringify(a)); } catch(e){}
+      }
+
+      async function checkPW() {
+        const errEl = document.getElementById('pw-error');
+        const att = getAttempts();
+        const now = Date.now();
+        if (att.lockedUntil > now) {
+          const sec = Math.ceil((att.lockedUntil - now) / 1000);
+          errEl.textContent = `🔒 ล็อก ${sec} วินาที (กรอกผิดเกินกำหนด)`;
+          return;
+        }
         const val = document.getElementById('pw-input').value;
-        if (val === PW) {
+        const hashedInput = await sha256Hex(val);
+        if (hashedInput === PW_HASH) {
           sessionStorage.setItem(KEY, '1');
+          setAttempts({ count: 0, lockedUntil: 0 });
           document.getElementById('pw-gate').style.display = 'none';
           document.getElementById('pw-input').value = '';
         } else {
-          const errEl = document.getElementById('pw-error');
-          errEl.textContent = '❌ รหัสผ่านไม่ถูกต้อง';
+          const newCount = (att.count || 0) + 1;
+          if (newCount >= MAX_ATTEMPTS) {
+            setAttempts({ count: 0, lockedUntil: now + LOCKOUT_MS });
+            errEl.textContent = '🔒 กรอกผิดเกิน 5 ครั้ง — ล็อก 60 วินาที';
+          } else {
+            setAttempts({ count: newCount, lockedUntil: 0 });
+            errEl.textContent = `❌ รหัสผ่านไม่ถูกต้อง (เหลือ ${MAX_ATTEMPTS - newCount} ครั้ง)`;
+          }
           document.getElementById('pw-input').value = '';
           document.getElementById('pw-input').focus();
-          setTimeout(() => { errEl.textContent = ''; }, 2000);
+          setTimeout(() => { errEl.textContent = ''; }, 3000);
         }
       }
       window.checkPW = checkPW;
@@ -2866,14 +2915,20 @@
             if (!pid) { showError('กรุณาเลือกผู้เล่นก่อน'); return; }
             if (!msg) { showError('กรุณาพิมพ์ข้อความก่อน'); return; }
 
-            const player = PlayerUtils.getById(+pid);
+            // ป้องกัน path injection: pid ต้องเป็นเลขจำนวนเต็มเท่านั้น
+            const pidNum = +pid;
+            if (!Number.isInteger(pidNum) || pidNum < 0) {
+                showError('รหัสผู้เล่นไม่ถูกต้อง'); return;
+            }
+
+            const player = PlayerUtils.getById(pidNum);
             const name = player ? player.name : '???';
 
             statusEl.textContent = `⏳ กำลังส่งถึง ${name}...`;
             statusEl.style.color = '#e67e22';
 
             try {
-                firebase.database().ref('directMessage/' + pid).set({
+                firebase.database().ref('directMessage/' + pidNum).set({
                     message: msg, timestamp: Date.now(), sentBy: 'admin', playerName: name
                 }).then(() => {
                     statusEl.textContent = `✅ ส่งถึง ${name} เรียบร้อย!`;
@@ -3061,15 +3116,20 @@
         },
 
         togglePayment: function(pid, paid) {
+            // ป้องกัน path injection: pid ต้องเป็น integer
+            const pidNum = +pid;
+            if (!Number.isInteger(pidNum) || pidNum < 0) {
+                showError('รหัสผู้เล่นไม่ถูกต้อง'); return;
+            }
             if (!appState.payments) appState.payments = {};
-            const ref = firebase.database().ref(`badmintonState/payments/${pid}`);
+            const ref = firebase.database().ref(`badmintonState/payments/${pidNum}`);
             if (paid) {
-                const existing = appState.payments[pid] || {};
+                const existing = appState.payments[pidNum] || {};
                 const data = { ...existing, paid: true, pending: false, paidTs: Date.now() };
-                appState.payments[pid] = data;
+                appState.payments[pidNum] = data;
                 ref.set(data);
             } else {
-                delete appState.payments[pid];
+                delete appState.payments[pidNum];
                 ref.remove();
             }
             // ไม่ saveState() เพื่อป้องกัน overwrite payment ของ user
@@ -3148,7 +3208,7 @@
                                 <span style="font-size:0.75rem;font-weight:600;">📱 ${escapeHtml(deviceInfo)}</span>
                                 <span style="font-size:0.7rem;color:#aaa;">${agoStr}</span>
                                 ${onlineBadge}
-                                ${!isOnline ? `<button onclick="firebase.database().ref('pushTokens/${pidStr}/${devId}').remove();App.checkConnectedDevices();"
+                                ${!isOnline ? `<button data-action="revoke-device" data-pid="${escapeHtml(pidStr)}" data-devid="${escapeHtml(devId)}"
                                     class="danger" style="font-size:0.6rem;padding:1px 5px;min-height:unset;">🗑️</button>` : ''}
                             </div>`;
                         }).join('');
@@ -3186,7 +3246,11 @@
 
         revokePlayerToken: function(pid, name) {
             if (!confirm(`ถอน token ของ ${name}? เครื่องนั้นจะหยุดรับแจ้งเตือน`)) return;
-            firebase.database().ref('pushTokens/' + pid).remove()
+            const pidNum = +pid;
+            if (!Number.isInteger(pidNum) || pidNum < 0) {
+                showError('รหัสผู้เล่นไม่ถูกต้อง'); return;
+            }
+            firebase.database().ref('pushTokens/' + pidNum).remove()
                 .then(() => {
                     showSuccess(`ถอน token ของ ${name} แล้ว`);
                     this.checkConnectedDevices();
