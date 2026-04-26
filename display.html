@@ -1353,6 +1353,7 @@
     let _swRegistration = null;
     let _pushGranted    = false;
     let _fcmToken       = null;
+    let _onMessageRegistered = false;
 
     // ── SW helpers: sync state + start/stop polling ─────────────────
     function swPost(msg) {
@@ -1400,8 +1401,11 @@
         // touch timestamp ของ token (ไม่ re-register เต็ม) — แค่ยืนยันว่ายังใช้อยู่
         if (_pushGranted && watchedIds.size > 0) {
           touchMyTokens();
-          // re-setup presence (lightweight) — ไม่ลบ token เดิม
-          watchedIds.forEach(pid => setupPresence(pid));
+          // re-setup presence + direct message listener (lightweight) — ไม่ลบ token เดิม
+          watchedIds.forEach(pid => {
+            setupPresence(pid);
+            setupDirectMessageListener(pid);
+          });
         }
       }
     });
@@ -1463,6 +1467,104 @@
       if (_presenceRef) { _presenceRef.remove().catch(()=>{}); _presenceRef = null; }
     }
 
+    // ============================================================
+    // Direct Message Listener (Plan B) — ฟังข้อความจาก admin ตรง
+    // ใช้เป็น backup กรณี Cloud Function ส่ง FCM ไม่ถึงเครื่อง iOS
+    // ============================================================
+    let _directMsgRef = null;
+    let _lastDirectMsgTs = 0;
+
+    function setupDirectMessageListener(pid) {
+      // cleanup listener เก่าก่อน
+      if (_directMsgRef) {
+        try { _directMsgRef.off(); } catch(e) {}
+        _directMsgRef = null;
+      }
+
+      if (!pid) return;
+
+      // จำ timestamp ล่าสุดก่อนเริ่มฟัง — เพื่อไม่ให้ trigger ข้อความเก่าที่ค้างใน DB
+      _lastDirectMsgTs = Date.now();
+
+      _directMsgRef = db.ref(`directMessage/${pid}`);
+      _directMsgRef.on('value', snap => {
+        const data = snap.val();
+        if (!data) return;
+
+        const msgTs = parseInt(data.timestamp || data.ts || 0);
+        // ข้าม message เก่าที่ค้างอยู่ก่อนเริ่มฟัง
+        if (!msgTs || msgTs <= _lastDirectMsgTs) return;
+        _lastDirectMsgTs = msgTs;
+
+        const message    = data.message || 'มีข้อความใหม่';
+        const playerName = data.playerName || '';
+        const sentBy     = data.sentBy || 'admin';
+
+        console.log('[DirectMsg] received:', { message, playerName, sentBy, ts: msgTs });
+
+        const title = `💬 ข้อความจาก ${sentBy === 'admin' ? 'ผู้จัดการ' : sentBy}`;
+        const body  = playerName ? `ถึง ${playerName}: ${message}` : message;
+
+        // แสดง notification ผ่าน Service Worker (ทำงานทั้งตอน PWA เปิด/พับ)
+        if (_swRegistration) {
+          _swRegistration.showNotification(title, {
+            body,
+            tag: 'direct-msg-' + msgTs,
+            renotify: true,
+            icon: 'apple-touch-icon.png',
+            badge: 'apple-touch-icon.png',
+            vibrate: [200, 80, 200, 80, 200],
+            requireInteraction: true,
+            data: { url: './display.html', type: 'direct' },
+          }).catch(e => console.warn('[DirectMsg] showNotification failed:', e));
+        } else if ('Notification' in window && Notification.permission === 'granted') {
+          // Fallback ถ้าไม่มี SW
+          try {
+            const n = new Notification(title, { body, tag: 'direct-msg-' + msgTs, icon: 'apple-touch-icon.png' });
+            n.onclick = () => { window.focus(); n.close(); };
+          } catch(e) {}
+        }
+
+        // เล่นเสียงเตือน + แสดง toast ในแอป (ถ้า PWA active)
+        try { playDirectMsgSound(); } catch(_) {}
+        if (typeof syncStatus === 'function') {
+          syncStatus('💬 ' + body, '#3498db');
+          setTimeout(() => syncStatus('☁️ เชื่อมต่อแล้ว', '#00a8cc'), 5000);
+        }
+      });
+
+      console.log('[DirectMsg] listener attached for pid', pid);
+    }
+
+    function clearDirectMessageListener() {
+      if (_directMsgRef) {
+        try { _directMsgRef.off(); } catch(e) {}
+        _directMsgRef = null;
+      }
+    }
+
+    // เสียง beep สำหรับ direct message — สั้น 3 ครั้ง
+    let _dmAudioCtx = null;
+    function playDirectMsgSound() {
+      try {
+        if (!_dmAudioCtx) _dmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const ctx = _dmAudioCtx;
+        [0, 0.18, 0.36].forEach(delay => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain); gain.connect(ctx.destination);
+          osc.frequency.value = 1046; // C6
+          osc.type = 'sine';
+          const t = ctx.currentTime + delay;
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(0.25, t + 0.02);
+          gain.gain.linearRampToValueAtTime(0, t + 0.14);
+          osc.start(t);
+          osc.stop(t + 0.15);
+        });
+      } catch(e) {}
+    }
+
     async function registerFCMToken(pid) {
       if (!_swRegistration || !_pushGranted) return;
       try {
@@ -1512,6 +1614,44 @@
           vapidKey: VAPID_KEY,
           serviceWorkerRegistration: _swRegistration,
         });
+
+        // Handle foreground messages — เมื่อ FCM มาถึงตอนแอปเปิดอยู่
+        // (ปกติ SW จะจัดการตอนแอปพับ/ปิด แต่ตอนเปิด FCM ส่งเข้า onMessage แทน)
+        if (!_onMessageRegistered) {
+          messaging.onMessage((payload) => {
+            try {
+              console.log('[FCM] foreground message:', payload);
+              const title = payload.notification?.title || payload.data?.title || '🔔 แจ้งเตือน';
+              const body  = payload.notification?.body  || payload.data?.body  || '';
+              const tag   = payload.data?.tag || 'fcm-' + Date.now();
+
+              // แสดง notification ผ่าน Service Worker
+              if (_swRegistration) {
+                _swRegistration.showNotification(title, {
+                  body,
+                  tag,
+                  renotify: true,
+                  icon: 'apple-touch-icon.png',
+                  badge: 'apple-touch-icon.png',
+                  vibrate: [200, 80, 200],
+                  requireInteraction: false,
+                  data: { url: './display.html' },
+                });
+              } else if ('Notification' in window && Notification.permission === 'granted') {
+                // fallback ถ้าไม่มี SW
+                new Notification(title, { body, tag, icon: 'apple-touch-icon.png' });
+              }
+
+              // เพิ่ม toast แจ้งใน UI ด้วย (ถ้ามีฟังก์ชัน)
+              if (typeof syncStatus === 'function') {
+                syncStatus('🔔 ' + title, '#3498db');
+                setTimeout(() => syncStatus('☁️ เชื่อมต่อแล้ว', '#00a8cc'), 4000);
+              }
+            } catch(e) { console.warn('[FCM] onMessage handler error:', e); }
+          });
+          _onMessageRegistered = true;
+          console.log('[FCM] onMessage handler registered');
+        }
         if (token) {
           _fcmToken = token;
           // เก็บ device info ด้วยเพื่อให้ admin ดูได้
@@ -1623,7 +1763,7 @@
       }
       // re-register token และ presence สำหรับ watchedIds ที่โหลดจาก localStorage
       if (_pushGranted && watchedIds.size > 0) {
-        watchedIds.forEach(pid => { setupPresence(pid); registerFCMToken(pid); });
+        watchedIds.forEach(pid => { setupPresence(pid); setupDirectMessageListener(pid); registerFCMToken(pid); });
       }
     }, () => syncStatus('❌ เชื่อมต่อไม่ได้', '#e74c3c'));
 
@@ -2239,6 +2379,7 @@
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
         clearPresence();
+        clearDirectMessageListener();
         const _did1 = localStorage.getItem('bb-device-id');
         if (_did1) db.ref(`pushTokens/${pid}/${_did1}`).remove().catch(()=>{});
         db.ref('alertState/' + pid).remove().catch(()=>{});
@@ -2255,6 +2396,7 @@
         watchedIds.add(pid);
         saveWatchedIds();
         setupPresence(pid);
+        setupDirectMessageListener(pid);
         if (_pushGranted) {
           registerFCMToken(pid);
         } else {
