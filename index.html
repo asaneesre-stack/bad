@@ -1641,6 +1641,24 @@
                 <div id="broadcast-status" style="margin-top:0.75rem;font-size:0.85rem;color:#888;"></div>
             </div>
 
+            <!-- Auto-Backup & Recovery -->
+            <div class="card" style="border-left:4px solid #27ae60;">
+                <h2>🛡️ Auto-Backup &amp; Recovery</h2>
+                <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">
+                    ระบบสำรองข้อมูลอัตโนมัติทุกครั้งก่อนบันทึก เก็บ 10 ครั้งล่าสุดในเครื่องของคุณ<br>
+                    🔒 ใช้กู้คืนได้หากข้อมูลหายเพราะกดผิด/บั๊ก
+                </p>
+
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.75rem;">
+                    <button onclick="App.showBackups()" class="success" style="font-size:0.85rem;padding:0.45rem 0.9rem;min-height:unset;">📋 ดู backup ทั้งหมด</button>
+                    <button onclick="App.makeManualBackup()" style="font-size:0.85rem;padding:0.45rem 0.9rem;min-height:unset;background:#3498db;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;">💾 backup ตอนนี้</button>
+                </div>
+
+                <div id="backup-list" style="max-height:300px;overflow-y:auto;border:1px solid #eee;border-radius:8px;display:none;">
+                    <div style="text-align:center;color:#aaa;padding:1rem;font-size:0.85rem;">กดปุ่ม "ดู backup" เพื่อแสดงรายการ</div>
+                </div>
+            </div>
+
             <!-- Audit Log -->
             <div class="card">
                 <h2>📋 ประวัติการแก้ไข</h2>
@@ -1940,6 +1958,13 @@
     let _dbRef = null;
     let _saveDebounce = null;
 
+    // ── Save Protection (Level 1) ────────────────────────────────
+    let _isLoaded = false;        // เริ่มเป็น false — ห้าม save จน load เสร็จ
+    let _lastKnownPlayerCount = 0; // จำนวน player ครั้งล่าสุดที่ load — ใช้ตรวจ data loss
+    let _lastKnownMatchCount  = 0;
+    const SAFE_BACKUP_KEY = 'badminton_safe_backup'; // localStorage key สำหรับ auto-backup
+    const MAX_BACKUPS     = 10;    // เก็บ backup ล่าสุด 10 อัน
+
     // Unique ID for this browser tab/device — used to detect our own echoes
     const _deviceId = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -1958,8 +1983,88 @@
         if (el) { el.textContent = msg; el.style.color = color || '#888'; }
     }
 
+    // ── Auto-backup helper ───────────────────────────────────────
+    function _autoBackup(reason) {
+        try {
+            const backups = JSON.parse(localStorage.getItem(SAFE_BACKUP_KEY) || '[]');
+            backups.push({
+                ts: Date.now(),
+                reason: reason || 'auto',
+                playerCount: (appState.players || []).length,
+                matchCount:  (appState.matches || []).length,
+                state: JSON.stringify(appState),
+            });
+            // เก็บแค่ 10 อันล่าสุด
+            while (backups.length > MAX_BACKUPS) backups.shift();
+            localStorage.setItem(SAFE_BACKUP_KEY, JSON.stringify(backups));
+        } catch(e) {
+            console.warn('Auto-backup failed:', e);
+        }
+    }
+
+    // ── Recovery helper — เรียกใน Console ตอนต้องการ restore ────
+    window.recoverFromBackup = function(index) {
+        try {
+            const backups = JSON.parse(localStorage.getItem(SAFE_BACKUP_KEY) || '[]');
+            if (!backups.length) { console.log('ไม่มี backup'); return; }
+            console.log('Backups available:');
+            backups.forEach((b, i) => {
+                console.log(`  [${i}] ${new Date(b.ts).toLocaleString('th-TH')} - ${b.playerCount} players, ${b.matchCount} matches (${b.reason})`);
+            });
+            if (index === undefined) {
+                console.log('\nเรียก recoverFromBackup(N) เพื่อกู้คืน backup ตัวที่ N');
+                return backups;
+            }
+            const b = backups[index];
+            if (!b) { console.log('Index ไม่ถูกต้อง'); return; }
+            const restored = JSON.parse(b.state);
+            console.log('🔄 จะกู้คืนเป็น state ดังนี้:', { players: restored.players?.length, matches: restored.matches?.length });
+            if (confirm(`กู้คืน backup จาก ${new Date(b.ts).toLocaleString('th-TH')}?\nผู้เล่น: ${b.playerCount} คน, เกม: ${b.matchCount} เกม`)) {
+                appState = restored;
+                _isLoaded = true; // อนุญาต save
+                _lastKnownPlayerCount = (appState.players || []).length;
+                _lastKnownMatchCount  = (appState.matches || []).length;
+                _autoBackup('manual_recovery');
+                if (typeof saveState === 'function') saveState();
+                if (App && App.showView) App.showView('dashboard');
+                alert('✅ กู้คืนสำเร็จ');
+            }
+        } catch(e) {
+            console.error('Recovery failed:', e);
+        }
+    };
+
     function saveState() {
-        // Always backup to localStorage
+        // ── Save Protection ──────────────────────────────────────
+        // Block 1: ห้าม save ก่อน load สำเร็จ (ป้องกัน race condition ตอนเปิดแอป)
+        if (!_isLoaded) {
+            console.warn('🛡️ saveState() blocked — not loaded yet');
+            return false;
+        }
+
+        // Block 2: Sanity check — ตรวจว่า players ลดลงผิดปกติ
+        const currentPlayerCount = (appState.players || []).length;
+        const currentMatchCount  = (appState.matches || []).length;
+        if (_lastKnownPlayerCount >= 3 && currentPlayerCount === 0) {
+            console.error('🚨 SUSPICIOUS SAVE BLOCKED — players เคยมี ' + _lastKnownPlayerCount + ' คน แต่ตอนนี้ 0');
+            const ok = confirm(
+                `⚠️ ตรวจพบความผิดปกติ!\n\n` +
+                `ผู้เล่นเคยมี ${_lastKnownPlayerCount} คน\n` +
+                `แต่ตอนนี้เหลือ 0 คน\n\n` +
+                `ต้องการบันทึก (ทำให้ข้อมูลใน Firebase หาย) จริงๆ หรือ?\n\n` +
+                `❌ กดยกเลิก = ป้องกันข้อมูลหาย (แนะนำ)\n` +
+                `✅ กดตกลง = ยอมรับว่าเคลียร์เอง`
+            );
+            if (!ok) {
+                console.log('🛡️ Save cancelled by user');
+                return false;
+            }
+        }
+
+        // Block 3: Auto-backup ก่อน save ทุกครั้ง
+        _autoBackup('before_save');
+
+        // Always backup to localStorage (เก่า — ใช้ปุ่ม Restore ของแอด min)
         try { localStorage.setItem(STORAGE_KEY, JSON.stringify(appState)); } catch(e) {}
 
         const ref = getDbRef();
@@ -1972,6 +2077,9 @@
             const payload = { ...appState, _savedBy: _deviceId };
             ref.set(payload)
                 .then(() => {
+                    // อัปเดต known counts หลัง save สำเร็จ
+                    _lastKnownPlayerCount = currentPlayerCount;
+                    _lastKnownMatchCount  = currentMatchCount;
                     showSyncStatus('☁️ sync แล้ว', '#27ae60');
                 })
                 .catch(e => {
@@ -2009,6 +2117,9 @@
         const { _savedBy, ...cleanData } = (raw || {});
         appState = _fixFirebaseArrays(cleanData);
         validateAndFixState();
+        // อัปเดต known counts ทุกครั้งที่มี remote data (ป้องกัน sanity check trigger ผิดเวลา)
+        _lastKnownPlayerCount = (appState.players || []).length;
+        _lastKnownMatchCount  = (appState.matches || []).length;
     }
 
     function _startRealtimeSync() {
@@ -2158,12 +2269,21 @@
                         showSyncStatus('☁️ เชื่อมต่อแล้ว (ยังไม่มีข้อมูล)', '#27ae60');
                     }
                 }
+                // ✅ Mark loaded — เปิดให้ saveState() ทำงานได้
+                _isLoaded = true;
+                _lastKnownPlayerCount = (appState.players || []).length;
+                _lastKnownMatchCount  = (appState.matches || []).length;
+                _autoBackup('after_load');
+                console.log('✅ State loaded —', _lastKnownPlayerCount, 'players,', _lastKnownMatchCount, 'matches');
                 _startRealtimeSync();
                 App.showView('dashboard');
             })
             .catch(e => {
                 console.error('Firebase load error', e);
                 _loadFromLocalStorage();
+                _isLoaded = true; // อนุญาต save แม้ load fail (ใช้ local)
+                _lastKnownPlayerCount = (appState.players || []).length;
+                _lastKnownMatchCount  = (appState.matches || []).length;
                 showSyncStatus('⚠️ offline — ใช้ข้อมูล local', '#e67e22');
                 App.showView('dashboard');
             });
@@ -2971,6 +3091,90 @@
         },
 
 
+
+        // ── Backup Management ──────────────────────────────────────
+        showBackups: function() {
+            const listEl = document.getElementById('backup-list');
+            if (!listEl) return;
+            listEl.style.display = 'block';
+            try {
+                const backups = JSON.parse(localStorage.getItem(SAFE_BACKUP_KEY) || '[]');
+                if (!backups.length) {
+                    listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:1rem;font-size:0.85rem;">ยังไม่มี backup</div>';
+                    return;
+                }
+                // เรียงล่าสุดบนสุด
+                const sorted = backups.map((b, i) => ({ ...b, originalIndex: i })).sort((a, b) => b.ts - a.ts);
+                listEl.innerHTML = sorted.map(b => {
+                    const time = new Date(b.ts).toLocaleString('th-TH');
+                    const reasonLabel = {
+                        'auto':            ['🔄', '#888', 'อัตโนมัติ'],
+                        'before_save':     ['💾', '#3498db', 'ก่อนบันทึก'],
+                        'after_load':      ['📥', '#27ae60', 'หลังโหลด'],
+                        'manual':          ['✋', '#e67e22', 'manual'],
+                        'manual_recovery': ['🔧', '#9b59b6', 'หลัง recovery'],
+                    }[b.reason] || ['📦', '#888', b.reason];
+                    return `<div style="padding:0.6rem 0.75rem;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;gap:0.5rem;font-size:0.85rem;">
+                        <span style="font-size:1.1rem;">${reasonLabel[0]}</span>
+                        <div style="flex:1;">
+                            <div style="color:#333;font-weight:700;">${time}</div>
+                            <div style="color:#666;font-size:0.78rem;">
+                                <span style="color:${reasonLabel[1]};">${reasonLabel[2]}</span> ·
+                                ${b.playerCount} ผู้เล่น · ${b.matchCount} เกม
+                            </div>
+                        </div>
+                        <button onclick="App.restoreBackup(${b.originalIndex})"
+                            style="font-size:0.78rem;padding:0.35rem 0.7rem;background:#3498db;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;">
+                            🔄 กู้คืน
+                        </button>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                listEl.innerHTML = '<div style="text-align:center;color:#e74c3c;padding:1rem;">โหลด backup ล้มเหลว</div>';
+                console.error(e);
+            }
+        },
+
+        makeManualBackup: function() {
+            try {
+                _autoBackup('manual');
+                showSuccess('✅ สำรองข้อมูลแล้ว');
+                if (document.getElementById('backup-list').style.display !== 'none') {
+                    this.showBackups();
+                }
+            } catch(e) {
+                showError('Backup ล้มเหลว: ' + (e.message || e));
+            }
+        },
+
+        restoreBackup: function(index) {
+            try {
+                const backups = JSON.parse(localStorage.getItem(SAFE_BACKUP_KEY) || '[]');
+                const b = backups[index];
+                if (!b) { showError('ไม่พบ backup'); return; }
+                const time = new Date(b.ts).toLocaleString('th-TH');
+                if (!confirm(
+                    `กู้คืน backup จาก ${time}?\n\n` +
+                    `ผู้เล่น: ${b.playerCount} คน\n` +
+                    `เกม: ${b.matchCount} เกม\n\n` +
+                    `⚠️ ข้อมูลปัจจุบันจะถูกแทนที่ด้วยข้อมูล backup`
+                )) return;
+
+                const restored = JSON.parse(b.state);
+                // backup ตัวปัจจุบันก่อนเขียนทับ — กันพลาด
+                _autoBackup('before_restore');
+                appState = restored;
+                _lastKnownPlayerCount = (appState.players || []).length;
+                _lastKnownMatchCount  = (appState.matches || []).length;
+                if (typeof saveState === 'function') saveState();
+                this.showView('dashboard');
+                showSuccess('✅ กู้คืนสำเร็จ');
+                auditLog('restore_backup', { ts: b.ts, players: b.playerCount, matches: b.matchCount });
+            } catch(e) {
+                showError('Restore ล้มเหลว: ' + (e.message || e));
+                console.error(e);
+            }
+        },
 
         // ── Audit Log Viewer ────────────────────────────────────
         loadAuditLog: async function() {
