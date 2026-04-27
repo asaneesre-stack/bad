@@ -1585,6 +1585,30 @@
                 <!-- Tab: Broadcast -->
                 <div id="tab-content-broadcast">
                     <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">ส่งถึงทุกคนที่เปิดติดตามคิวใน display.html อยู่</p>
+
+                    <!-- 📣 เตือนก่อนงาน — ปลุก PWA iOS -->
+                    <div style="background:linear-gradient(135deg,#fff3cd 0%,#ffe8a1 100%);border:2px solid #f39c12;border-radius:12px;padding:0.85rem 1rem;margin-bottom:1.25rem;">
+                        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">
+                            <span style="font-size:1.4rem;">⏰</span>
+                            <div style="flex:1;">
+                                <div style="font-weight:800;color:#7d5e00;font-size:0.95rem;">เตือนก่อนงาน — ปลุก PWA</div>
+                                <div style="color:#7d5e00;font-size:0.78rem;line-height:1.4;">
+                                    ส่งก่อนงาน 30 นาที — บังคับ PWA ตื่น เพื่อรับการแจ้งเตือนระหว่างเล่น
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;">
+                            <button onclick="App.setAndSendBroadcast('🏸 อีก 30 นาทีจัดก๊วน! กรุณาเปิดแอป B-BAD เพื่อเตรียมรับแจ้งเตือนคิว/สนาม 🔔')"
+                                style="flex:1;min-width:170px;font-size:0.85rem;padding:0.55rem 0.9rem;background:#f39c12;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;min-height:42px;">
+                                ⏰ เตือน 30 นาทีก่อนงาน
+                            </button>
+                            <button onclick="App.setAndSendBroadcast('🏸 เริ่มจัดก๊วนแล้ว! เปิดแอป B-BAD เพื่อจองคิว/ติดตามสนาม')"
+                                style="flex:1;min-width:170px;font-size:0.85rem;padding:0.55rem 0.9rem;background:#e67e22;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;min-height:42px;">
+                                🚀 เริ่มจัดก๊วนแล้ว
+                            </button>
+                        </div>
+                    </div>
+
                     <h3>ข้อความสำเร็จรูป</h3>
                     <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.25rem;">
                         <button class="warning" style="font-size:0.85rem;min-height:38px;"
@@ -1726,10 +1750,21 @@
                 <div id="connected-devices-list" style="margin:0.75rem 0;display:block;">
                     <div style="font-size:0.8rem;font-weight:700;color:var(--primary);margin-bottom:0.5rem;">📱 เครื่องที่เชื่อมต่ออยู่:</div>
                     <div id="connected-devices-body" style="display:flex;flex-direction:column;gap:0.4rem;max-height:240px;overflow-y:auto;"></div>
+
+                    <!-- Legend -->
+                    <div style="margin-top:0.6rem;padding:0.6rem 0.75rem;background:#f8f9fa;border-radius:8px;font-size:0.72rem;line-height:1.6;color:#555;">
+                        <div style="font-weight:700;margin-bottom:0.3rem;color:#333;">📖 ความหมายสถานะ:</div>
+                        <div>🟢 <b>Active</b> = เปิดล่าสุด < 30 นาที — ส่ง notification ได้แน่นอน</div>
+                        <div>🟡 <b>Recent</b> = 30 นาที - 2 ชม — น่าจะส่งได้</div>
+                        <div>🟠 <b>Stale</b> = 2-6 ชม — iOS อาจจะ hibernate แล้ว</div>
+                        <div>🔴 <b>Hibernate</b> = 6-12 ชม — ส่งไม่ถึงแน่นอน <b>ต้องให้ user เปิดแอปใหม่</b></div>
+                        <div>⚫ <b>Dead</b> = > 12 ชม — token หมดอายุ ระบบจะลบเมื่อ user เปิดใหม่</div>
+                    </div>
                 </div>
 
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:0.75rem;">
                     <button class="danger" onclick="App.clearAllPushTokens()">🔕 เคลียร์ token ทั้งหมด</button>
+                    <button onclick="App.clearStaleTokens()" style="background:#e67e22;color:#fff;border:none;padding:0.6rem 1rem;border-radius:8px;font-weight:700;cursor:pointer;">🟠 ลบ token เก่ากว่า 2 ชม</button>
                     <button class="secondary" onclick="App.clearAlertState()">🔄 รีเซ็ต alert state</button>
                 </div>
                 <div id="clear-token-status" style="margin-top:0.5rem;font-size:0.82rem;color:#888;"></div>
@@ -3818,15 +3853,43 @@
                         deviceCount = devices.length;
                         deviceRows = devices.map(([devId, d]) => {
                             const ago = d.ts ? Math.floor((now - d.ts) / 60000) : null;
-                            const agoStr = ago !== null ? (ago < 1 ? 'เพิ่งเชื่อมต่อ' : `${ago} นาทีที่แล้ว`) : '';
+                            const ageHours = ago !== null ? ago / 60 : null;
+
+                            // สถานะ token
+                            let statusBadge = '';
+                            let agoStr = '';
+                            if (ago === null) {
+                                agoStr = '?';
+                                statusBadge = `<span style="background:#95a5a6;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">⚪ Unknown</span>`;
+                            } else if (ago < 1) {
+                                agoStr = 'เพิ่งเชื่อมต่อ';
+                                statusBadge = `<span style="background:#27ae60;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">🟢 Active</span>`;
+                            } else if (ago < 30) {
+                                agoStr = `${ago} นาทีที่แล้ว`;
+                                statusBadge = `<span style="background:#27ae60;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">🟢 Active</span>`;
+                            } else if (ageHours < 2) {
+                                agoStr = `${Math.floor(ageHours*10)/10} ชม.ที่แล้ว`;
+                                statusBadge = `<span style="background:#f1c40f;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;" title="อาจจะยังส่ง notification ได้">🟡 Recent</span>`;
+                            } else if (ageHours < 6) {
+                                agoStr = `${Math.floor(ageHours)} ชม.ที่แล้ว`;
+                                statusBadge = `<span style="background:#e67e22;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;" title="iOS อาจจะ hibernate token แล้ว — ส่ง notification อาจไม่ถึง">🟠 Stale</span>`;
+                            } else if (ageHours < 12) {
+                                agoStr = `${Math.floor(ageHours)} ชม.ที่แล้ว`;
+                                statusBadge = `<span style="background:#e74c3c;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;" title="iOS hibernate แน่นอน — ส่ง notification ไม่ถึง">🔴 Hibernate</span>`;
+                            } else {
+                                agoStr = `${Math.floor(ageHours/24*10)/10} วันที่แล้ว`;
+                                statusBadge = `<span style="background:#7f8c8d;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;" title="Token เก่าเกิน 12 ชม — ระบบจะลบเมื่อ user เปิดแอปใหม่">⚫ Dead</span>`;
+                            }
+
                             const deviceInfo = d.device || 'Unknown';
                             const isOnline = !!(presence[pidStr] && presence[pidStr][devId]?.online);
                             const onlineBadge = isOnline
-                                ? `<span style="background:#27ae60;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">🟢 Online</span>`
-                                : `<span style="background:#e74c3c;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">🔴 Offline</span>`;
+                                ? `<span style="background:#27ae60;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">📡 Online</span>`
+                                : `<span style="background:#bdc3c7;color:#fff;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:6px;">📴 Offline</span>`;
                             return `<div style="display:flex;align-items:center;gap:0.35rem;flex-wrap:wrap;margin-top:2px;">
                                 <span style="font-size:0.75rem;font-weight:600;">📱 ${escapeHtml(deviceInfo)}</span>
                                 <span style="font-size:0.7rem;color:#aaa;">${agoStr}</span>
+                                ${statusBadge}
                                 ${onlineBadge}
                                 ${!isOnline ? `<button data-action="revoke-device" data-pid="${escapeHtml(pidStr)}" data-devid="${escapeHtml(devId)}"
                                     class="danger" style="font-size:0.6rem;padding:1px 5px;min-height:unset;">🗑️</button>` : ''}
@@ -3876,6 +3939,53 @@
                     this.checkConnectedDevices();
                 })
                 .catch(() => showError('ถอน token ไม่สำเร็จ'));
+        },
+
+        // ลบเฉพาะ token ที่เก่ากว่า 2 ชั่วโมง (น่าจะ hibernate แล้ว)
+        clearStaleTokens: async function() {
+            if (!confirm('ลบ token ที่เก่ากว่า 2 ชม?\n\n💡 ใช้เคลียร์ token ที่ iOS hibernate แล้ว — user ที่ active อยู่จะไม่กระทบ')) return;
+            const statusEl = document.getElementById('clear-token-status');
+            try {
+                statusEl.textContent = '⏳ กำลังตรวจสอบ...';
+                statusEl.style.color = '#e67e22';
+                const snap = await firebase.database().ref('pushTokens').once('value');
+                const data = snap.val() || {};
+                const now = Date.now();
+                const STALE_THRESHOLD = 2 * 60 * 60 * 1000; // 2 ชม
+                const toDelete = [];
+                Object.entries(data).forEach(([pid, devices]) => {
+                    if (typeof devices !== 'object' || devices === null) return;
+                    Object.entries(devices).forEach(([devId, val]) => {
+                        if (!val || !val.token) return;
+                        const age = now - (val.ts || 0);
+                        if (age > STALE_THRESHOLD) {
+                            toDelete.push({ pid, devId, age });
+                        }
+                    });
+                });
+                if (toDelete.length === 0) {
+                    statusEl.textContent = '✨ ไม่มี token เก่าให้ลบ';
+                    statusEl.style.color = '#27ae60';
+                    return;
+                }
+                // ลบทีละอัน
+                let deleted = 0;
+                for (const item of toDelete) {
+                    try {
+                        await firebase.database().ref(`pushTokens/${item.pid}/${item.devId}`).remove();
+                        deleted++;
+                    } catch(e) { console.warn('delete failed:', e); }
+                }
+                statusEl.textContent = `✅ ลบ token เก่า ${deleted} ใบ`;
+                statusEl.style.color = '#27ae60';
+                if (typeof auditLog === 'function') auditLog('clear_stale_tokens', { count: deleted });
+                // refresh list
+                this.checkConnectedDevices();
+            } catch(e) {
+                console.error('clearStaleTokens failed:', e);
+                statusEl.textContent = '❌ ล้มเหลว: ' + (e.message || e);
+                statusEl.style.color = '#e74c3c';
+            }
         },
 
         clearAllPushTokens: function() {

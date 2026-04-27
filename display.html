@@ -1159,6 +1159,113 @@
 </head>
 <body>
 
+  <!-- ═══════════════════════════════════════════════════════════
+       Onboarding Modal — แสดงครั้งแรกที่ user เปิดแอป
+       ═══════════════════════════════════════════════════════════ -->
+  <div id="onboarding-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99998;align-items:center;justify-content:center;padding:1rem;">
+    <div style="background:#fff;border-radius:18px;max-width:440px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+      <!-- Header -->
+      <div style="background:linear-gradient(135deg,#3498db 0%,#2980b9 100%);color:#fff;padding:1.5rem;border-radius:18px 18px 0 0;text-align:center;">
+        <div style="font-size:2.5rem;margin-bottom:0.4rem;">🏸</div>
+        <div style="font-size:1.3rem;font-weight:800;">ยินดีต้อนรับสู่ B-BAD!</div>
+        <div style="font-size:0.85rem;opacity:0.9;margin-top:0.3rem;">ระบบจัดการสนามแบดมินตัน</div>
+      </div>
+
+      <!-- Content -->
+      <div style="padding:1.5rem;">
+        <div id="onboarding-step-1" style="display:block;">
+          <h3 style="margin:0 0 1rem 0;color:#2c3e50;font-size:1.1rem;">📱 ติดตั้งแอปเพื่อรับการแจ้งเตือน</h3>
+          <p style="color:#666;line-height:1.6;font-size:0.92rem;margin-bottom:1rem;">
+            เพื่อให้ได้รับ <b style="color:#e67e22;">การแจ้งเตือนคิว/สนามว่าง</b> 
+            แม้ปิดแอปแล้ว — กรุณาติดตั้งแอปลงหน้าจอหลักก่อนนะคะ
+          </p>
+
+          <div style="background:#fff5e6;border-left:4px solid #e67e22;padding:0.85rem 1rem;border-radius:8px;margin-bottom:1rem;">
+            <div style="font-weight:700;color:#e67e22;font-size:0.88rem;margin-bottom:0.3rem;">
+              ⚠️ ทำไมต้องติดตั้ง?
+            </div>
+            <div style="color:#666;font-size:0.85rem;line-height:1.5;">
+              iOS Safari ไม่ส่งการแจ้งเตือนให้แอปที่เปิดผ่าน browser
+              ต้องติดตั้งเป็น PWA เท่านั้น
+            </div>
+          </div>
+
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+            <button onclick="onboardingShowInstall()" style="flex:1;min-width:140px;padding:0.75rem;background:linear-gradient(135deg,#3498db 0%,#2980b9 100%);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:0.95rem;cursor:pointer;">
+              📲 ดูวิธีติดตั้ง
+            </button>
+            <button onclick="onboardingSkip()" style="padding:0.75rem 1rem;background:#ecf0f1;color:#7f8c8d;border:none;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">
+              ข้ามไปก่อน
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2: วิธีติดตั้ง iOS -->
+        <div id="onboarding-step-ios" style="display:none;">
+          <h3 style="margin:0 0 1rem 0;color:#2c3e50;font-size:1.05rem;">📱 iPhone / iPad — Safari</h3>
+          <ol style="padding-left:1.4rem;color:#444;line-height:1.9;font-size:0.92rem;">
+            <li>กดปุ่ม <b>"แชร์"</b> 
+              <span style="display:inline-block;width:20px;height:20px;border:1.5px solid #3498db;border-radius:5px;text-align:center;font-size:14px;color:#3498db;font-weight:700;line-height:18px;">⬆</span>
+              ที่ด้านล่างของ Safari</li>
+            <li>เลื่อนลง → กด <b>"เพิ่มที่หน้าจอโฮม"</b> หรือ <b>"Add to Home Screen"</b></li>
+            <li>กด <b>"เพิ่ม"</b> มุมขวาบน</li>
+            <li>ปิด Safari → เปิดแอปจาก <b>หน้าจอโฮม</b> (ไอคอน B-BAD)</li>
+            <li>กดติดตามผู้เล่นและกด <b>"อนุญาต"</b> เมื่อขอแจ้งเตือน</li>
+          </ol>
+          <div style="background:#e8f5e9;border-left:4px solid #27ae60;padding:0.7rem 0.9rem;border-radius:8px;margin-top:1rem;font-size:0.83rem;color:#1e8449;">
+            ✅ หลังติดตั้ง — แอปจะเด้งแจ้งเตือนทุกครั้งที่ admin เรียก
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+            <button onclick="onboardingBack()" style="padding:0.65rem 0.9rem;background:#ecf0f1;color:#7f8c8d;border:none;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">
+              ← กลับ
+            </button>
+            <button onclick="onboardingSkip()" style="flex:1;padding:0.7rem;background:#27ae60;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:0.9rem;cursor:pointer;">
+              ✅ เข้าใจแล้ว เริ่มใช้งาน
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2b: Android -->
+        <div id="onboarding-step-android" style="display:none;">
+          <h3 style="margin:0 0 1rem 0;color:#2c3e50;font-size:1.05rem;">📱 Android — Chrome</h3>
+          <ol style="padding-left:1.4rem;color:#444;line-height:1.9;font-size:0.92rem;">
+            <li>กดเมนู <b>⋮</b> มุมขวาบนของ Chrome</li>
+            <li>กด <b>"ติดตั้งแอป"</b> หรือ <b>"Add to Home screen"</b></li>
+            <li>กด <b>"ติดตั้ง"</b> เพื่อยืนยัน</li>
+            <li>เปิดแอปจาก <b>หน้าจอโฮม</b> (ไอคอน B-BAD)</li>
+            <li>กดติดตามผู้เล่นและกด <b>"อนุญาต"</b> เมื่อขอแจ้งเตือน</li>
+          </ol>
+          <div style="background:#e8f5e9;border-left:4px solid #27ae60;padding:0.7rem 0.9rem;border-radius:8px;margin-top:1rem;font-size:0.83rem;color:#1e8449;">
+            ✅ หลังติดตั้ง — แอปจะเด้งแจ้งเตือนทุกครั้งที่ admin เรียก
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+            <button onclick="onboardingBack()" style="padding:0.65rem 0.9rem;background:#ecf0f1;color:#7f8c8d;border:none;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">
+              ← กลับ
+            </button>
+            <button onclick="onboardingSkip()" style="flex:1;padding:0.7rem;background:#27ae60;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:0.9rem;cursor:pointer;">
+              ✅ เข้าใจแล้ว เริ่มใช้งาน
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 2c: Already PWA (skip install) -->
+        <div id="onboarding-step-installed" style="display:none;">
+          <div style="text-align:center;padding:1rem 0;">
+            <div style="font-size:3rem;margin-bottom:0.5rem;">✅</div>
+            <h3 style="color:#27ae60;margin:0 0 0.5rem 0;">ติดตั้งแอปแล้ว!</h3>
+            <p style="color:#666;line-height:1.6;font-size:0.9rem;">
+              ระบบพร้อมใช้งานแล้ว<br>
+              อย่าลืม <b>กด "อนุญาต"</b> เมื่อระบบขอสิทธิ์แจ้งเตือน
+            </p>
+          </div>
+          <button onclick="onboardingSkip()" style="width:100%;padding:0.85rem;background:linear-gradient(135deg,#27ae60 0%,#229954 100%);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:1rem;cursor:pointer;">
+            🚀 เริ่มใช้งาน
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Header -->
   <div class="header">
     <div class="header-left">
@@ -1199,6 +1306,7 @@
       <span class="watch-hint">กดชื่อตัวเองเพื่อรับแจ้งเตือนเมื่อถึงคิว</span>
     </div>
     <button class="sound-unlock-btn" id="sound-unlock-btn" onclick="unlockAudioManual()">🔇 เปิดเสียง</button>
+    <button onclick="openOnboarding()" title="วิธีติดตั้งแอป" style="background:#f39c12;color:#fff;border:none;border-radius:20px;padding:5px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;">📲 ติดตั้ง</button>
     <button id="pay-btn" onclick="showPaymentQR()"
       style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;
       border-radius:20px;padding:5px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;
@@ -1387,8 +1495,10 @@
       });
     }
 
+    let _lastHiddenTs = 0;
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
+        _lastHiddenTs = Date.now();
         syncStateToSW();
         startSWPoll();
       } else {
@@ -1398,14 +1508,27 @@
           _swRegistration.getNotifications().then(ns => ns.forEach(n => n.close())).catch(()=>{});
         }
         setTimeout(() => { _justReturned = false; }, 3000);
-        // touch timestamp ของ token (ไม่ re-register เต็ม) — แค่ยืนยันว่ายังใช้อยู่
+
+        // ตรวจว่า PWA ถูกซ่อนนานแค่ไหน
+        const hiddenDuration = _lastHiddenTs ? (Date.now() - _lastHiddenTs) : 0;
+        const FORCE_REREG_THRESHOLD = 30 * 60 * 1000; // 30 นาที
+        const shouldForceReregister = hiddenDuration > FORCE_REREG_THRESHOLD;
+
         if (_pushGranted && watchedIds.size > 0) {
-          touchMyTokens();
-          // re-setup presence + direct message listener (lightweight) — ไม่ลบ token เดิม
+          // re-setup presence + direct message listener
           watchedIds.forEach(pid => {
             setupPresence(pid);
             setupDirectMessageListener(pid);
           });
+
+          if (shouldForceReregister) {
+            // ⚡ Force re-register ทุกครั้งที่ PWA หลับนานเกิน 30 นาที (กัน iOS hibernate)
+            console.log('[FCM] PWA was hidden for', Math.round(hiddenDuration/1000/60), 'min — force re-register token');
+            watchedIds.forEach(pid => registerFCMToken(pid));
+          } else {
+            // Hidden ไม่นาน → แค่ touch timestamp
+            touchMyTokens();
+          }
         }
       }
     });
@@ -1420,6 +1543,79 @@
       } catch(_) {}
     });
 
+    // ============================================================
+    // Onboarding — แสดงครั้งแรกที่ user เปิดแอป
+    // ============================================================
+    const ONBOARDING_KEY = 'bb-onboarding-seen';
+
+    function isStandalonePWA() {
+      // Check ว่าเปิดผ่าน PWA (ติดตั้งแล้ว) หรือ browser ปกติ
+      return (
+        window.matchMedia && window.matchMedia('(display-mode: standalone)').matches ||
+        window.navigator.standalone === true  // iOS Safari
+      );
+    }
+
+    function isIOS() {
+      return /iPad|iPhone|iPod/.test(navigator.userAgent);
+    }
+
+    function isAndroid() {
+      return /Android/i.test(navigator.userAgent);
+    }
+
+    function showOnboarding() {
+      const overlay = document.getElementById('onboarding-overlay');
+      if (!overlay) return;
+      overlay.style.display = 'flex';
+
+      // ถ้าติดตั้ง PWA แล้ว → ข้ามไปหน้า "ติดตั้งแล้ว"
+      if (isStandalonePWA()) {
+        document.getElementById('onboarding-step-1').style.display = 'none';
+        document.getElementById('onboarding-step-installed').style.display = 'block';
+      } else {
+        document.getElementById('onboarding-step-1').style.display = 'block';
+      }
+    }
+
+    function onboardingShowInstall() {
+      document.getElementById('onboarding-step-1').style.display = 'none';
+      // เลือก step ตาม OS
+      if (isAndroid()) {
+        document.getElementById('onboarding-step-android').style.display = 'block';
+      } else {
+        // default = iOS (และ desktop browser ก็ใช้แนวเดียวกัน)
+        document.getElementById('onboarding-step-ios').style.display = 'block';
+      }
+    }
+
+    function onboardingBack() {
+      document.getElementById('onboarding-step-ios').style.display = 'none';
+      document.getElementById('onboarding-step-android').style.display = 'none';
+      document.getElementById('onboarding-step-installed').style.display = 'none';
+      document.getElementById('onboarding-step-1').style.display = 'block';
+    }
+
+    function onboardingSkip() {
+      try { localStorage.setItem(ONBOARDING_KEY, '1'); } catch(e) {}
+      const overlay = document.getElementById('onboarding-overlay');
+      if (overlay) overlay.style.display = 'none';
+    }
+
+    // ปุ่มเปิด onboarding ใหม่ (เผื่อ user ลืม)
+    window.openOnboarding = showOnboarding;
+
+    // ตรวจตอนเปิดแอป — ถ้ายังไม่เคยเห็น onboarding และยังไม่ได้ติดตั้ง PWA → แสดง
+    function checkOnboarding() {
+      try {
+        const seen = localStorage.getItem(ONBOARDING_KEY);
+        if (!seen && !isStandalonePWA()) {
+          // delay 1 วินาที ให้แอปโหลดเสร็จก่อน
+          setTimeout(() => showOnboarding(), 1000);
+        }
+      } catch(e) {}
+    }
+
     async function initPWA() {
       if (!('serviceWorker' in navigator)) return;
       try {
@@ -1430,6 +1626,7 @@
       } catch(e) { console.warn('[SW] register failed', e); }
     }
     initPWA();
+    checkOnboarding();
 
     // Heartbeat ทุก 6 ชั่วโมง — touch timestamp ให้ token ดูสด ไม่โดน TTL ลบ
     // (ทำงานเฉพาะเมื่อแอปเปิดอยู่ ถ้าปิดนานเกิน 7 วันจริงๆ ก็ตามนั้น)
@@ -1485,16 +1682,31 @@
 
       // จำ timestamp ล่าสุดก่อนเริ่มฟัง — เพื่อไม่ให้ trigger ข้อความเก่าที่ค้างใน DB
       _lastDirectMsgTs = Date.now();
+      console.log('[DirectMsg] start listening pid', pid, '_lastDirectMsgTs =', _lastDirectMsgTs, new Date(_lastDirectMsgTs).toLocaleString());
 
       _directMsgRef = db.ref(`directMessage/${pid}`);
       _directMsgRef.on('value', snap => {
         const data = snap.val();
-        if (!data) return;
+        console.log('[DirectMsg] snapshot received:', data);
+        if (!data) {
+          console.log('[DirectMsg] no data — skipping');
+          return;
+        }
 
         const msgTs = parseInt(data.timestamp || data.ts || 0);
+        console.log('[DirectMsg] msgTs:', msgTs, new Date(msgTs).toLocaleString(), '| _lastDirectMsgTs:', _lastDirectMsgTs, new Date(_lastDirectMsgTs).toLocaleString());
+
         // ข้าม message เก่าที่ค้างอยู่ก่อนเริ่มฟัง
-        if (!msgTs || msgTs <= _lastDirectMsgTs) return;
+        if (!msgTs) {
+          console.log('[DirectMsg] no timestamp — skipping');
+          return;
+        }
+        if (msgTs <= _lastDirectMsgTs) {
+          console.log('[DirectMsg] message older or equal to last — skipping');
+          return;
+        }
         _lastDirectMsgTs = msgTs;
+        console.log('[DirectMsg] ✅ NEW message — will show notification');
 
         const message    = data.message || 'มีข้อความใหม่';
         const playerName = data.playerName || '';
@@ -1505,7 +1717,8 @@
         const title = `💬 ข้อความจาก ${sentBy === 'admin' ? 'ผู้จัดการ' : sentBy}`;
         const body  = playerName ? `ถึง ${playerName}: ${message}` : message;
 
-        // แสดง notification ผ่าน Service Worker (ทำงานทั้งตอน PWA เปิด/พับ)
+        // 1) แสดง notification ผ่าน Service Worker (ทำงานทั้งตอน PWA เปิด/พับ)
+        let swShown = false;
         if (_swRegistration) {
           _swRegistration.showNotification(title, {
             body,
@@ -1516,14 +1729,26 @@
             vibrate: [200, 80, 200, 80, 200],
             requireInteraction: true,
             data: { url: './display.html', type: 'direct' },
-          }).catch(e => console.warn('[DirectMsg] showNotification failed:', e));
-        } else if ('Notification' in window && Notification.permission === 'granted') {
-          // Fallback ถ้าไม่มี SW
+          }).then(() => {
+            swShown = true;
+            console.log('[DirectMsg] ✅ SW notification shown');
+          }).catch(e => console.warn('[DirectMsg] SW showNotification failed:', e));
+        } else {
+          console.warn('[DirectMsg] no SW registration');
+        }
+
+        // 2) Fallback: Browser notification (ถ้า SW ไม่ทำงาน)
+        if (!_swRegistration && 'Notification' in window && Notification.permission === 'granted') {
           try {
             const n = new Notification(title, { body, tag: 'direct-msg-' + msgTs, icon: 'apple-touch-icon.png' });
             n.onclick = () => { window.focus(); n.close(); };
-          } catch(e) {}
+            console.log('[DirectMsg] ✅ browser notification shown');
+          } catch(e) { console.warn('[DirectMsg] browser notification failed:', e); }
         }
+
+        // 3) Always show in-app alert — ไม่ว่า notification จะแสดงหรือไม่
+        // เพื่อให้ user ที่ active อยู่ในแอปเห็นทันที
+        showDirectMessageInAppAlert(title, body);
 
         // เล่นเสียงเตือน + แสดง toast ในแอป (ถ้า PWA active)
         try { playDirectMsgSound(); } catch(_) {}
@@ -1565,6 +1790,60 @@
       } catch(e) {}
     }
 
+    // แสดง popup alert ใน UI ของแอป (ทำงานเสมอ ไม่ต้อง permission)
+    function showDirectMessageInAppAlert(title, body) {
+      try {
+        // สร้าง overlay popup ถ้ายังไม่มี
+        let overlay = document.getElementById('direct-msg-overlay');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'direct-msg-overlay';
+          overlay.style.cssText = `
+            position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: #fff; padding: 14px 20px; border-radius: 14px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            z-index: 99999; max-width: 90%; min-width: 280px;
+            font-family: 'Sarabun', sans-serif;
+            cursor: pointer;
+            animation: dmSlideDown 0.4s ease-out;
+          `;
+          // เพิ่ม animation keyframes
+          if (!document.getElementById('dm-style')) {
+            const style = document.createElement('style');
+            style.id = 'dm-style';
+            style.textContent = `
+              @keyframes dmSlideDown {
+                from { transform: translate(-50%, -120%); opacity: 0; }
+                to   { transform: translate(-50%, 0);     opacity: 1; }
+              }
+              @keyframes dmFadeOut {
+                from { opacity: 1; }
+                to   { opacity: 0; transform: translate(-50%, -20%); }
+              }
+            `;
+            document.head.appendChild(style);
+          }
+          document.body.appendChild(overlay);
+        }
+        overlay.innerHTML = `
+          <div style="font-weight:800;font-size:0.95rem;margin-bottom:4px;">${esc(title)}</div>
+          <div style="font-size:0.88rem;opacity:0.95;">${esc(body)}</div>
+          <div style="text-align:right;margin-top:6px;font-size:0.7rem;opacity:0.7;">แตะเพื่อปิด</div>
+        `;
+        overlay.style.display = 'block';
+        overlay.style.animation = 'dmSlideDown 0.4s ease-out';
+        // กดเพื่อปิด
+        overlay.onclick = () => { overlay.style.display = 'none'; };
+        // auto-hide หลัง 8 วินาที
+        clearTimeout(overlay._hideTimer);
+        overlay._hideTimer = setTimeout(() => {
+          overlay.style.animation = 'dmFadeOut 0.5s ease-out';
+          setTimeout(() => { overlay.style.display = 'none'; }, 500);
+        }, 8000);
+      } catch(e) { console.warn('[DirectMsg] in-app alert failed:', e); }
+    }
+
     async function registerFCMToken(pid) {
       if (!_swRegistration || !_pushGranted) return;
       try {
@@ -1577,20 +1856,19 @@
         // เช็คว่ามี device อื่น token อยู่แล้วไหม
         const snap = await db.ref(`pushTokens/${pid}`).once('value');
         const existing = snap.val();
-        // TTL ยาว 7 วัน — token จะถูกลบก็ต่อเมื่อ user เลิกติดตามเอง หรือเก่ามากจริงๆ
-        // (ไม่ลบเพราะปิดแอป/swipe out/หน้าจอดับ)
-        const TOKEN_TTL = 7 * 24 * 60 * 60 * 1000; // 7 วัน
+        // TTL สั้น 12 ชั่วโมง — กัน iOS hibernate token (ที่ admin เห็นแต่ส่งไม่ถึงจริง)
+        // หลัง 12 ชม → token เก่าจะถูกลบ → user ต้องเปิดแอปใหม่ → token ใหม่ → push ทำงานปกติ
+        const TOKEN_TTL = 12 * 60 * 60 * 1000; // 12 ชั่วโมง
         if (existing && typeof existing === 'object') {
           const now = Date.now();
-          // ลบเฉพาะ token ที่เก่าเกิน 7 วัน (ปลอดภัยสมมติว่า user ลืมแล้ว)
+          // ลบ token เก่ากว่า TTL ทุกตัว (ทั้งของ device อื่น และของตัวเอง)
           const cleanupPromises = [];
           Object.entries(existing).forEach(([devId, val]) => {
-            if (devId !== did) {
-              const age = now - (val.ts || 0);
-              if (age > TOKEN_TTL) {
-                cleanupPromises.push(db.ref(`pushTokens/${pid}/${devId}`).remove());
-                delete existing[devId];
-              }
+            const age = now - (val.ts || 0);
+            if (age > TOKEN_TTL) {
+              cleanupPromises.push(db.ref(`pushTokens/${pid}/${devId}`).remove());
+              delete existing[devId];
+              console.log('[FCM] cleanup stale token:', devId, 'age:', Math.round(age/1000/60/60), 'hr');
             }
           });
           if (cleanupPromises.length > 0) await Promise.all(cleanupPromises);
