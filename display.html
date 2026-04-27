@@ -1042,6 +1042,134 @@
       color: #27ae60;
     }
 
+    /* ═══════════════════════════════════════════════════════════
+       Boxing Mode (โหมดก๊วน) — ป้องกัน iOS hibernate
+       ═══════════════════════════════════════════════════════════ */
+    .boxing-mode-btn {
+      background: linear-gradient(135deg,#e74c3c 0%,#c0392b 100%);
+      color: #fff;
+      border: none;
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(231,76,60,0.4);
+    }
+    .boxing-mode-btn.active {
+      background: linear-gradient(135deg,#27ae60 0%,#229954 100%);
+      animation: bbm-pulse 2s ease-in-out infinite;
+    }
+    @keyframes bbm-pulse {
+      0%, 100% { box-shadow: 0 2px 6px rgba(39,174,96,0.4); }
+      50%      { box-shadow: 0 2px 14px rgba(39,174,96,0.7); }
+    }
+
+    /* Boxing Mode Floating Widget — countdown มุมล่างขวา */
+    #boxing-mode-widget {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: linear-gradient(135deg,#27ae60 0%,#229954 100%);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 14px;
+      box-shadow: 0 8px 24px rgba(39,174,96,0.4);
+      z-index: 9000;
+      display: none;
+      cursor: pointer;
+      font-family: 'Sarabun', sans-serif;
+      user-select: none;
+      transition: transform 0.2s;
+    }
+    #boxing-mode-widget:active { transform: scale(0.96); }
+    #boxing-mode-widget .bm-label {
+      font-size: 0.68rem;
+      opacity: 0.85;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+    #boxing-mode-widget .bm-time {
+      font-size: 1.15rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 1px;
+      margin-top: 1px;
+    }
+
+    /* Boxing Mode Modal */
+    #boxing-mode-modal {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 99997;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    #boxing-mode-modal .bm-card {
+      background: #fff;
+      border-radius: 18px;
+      max-width: 440px;
+      width: 100%;
+      max-height: 92vh;
+      overflow: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+    .bm-header {
+      background: linear-gradient(135deg,#e74c3c 0%,#c0392b 100%);
+      color: #fff;
+      padding: 1.25rem;
+      border-radius: 18px 18px 0 0;
+      text-align: center;
+    }
+    .bm-active-header {
+      background: linear-gradient(135deg,#27ae60 0%,#229954 100%) !important;
+    }
+    .bm-body { padding: 1.25rem; }
+    .bm-duration-row {
+      display: flex;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+    .bm-duration-btn {
+      flex: 1;
+      padding: 0.85rem 0.5rem;
+      border: 2px solid #ddd;
+      background: #fff;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 700;
+      color: #555;
+      transition: all 0.15s;
+    }
+    .bm-duration-btn:hover { border-color: #3498db; }
+    .bm-duration-btn.selected {
+      background: linear-gradient(135deg,#3498db 0%,#2980b9 100%);
+      color: #fff;
+      border-color: #2980b9;
+    }
+    .bm-big-time {
+      text-align: center;
+      font-size: 3rem;
+      font-weight: 800;
+      color: #27ae60;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 2px;
+      margin: 0.5rem 0;
+    }
+    .bm-status-row {
+      display: flex;
+      justify-content: space-around;
+      margin: 0.75rem 0;
+      padding: 0.6rem;
+      background: #f8f9fa;
+      border-radius: 10px;
+      font-size: 0.78rem;
+      color: #555;
+    }
+
     .ci-search {
       position: relative;
       margin-bottom: 1rem;
@@ -1266,6 +1394,100 @@
     </div>
   </div>
 
+  <!-- ═══════════════════════════════════════════════════════════
+       Boxing Mode Modal — เลือกระยะเวลา
+       ═══════════════════════════════════════════════════════════ -->
+  <div id="boxing-mode-modal">
+    <div class="bm-card">
+      <!-- Header -->
+      <div class="bm-header" id="bm-header">
+        <div style="font-size:2.2rem;margin-bottom:0.3rem;">🎯</div>
+        <div style="font-size:1.2rem;font-weight:800;" id="bm-title">โหมดก๊วน</div>
+        <div style="font-size:0.82rem;opacity:0.92;margin-top:0.2rem;" id="bm-subtitle">ป้องกัน iOS หยุดส่งแจ้งเตือน</div>
+      </div>
+
+      <!-- Body — Setup -->
+      <div class="bm-body" id="bm-setup">
+        <p style="color:#555;line-height:1.6;font-size:0.9rem;margin-bottom:0.5rem;">
+          เปิดโหมดนี้ตอน <b>เริ่มก๊วน</b> เพื่อให้แอป
+          <b style="color:#e74c3c;">ไม่หลับ</b> ตลอดเวลา —
+          จะได้รับแจ้งเตือนคิว/สนามครบทุกครั้ง
+        </p>
+        <div style="background:#fff8e6;border-left:4px solid #f39c12;padding:0.6rem 0.8rem;border-radius:8px;font-size:0.8rem;color:#7d5e00;margin-bottom:0.75rem;">
+          ⚠️ <b>ข้อควรรู้</b>: โหมดนี้กิน battery มากกว่าปกติ ~15-20%
+          (เทียบเท่าใช้ Maps ระหว่างขับรถ)
+        </div>
+
+        <label style="font-weight:700;color:#333;font-size:0.92rem;">เลือกระยะเวลา:</label>
+        <div class="bm-duration-row">
+          <button class="bm-duration-btn" data-hours="2" onclick="bmSelectDuration(2)">
+            <div style="font-size:1.2rem;">2</div>
+            <div style="font-size:0.7rem;">ชั่วโมง</div>
+          </button>
+          <button class="bm-duration-btn selected" data-hours="4" onclick="bmSelectDuration(4)">
+            <div style="font-size:1.2rem;">4</div>
+            <div style="font-size:0.7rem;">ชั่วโมง ⭐</div>
+          </button>
+          <button class="bm-duration-btn" data-hours="6" onclick="bmSelectDuration(6)">
+            <div style="font-size:1.2rem;">6</div>
+            <div style="font-size:0.7rem;">ชั่วโมง</div>
+          </button>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+          <button onclick="bmCloseModal()" style="padding:0.7rem 1rem;background:#ecf0f1;color:#7f8c8d;border:none;border-radius:10px;font-weight:600;font-size:0.85rem;cursor:pointer;">
+            ยกเลิก
+          </button>
+          <button onclick="bmStart()" style="flex:1;padding:0.85rem;background:linear-gradient(135deg,#27ae60 0%,#229954 100%);color:#fff;border:none;border-radius:10px;font-weight:700;font-size:1rem;cursor:pointer;">
+            🎯 เริ่มโหมดก๊วน
+          </button>
+        </div>
+      </div>
+
+      <!-- Body — Active -->
+      <div class="bm-body" id="bm-active" style="display:none;">
+        <div style="text-align:center;color:#666;font-size:0.85rem;">เหลือเวลา</div>
+        <div class="bm-big-time" id="bm-big-time">04:00:00</div>
+
+        <div class="bm-status-row">
+          <div style="text-align:center;">
+            <div style="font-size:1.2rem;">🔋</div>
+            <div id="bm-battery">--</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:1.2rem;">📡</div>
+            <div id="bm-connection">เชื่อมต่อ</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:1.2rem;">🔔</div>
+            <div id="bm-notifs">0 ครั้ง</div>
+          </div>
+        </div>
+
+        <div style="background:#e8f5e9;border-left:4px solid #27ae60;padding:0.6rem 0.85rem;border-radius:8px;font-size:0.78rem;color:#1e8449;margin-top:0.75rem;">
+          ✅ <b>โหมดก๊วนเปิดอยู่</b> — แอปจะไม่หลับ พร้อมรับแจ้งเตือน
+        </div>
+
+        <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+          <button onclick="bmStop()" style="flex:1;padding:0.85rem;background:#e74c3c;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:0.95rem;cursor:pointer;">
+            ⏹ หยุดโหมดก๊วน
+          </button>
+          <button onclick="bmCloseModal()" style="padding:0.85rem 1rem;background:#3498db;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:0.85rem;cursor:pointer;">
+            ปิดหน้าต่าง
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Floating Widget — countdown มุมล่างขวา
+       ═══════════════════════════════════════════════════════════ -->
+  <div id="boxing-mode-widget" onclick="bmOpenModal()">
+    <div class="bm-label">🎯 โหมดก๊วน</div>
+    <div class="bm-time" id="bm-widget-time">--:--:--</div>
+  </div>
+
   <!-- Header -->
   <div class="header">
     <div class="header-left">
@@ -1307,6 +1529,7 @@
     </div>
     <button class="sound-unlock-btn" id="sound-unlock-btn" onclick="unlockAudioManual()">🔇 เปิดเสียง</button>
     <button onclick="openOnboarding()" title="วิธีติดตั้งแอป" style="background:#f39c12;color:#fff;border:none;border-radius:20px;padding:5px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;">📲 ติดตั้ง</button>
+    <button id="boxing-mode-trigger" class="boxing-mode-btn" onclick="bmOpenModal()">🎯 เปิดโหมดก๊วน</button>
     <button id="pay-btn" onclick="showPaymentQR()"
       style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;
       border-radius:20px;padding:5px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;
@@ -1616,6 +1839,257 @@
       } catch(e) {}
     }
 
+    // ============================================================
+    // 🎯 Boxing Mode — ป้องกัน iOS hibernate
+    // Wake Lock + Silent Audio + Heartbeat
+    // ============================================================
+    const BM_STATE_KEY = 'bb-boxing-mode';
+    let bmSelectedHours = 4;
+    let bmActive = false;
+    let bmEndTime = 0;
+    let bmStartTime = 0;
+    let bmNotifCount = 0;
+    let bmWakeLock = null;
+    let bmAudio = null;
+    let bmHeartbeatTimer = null;
+    let bmCountdownTimer = null;
+    let bmBatteryStart = null;
+
+    function bmOpenModal() {
+      const modal = document.getElementById('boxing-mode-modal');
+      if (!modal) return;
+      modal.style.display = 'flex';
+      // ถ้ากำลัง active อยู่ — แสดง active panel
+      if (bmActive) {
+        document.getElementById('bm-setup').style.display = 'none';
+        document.getElementById('bm-active').style.display = 'block';
+        document.getElementById('bm-header').classList.add('bm-active-header');
+        document.getElementById('bm-title').textContent = '🟢 โหมดก๊วน — Active';
+        document.getElementById('bm-subtitle').textContent = 'ระบบป้องกัน hibernate กำลังทำงาน';
+        bmUpdateUI();
+      } else {
+        document.getElementById('bm-setup').style.display = 'block';
+        document.getElementById('bm-active').style.display = 'none';
+        document.getElementById('bm-header').classList.remove('bm-active-header');
+        document.getElementById('bm-title').textContent = 'โหมดก๊วน';
+        document.getElementById('bm-subtitle').textContent = 'ป้องกัน iOS หยุดส่งแจ้งเตือน';
+      }
+    }
+
+    function bmCloseModal() {
+      const modal = document.getElementById('boxing-mode-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    function bmSelectDuration(hours) {
+      bmSelectedHours = hours;
+      document.querySelectorAll('.bm-duration-btn').forEach(btn => {
+        btn.classList.toggle('selected', +btn.dataset.hours === hours);
+      });
+    }
+
+    async function bmStart() {
+      if (bmActive) return;
+      try {
+        bmStartTime = Date.now();
+        bmEndTime   = bmStartTime + bmSelectedHours * 60 * 60 * 1000;
+        bmActive    = true;
+        bmNotifCount = 0;
+
+        // 1. Wake Lock — ขอจอไม่ดับ (iOS 16.4+)
+        if ('wakeLock' in navigator) {
+          try {
+            bmWakeLock = await navigator.wakeLock.request('screen');
+            console.log('[BM] WakeLock acquired');
+            bmWakeLock.addEventListener('release', () => {
+              console.log('[BM] WakeLock released');
+            });
+          } catch(e) {
+            console.warn('[BM] WakeLock failed:', e);
+          }
+        }
+
+        // 2. Silent Audio Loop — บังคับ iOS keep PWA active
+        try {
+          // สร้าง silent audio ผ่าน data URI (44.1kHz, 1 ch, 1 sec silent WAV)
+          const silentWav = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+          bmAudio = new Audio(silentWav);
+          bmAudio.loop = true;
+          bmAudio.volume = 0.001; // เกือบเงียบ
+          await bmAudio.play();
+          console.log('[BM] Silent audio looping');
+        } catch(e) {
+          console.warn('[BM] Audio loop failed (user must interact first):', e);
+        }
+
+        // 3. Heartbeat — ping Firebase ทุก 30 วินาที
+        bmHeartbeatTimer = setInterval(() => {
+          // touch token timestamps
+          if (typeof touchMyTokens === 'function') touchMyTokens();
+          // touch presence
+          if (_pushGranted && watchedIds && watchedIds.size > 0) {
+            watchedIds.forEach(pid => {
+              if (typeof setupPresence === 'function') setupPresence(pid);
+            });
+          }
+        }, 30 * 1000);
+
+        // 4. Countdown timer
+        bmCountdownTimer = setInterval(() => {
+          bmUpdateUI();
+          if (Date.now() >= bmEndTime) {
+            bmStop(true); // auto stop
+          }
+        }, 1000);
+
+        // 5. Save state to localStorage (เผื่อ reload)
+        localStorage.setItem(BM_STATE_KEY, JSON.stringify({
+          startTime: bmStartTime, endTime: bmEndTime, hours: bmSelectedHours,
+        }));
+
+        // 6. Battery monitoring
+        if (navigator.getBattery) {
+          navigator.getBattery().then(b => { bmBatteryStart = Math.round(b.level * 100); });
+        }
+
+        // 7. Update UI
+        document.getElementById('bm-setup').style.display = 'none';
+        document.getElementById('bm-active').style.display = 'block';
+        document.getElementById('bm-header').classList.add('bm-active-header');
+        document.getElementById('bm-title').textContent = '🟢 โหมดก๊วน — Active';
+        document.getElementById('bm-subtitle').textContent = 'ระบบป้องกัน hibernate กำลังทำงาน';
+        document.getElementById('boxing-mode-widget').style.display = 'block';
+        document.getElementById('boxing-mode-trigger')?.classList.add('active');
+        document.getElementById('boxing-mode-trigger').textContent = '🟢 โหมดก๊วน On';
+
+        bmUpdateUI();
+        console.log('[BM] Started for', bmSelectedHours, 'hours');
+      } catch(e) {
+        console.error('[BM] Start failed:', e);
+        alert('เปิดโหมดก๊วนไม่สำเร็จ: ' + (e.message || e));
+        bmActive = false;
+      }
+    }
+
+    async function bmStop(autoStopped) {
+      if (!bmActive) return;
+      try {
+        bmActive = false;
+
+        // ปล่อย Wake Lock
+        if (bmWakeLock) {
+          try { await bmWakeLock.release(); } catch(_) {}
+          bmWakeLock = null;
+        }
+
+        // หยุด audio
+        if (bmAudio) {
+          try { bmAudio.pause(); bmAudio.src = ''; } catch(_) {}
+          bmAudio = null;
+        }
+
+        // หยุด timers
+        if (bmHeartbeatTimer) { clearInterval(bmHeartbeatTimer); bmHeartbeatTimer = null; }
+        if (bmCountdownTimer) { clearInterval(bmCountdownTimer); bmCountdownTimer = null; }
+
+        // ลบ state
+        localStorage.removeItem(BM_STATE_KEY);
+
+        // Update UI
+        document.getElementById('boxing-mode-widget').style.display = 'none';
+        document.getElementById('boxing-mode-trigger')?.classList.remove('active');
+        document.getElementById('boxing-mode-trigger').textContent = '🎯 เปิดโหมดก๊วน';
+        document.getElementById('bm-setup').style.display = 'block';
+        document.getElementById('bm-active').style.display = 'none';
+        document.getElementById('bm-header').classList.remove('bm-active-header');
+        document.getElementById('bm-title').textContent = 'โหมดก๊วน';
+        document.getElementById('bm-subtitle').textContent = 'ป้องกัน iOS หยุดส่งแจ้งเตือน';
+
+        if (autoStopped) {
+          // โชว์ summary แล้วปิด modal หลัง 5 วินาที
+          alert(`✅ ก๊วนเสร็จแล้ว!\nระยะเวลา: ${bmSelectedHours} ชม.\nรับ notification: ${bmNotifCount} ครั้ง`);
+        }
+        console.log('[BM] Stopped');
+      } catch(e) {
+        console.error('[BM] Stop failed:', e);
+      }
+    }
+
+    function bmUpdateUI() {
+      if (!bmActive) return;
+      const remaining = Math.max(0, bmEndTime - Date.now());
+      const hh = Math.floor(remaining / 3600000);
+      const mm = Math.floor((remaining % 3600000) / 60000);
+      const ss = Math.floor((remaining % 60000) / 1000);
+      const timeStr = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:${String(ss).padStart(2,'0')}`;
+
+      const big = document.getElementById('bm-big-time');
+      const widget = document.getElementById('bm-widget-time');
+      if (big) big.textContent = timeStr;
+      if (widget) widget.textContent = timeStr;
+
+      // Battery
+      if (navigator.getBattery) {
+        navigator.getBattery().then(b => {
+          const pct = Math.round(b.level * 100);
+          const el = document.getElementById('bm-battery');
+          if (el) {
+            const drop = bmBatteryStart !== null ? ` (-${Math.max(0,bmBatteryStart-pct)}%)` : '';
+            el.textContent = pct + '%' + drop;
+          }
+        }).catch(()=>{});
+      }
+      // Notif count
+      const notifEl = document.getElementById('bm-notifs');
+      if (notifEl) notifEl.textContent = bmNotifCount + ' ครั้ง';
+      // Connection
+      const connEl = document.getElementById('bm-connection');
+      if (connEl) {
+        connEl.textContent = navigator.onLine ? 'เชื่อมต่อ' : 'ขาดเน็ต';
+        connEl.style.color = navigator.onLine ? '#27ae60' : '#e74c3c';
+      }
+    }
+
+    // เปิด wake lock อีกครั้งเมื่อ visibility กลับมา (iOS อาจ release ตอน hidden)
+    document.addEventListener('visibilitychange', async () => {
+      if (!document.hidden && bmActive && !bmWakeLock && 'wakeLock' in navigator) {
+        try {
+          bmWakeLock = await navigator.wakeLock.request('screen');
+          console.log('[BM] WakeLock re-acquired');
+        } catch(_) {}
+      }
+    });
+
+    // Restore boxing mode หลัง reload (ถ้ายังไม่หมดเวลา)
+    function bmTryRestore() {
+      try {
+        const raw = localStorage.getItem(BM_STATE_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (s.endTime && Date.now() < s.endTime) {
+          bmSelectedHours = s.hours;
+          bmStartTime = s.startTime;
+          bmEndTime   = s.endTime;
+          // เริ่มใหม่ (ต้อง user interaction → จะเริ่มจริงตอน user คลิก)
+          // แสดง widget เป็น hint
+          setTimeout(() => {
+            if (confirm('🎯 โหมดก๊วนยังเหลือเวลาอยู่ — เริ่มต่อไหม?')) {
+              bmStart();
+            } else {
+              localStorage.removeItem(BM_STATE_KEY);
+            }
+          }, 1500);
+        } else {
+          localStorage.removeItem(BM_STATE_KEY);
+        }
+      } catch(e) {}
+    }
+
+    // Hook for notification counting
+    window._bmIncrementNotifCount = function() {
+      if (bmActive) bmNotifCount++;
+    };
+
     async function initPWA() {
       if (!('serviceWorker' in navigator)) return;
       try {
@@ -1627,6 +2101,7 @@
     }
     initPWA();
     checkOnboarding();
+    bmTryRestore();
 
     // Heartbeat ทุก 6 ชั่วโมง — touch timestamp ให้ token ดูสด ไม่โดน TTL ลบ
     // (ทำงานเฉพาะเมื่อแอปเปิดอยู่ ถ้าปิดนานเกิน 7 วันจริงๆ ก็ตามนั้น)
@@ -1713,6 +2188,9 @@
         const sentBy     = data.sentBy || 'admin';
 
         console.log('[DirectMsg] received:', { message, playerName, sentBy, ts: msgTs });
+
+        // นับ notification (สำหรับ Boxing Mode)
+        if (window._bmIncrementNotifCount) window._bmIncrementNotifCount();
 
         const title = `💬 ข้อความจาก ${sentBy === 'admin' ? 'ผู้จัดการ' : sentBy}`;
         const body  = playerName ? `ถึง ${playerName}: ${message}` : message;
