@@ -1491,7 +1491,7 @@
   <!-- Header -->
   <div class="header">
     <div class="header-left">
-      <img src="apple-touch-icon.png" alt="B&B Badminton" class="header-logo-img">
+      <img src="apple-touch-icon.png" alt="B&B Badminton" class="header-logo-img" id="header-logo" style="cursor:pointer;">
       <div>
         <div class="header-title">ระบบจัดการสนามแบดมินตัน</div>
         <div id="sync-status" class="header-subtitle">⏳ กำลังเชื่อมต่อ...</div>
@@ -1529,7 +1529,7 @@
     </div>
     <button class="sound-unlock-btn" id="sound-unlock-btn" onclick="unlockAudioManual()">🔇 เปิดเสียง</button>
     <button onclick="openOnboarding()" title="วิธีติดตั้งแอป" style="background:#f39c12;color:#fff;border:none;border-radius:20px;padding:5px 12px;font-size:0.78rem;font-weight:700;cursor:pointer;">📲 ติดตั้ง</button>
-    <button id="boxing-mode-trigger" class="boxing-mode-btn" onclick="bmOpenModal()">🎯 เปิดโหมดก๊วน</button>
+    <button id="boxing-mode-trigger" class="boxing-mode-btn" onclick="bmOpenModal()" style="display:none;">🎯 เปิดโหมดก๊วน</button>
     <button id="pay-btn" onclick="showPaymentQR()"
       style="background:linear-gradient(135deg,#e74c3c,#c0392b);color:#fff;border:none;
       border-radius:20px;padding:5px 14px;font-size:0.82rem;font-weight:700;cursor:pointer;
@@ -1718,10 +1718,8 @@
       });
     }
 
-    let _lastHiddenTs = 0;
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        _lastHiddenTs = Date.now();
         syncStateToSW();
         startSWPoll();
       } else {
@@ -1731,27 +1729,14 @@
           _swRegistration.getNotifications().then(ns => ns.forEach(n => n.close())).catch(()=>{});
         }
         setTimeout(() => { _justReturned = false; }, 3000);
-
-        // ตรวจว่า PWA ถูกซ่อนนานแค่ไหน
-        const hiddenDuration = _lastHiddenTs ? (Date.now() - _lastHiddenTs) : 0;
-        const FORCE_REREG_THRESHOLD = 30 * 60 * 1000; // 30 นาที
-        const shouldForceReregister = hiddenDuration > FORCE_REREG_THRESHOLD;
-
+        // touch timestamp ของ token (ไม่ re-register เต็ม) — แค่ยืนยันว่ายังใช้อยู่
         if (_pushGranted && watchedIds.size > 0) {
-          // re-setup presence + direct message listener
+          touchMyTokens();
+          // re-setup presence + direct message listener (lightweight) — ไม่ลบ token เดิม
           watchedIds.forEach(pid => {
             setupPresence(pid);
             setupDirectMessageListener(pid);
           });
-
-          if (shouldForceReregister) {
-            // ⚡ Force re-register ทุกครั้งที่ PWA หลับนานเกิน 30 นาที (กัน iOS hibernate)
-            console.log('[FCM] PWA was hidden for', Math.round(hiddenDuration/1000/60), 'min — force re-register token');
-            watchedIds.forEach(pid => registerFCMToken(pid));
-          } else {
-            // Hidden ไม่นาน → แค่ touch timestamp
-            touchMyTokens();
-          }
         }
       }
     });
@@ -2103,6 +2088,27 @@
     checkOnboarding();
     bmTryRestore();
 
+    // Hidden feature: tap logo 5 ครั้งเพื่อเปิด Boxing Mode (advanced)
+    (function setupLogoTap() {
+      const logo = document.getElementById('header-logo');
+      if (!logo) return;
+      let taps = 0;
+      let resetTimer = null;
+      logo.addEventListener('click', () => {
+        taps++;
+        if (resetTimer) clearTimeout(resetTimer);
+        resetTimer = setTimeout(() => { taps = 0; }, 2000);
+        if (taps >= 5) {
+          taps = 0;
+          const btn = document.getElementById('boxing-mode-trigger');
+          if (btn) {
+            btn.style.display = '';
+            alert('🎯 ปลดล็อก Boxing Mode แล้ว!\n\nใช้กรณีรอคิวเกิน 30 นาที — ปุ่มจะอยู่ใน watch bar');
+          }
+        }
+      });
+    })();
+
     // Heartbeat ทุก 6 ชั่วโมง — touch timestamp ให้ token ดูสด ไม่โดน TTL ลบ
     // (ทำงานเฉพาะเมื่อแอปเปิดอยู่ ถ้าปิดนานเกิน 7 วันจริงๆ ก็ตามนั้น)
     setInterval(() => {
@@ -2334,19 +2340,21 @@
         // เช็คว่ามี device อื่น token อยู่แล้วไหม
         const snap = await db.ref(`pushTokens/${pid}`).once('value');
         const existing = snap.val();
-        // TTL สั้น 12 ชั่วโมง — กัน iOS hibernate token (ที่ admin เห็นแต่ส่งไม่ถึงจริง)
-        // หลัง 12 ชม → token เก่าจะถูกลบ → user ต้องเปิดแอปใหม่ → token ใหม่ → push ทำงานปกติ
-        const TOKEN_TTL = 12 * 60 * 60 * 1000; // 12 ชั่วโมง
+        // TTL 24 ชั่วโมง — token จะอยู่ตลอดวัน
+        // ลบเฉพาะตอน admin กดเคลียร์เอง หรือ user เลิกติดตาม
+        const TOKEN_TTL = 24 * 60 * 60 * 1000; // 24 ชั่วโมง
         if (existing && typeof existing === 'object') {
           const now = Date.now();
-          // ลบ token เก่ากว่า TTL ทุกตัว (ทั้งของ device อื่น และของตัวเอง)
+          // ลบเฉพาะ token ที่เก่าเกิน 24 ชม (ไม่กระทบ user ปกติ)
           const cleanupPromises = [];
           Object.entries(existing).forEach(([devId, val]) => {
-            const age = now - (val.ts || 0);
-            if (age > TOKEN_TTL) {
-              cleanupPromises.push(db.ref(`pushTokens/${pid}/${devId}`).remove());
-              delete existing[devId];
-              console.log('[FCM] cleanup stale token:', devId, 'age:', Math.round(age/1000/60/60), 'hr');
+            if (devId !== did) {
+              const age = now - (val.ts || 0);
+              if (age > TOKEN_TTL) {
+                cleanupPromises.push(db.ref(`pushTokens/${pid}/${devId}`).remove());
+                delete existing[devId];
+                console.log('[FCM] cleanup old token (>24h):', devId);
+              }
             }
           });
           if (cleanupPromises.length > 0) await Promise.all(cleanupPromises);
