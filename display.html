@@ -2198,6 +2198,12 @@
         // นับ notification (สำหรับ Boxing Mode)
         if (window._bmIncrementNotifCount) window._bmIncrementNotifCount();
 
+        // ⚡ Auto refresh token ทุกครั้งที่ได้รับ message — กัน Stale
+        if (typeof touchMyTokens === 'function') {
+          touchMyTokens();
+          console.log('[DirectMsg] ✅ token timestamp refreshed');
+        }
+
         const title = `💬 ข้อความจาก ${sentBy === 'admin' ? 'ผู้จัดการ' : sentBy}`;
         const body  = playerName ? `ถึง ${playerName}: ${message}` : message;
 
@@ -2388,6 +2394,13 @@
               const title = payload.notification?.title || payload.data?.title || '🔔 แจ้งเตือน';
               const body  = payload.notification?.body  || payload.data?.body  || '';
               const tag   = payload.data?.tag || 'fcm-' + Date.now();
+
+              // ⚡ Auto refresh token ทุกครั้งที่ได้รับ notification
+              // ทำให้ token ไม่ Stale → iOS ไม่ deprioritize → ส่งครั้งต่อไปได้เร็ว
+              if (typeof touchMyTokens === 'function') {
+                touchMyTokens();
+                console.log('[FCM] ✅ token timestamp refreshed (via notification)');
+              }
 
               // แสดง notification ผ่าน Service Worker
               if (_swRegistration) {
