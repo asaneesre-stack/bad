@@ -15,7 +15,8 @@
       object-src 'none';
       base-uri 'self';
     ">
-    <title>B&B Admin v24/04 10:00</title>
+    <title>B&B Admin v25-04-10</title>
+    <meta name="app-version" content="25.04.10">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
@@ -1133,6 +1134,16 @@
                     <div class="icon">🏸</div>
                     <div class="value" id="dash-shuttle-in-play">0</div>
                     <div class="label">ลูกแบดพร้อมใช้</div>
+                </div>
+                <div class="dashboard-card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);">
+                    <div class="icon">⏱️</div>
+                    <div class="value" id="dash-avg-game-time" style="color:#2e7d32;">--</div>
+                    <div class="label">เวลาเฉลี่ย/เกม</div>
+                </div>
+                <div class="dashboard-card" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
+                    <div class="icon">📊</div>
+                    <div class="value" id="dash-est-queue-time" style="color:#e65100;">--</div>
+                    <div class="label">ประมาณรอคิว</div>
                 </div>
             </div>
 
@@ -2885,6 +2896,48 @@
             document.getElementById('dash-active-matches').textContent = activeMatches;
             document.getElementById('dash-shuttle-in-play').textContent = newShuttleInPlay;
 
+            // ✅ เวลาเฉลี่ยต่อเกม + ประมาณรอคิว
+            try {
+                let totalGameTime = 0;
+                let totalGamesWithTime = 0;
+                Object.values(appState.history || {}).forEach(playerHist => {
+                    if (!playerHist || !Array.isArray(playerHist.games)) return;
+                    playerHist.games.forEach(g => {
+                        if (g.startTime && g.endTime && g.endTime > g.startTime) {
+                            const dur = (g.endTime - g.startTime) / 60000;
+                            // เกมแบดปกติ 5-30 นาที — กรองเกมแปลกๆ
+                            if (dur >= 1 && dur <= 60) {
+                                totalGameTime += dur;
+                                totalGamesWithTime++;
+                            }
+                        }
+                    });
+                });
+
+                const avgEl = document.getElementById('dash-avg-game-time');
+                const queueEl = document.getElementById('dash-est-queue-time');
+                if (totalGamesWithTime >= 2) {
+                    // หาร 4 เพราะ 1 เกม = 4 record (1 ต่อผู้เล่น)
+                    const avgMin = Math.round(totalGameTime / totalGamesWithTime);
+                    if (avgEl) avgEl.textContent = avgMin + ' นาที';
+
+                    // ประมาณรอคิว = avgMin × (queue length / court count)
+                    const queueLen = (appState.matchQueues || []).length;
+                    const courtCount = (appState.courts || []).filter(c => c.status !== 'closed').length || 1;
+                    const estMin = Math.ceil(avgMin * queueLen / courtCount);
+                    if (queueEl) {
+                        if (queueLen === 0) {
+                            queueEl.textContent = 'ว่าง';
+                        } else {
+                            queueEl.textContent = '~' + estMin + ' นาที';
+                        }
+                    }
+                } else {
+                    if (avgEl) avgEl.textContent = 'ยังไม่มี';
+                    if (queueEl) queueEl.textContent = '--';
+                }
+            } catch(e) { console.warn('avg game time calc failed:', e); }
+
             this.renderDashboardPlayerStats();
             this.renderFrequentPartners();
             this.renderFrequentOpponents();
@@ -4129,6 +4182,10 @@
             }
 
             if (confirm(`คุณแน่ใจว่าต้องการลบข้อมูลผู้เล่นทั้งหมด?\n⚠️ การกระทำนี้ไม่สามารถถอยกลับได้`)) {
+                // ✅ เก็บ snapshot ก่อนลบ — สำหรับ Undo
+                const playersBackup = JSON.parse(JSON.stringify(appState.players || []));
+                const queuesBackup  = JSON.parse(JSON.stringify(appState.matchQueues || []));
+
                 appState.players = [];
                 appState.nextId.player = 1;
                 auditLog('clear_all_players');
@@ -4137,6 +4194,65 @@
                 this.renderPlayerList();
                 this.renderCheckInList();
                 showSuccess('ลบข้อมูลผู้เล่นทั้งหมดสำเร็จ');
+
+                // ✅ แสดง Undo Toast — กดได้ภายใน 30 วินาที
+                this._showUndoToast(`ลบผู้เล่น ${playersBackup.length} คน`, 30, () => {
+                    appState.players = playersBackup;
+                    appState.matchQueues = queuesBackup;
+                    auditLog('undo_clear_all_players', { restored: playersBackup.length });
+                    saveState();
+                    this.renderDashboard();
+                    this.renderPlayerList();
+                    this.renderCheckInList();
+                    showSuccess(`✅ กู้คืน ${playersBackup.length} คนสำเร็จ`);
+                });
+            }
+        },
+
+        // ✅ Undo Toast — แสดง 30 วินาที + ปุ่ม Undo
+        _showUndoToast: function(actionLabel, seconds, undoFn) {
+            // ลบ toast เก่า (ถ้ามี)
+            const existing = document.getElementById('undo-toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.id = 'undo-toast';
+            toast.style.cssText = `
+                position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                background: #2c3e50; color: #fff; padding: 14px 18px; border-radius: 14px;
+                box-shadow: 0 8px 24px rgba(0,0,0,0.3); z-index: 99999;
+                font-family: 'Sarabun', sans-serif; font-size: 0.9rem;
+                display: flex; align-items: center; gap: 12px; max-width: 92%;
+            `;
+            toast.innerHTML = `
+                <div style="font-size:1.4rem;">🗑️</div>
+                <div style="flex:1;">
+                    <div style="font-weight:700;">${actionLabel}</div>
+                    <div id="undo-countdown" style="font-size:0.75rem;opacity:0.7;">ยกเลิกภายใน <span id="undo-seconds">${seconds}</span> วินาที</div>
+                </div>
+                <button id="undo-btn" style="background:#f39c12;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-weight:700;font-size:0.85rem;cursor:pointer;">↶ ยกเลิก</button>
+                <button onclick="document.getElementById('undo-toast')?.remove()" style="background:transparent;color:rgba(255,255,255,0.5);border:none;padding:6px 8px;font-size:1.2rem;cursor:pointer;">×</button>
+            `;
+            document.body.appendChild(toast);
+
+            let remaining = seconds;
+            const countdownTimer = setInterval(() => {
+                remaining--;
+                const el = document.getElementById('undo-seconds');
+                if (el) el.textContent = remaining;
+                if (remaining <= 0) {
+                    clearInterval(countdownTimer);
+                    document.getElementById('undo-toast')?.remove();
+                }
+            }, 1000);
+
+            const undoBtn = document.getElementById('undo-btn');
+            if (undoBtn) {
+                undoBtn.onclick = () => {
+                    clearInterval(countdownTimer);
+                    document.getElementById('undo-toast')?.remove();
+                    try { undoFn(); } catch(e) { console.error('Undo failed:', e); }
+                };
             }
         },
 

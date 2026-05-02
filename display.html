@@ -15,7 +15,8 @@
     object-src 'none';
     base-uri 'self';
   ">
-  <title>B&B Badminton v24/04 19:38</title>
+  <title>B&B Badminton v25-04-10</title>
+  <meta name="app-version" content="25.04.10">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Teko:wght@600;700&display=swap" rel="stylesheet">
   <link rel="manifest" href="manifest.json">
@@ -2082,7 +2083,54 @@
         // รอ SW พร้อมก่อน
         await navigator.serviceWorker.ready;
         console.log('[SW] registered');
+
+        // ✅ ตรวจ update SW อัตโนมัติทุกครั้งที่เปิดแอป
+        _swRegistration.update().catch(()=>{});
+
+        // ฟัง update ใหม่
+        _swRegistration.addEventListener('updatefound', () => {
+          const newWorker = _swRegistration.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // มี SW ใหม่พร้อมใช้
+              console.log('[SW] new version available — prompting user');
+              showUpdateToast();
+            }
+          });
+        });
+
+        // ตรวจทุก 30 นาทีตอน app active
+        setInterval(() => {
+          if (!document.hidden && _swRegistration) {
+            _swRegistration.update().catch(()=>{});
+          }
+        }, 30 * 60 * 1000);
       } catch(e) { console.warn('[SW] register failed', e); }
+    }
+
+    function showUpdateToast() {
+      // ป้องกันแสดงซ้ำ
+      if (document.getElementById('sw-update-toast')) return;
+      const toast = document.createElement('div');
+      toast.id = 'sw-update-toast';
+      toast.style.cssText = `
+        position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+        background:linear-gradient(135deg,#3498db,#2980b9); color:#fff;
+        padding:14px 18px; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+        z-index:99999; font-family:'Sarabun',sans-serif; font-size:0.9rem;
+        display:flex; align-items:center; gap:10px; max-width:90%;
+      `;
+      toast.innerHTML = `
+        <div style="font-size:1.4rem;">🔄</div>
+        <div style="flex:1;">
+          <div style="font-weight:700;">มีเวอร์ชั่นใหม่!</div>
+          <div style="font-size:0.78rem; opacity:0.9;">กดเพื่อโหลดใหม่</div>
+        </div>
+        <button onclick="window.location.reload()" style="background:#fff;color:#2980b9;border:none;padding:6px 14px;border-radius:8px;font-weight:700;font-size:0.85rem;cursor:pointer;">โหลด</button>
+        <button onclick="document.getElementById('sw-update-toast').remove()" style="background:transparent;color:#fff;border:none;padding:6px 8px;font-size:1.2rem;cursor:pointer;">×</button>
+      `;
+      document.body.appendChild(toast);
     }
     initPWA();
     checkOnboarding();
