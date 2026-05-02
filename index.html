@@ -1083,7 +1083,10 @@
 
     <header>
         <div class="container">
-            <h1>🏸 ระบบจัดการสนามแบดมินตัน 🏸</h1>
+            <h1 style="display:flex;align-items:center;gap:10px;justify-content:center;">
+                <img src="apple-touch-icon.png" alt="logo" style="width:38px;height:38px;border-radius:8px;object-fit:cover;flex-shrink:0;" onerror="this.style.display='none'">
+                <span>ระบบจัดการสนามแบดมินตัน</span>
+            </h1>
             <div id="sync-status" style="font-size:0.75rem;margin-top:0.4rem;opacity:0.9;">⏳ กำลังโหลด...</div>
         </div>
     </header>
@@ -5476,11 +5479,34 @@ if (btnViewQueue) {
 
         deleteQueue: function(queueId) {
             if (confirm(`ลบคิวเล่น #${queueId} ออกจากระบบ?`)) {
+                // ✅ ก่อนลบ — เก็บข้อมูลผู้เล่นในคิวเพื่อ notify
+                const queue = appState.matchQueues.find(q => q.id === queueId);
+                const playerIds = queue ? [
+                    ...(queue.team1 || []).map(p => p.id || p),
+                    ...(queue.team2 || []).map(p => p.id || p)
+                ].filter(Boolean) : [];
+
                 appState.matchQueues = appState.matchQueues.filter(q => q.id !== queueId);
                 saveState();
                 this.updateQueueDisplay();
                 this.renderQueueList();
                 showSuccess('ลบคิวเล่นสำเร็จ');
+
+                // ✅ ส่ง direct message แจ้งผู้เล่น "ยกเลิก" ไม่ใช่ "ลงสนาม"
+                if (playerIds.length > 0 && typeof firebase !== 'undefined' && firebase.database) {
+                    const ts = Date.now();
+                    playerIds.forEach(pid => {
+                        try {
+                            firebase.database().ref(`directMessages/${pid}`).set({
+                                message: '❌ คิวของคุณถูกยกเลิก',
+                                playerName: '',
+                                ts: ts,
+                                sentBy: 'admin-cancel-queue',
+                                type: 'cancel'
+                            }).catch(()=>{});
+                        } catch(e) { console.warn('notify cancel failed:', e); }
+                    });
+                }
             }
         },
 
