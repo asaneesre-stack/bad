@@ -684,41 +684,70 @@
         .toast-container {
             position: fixed;
             bottom: 20px;
-            right: 20px;
-            z-index: 2000;
-            max-width: 400px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            max-width: 92vw;
+            width: 380px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
         }
 
         .toast {
-            background-color: var(--white);
-            border-left: 4px solid var(--secondary);
-            padding: 1rem 1.5rem;
-            margin-bottom: 0.5rem;
-            border-radius: 4px;
-            box-shadow: var(--shadow);
-            animation: slideIn 0.3s ease-out;
+            background: rgba(44, 62, 80, 0.96);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            color: #fff;
+            border-left: 4px solid #3498db;
+            padding: 14px 18px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+            animation: toastSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            font-weight: 600;
+            font-size: 0.92rem;
+            line-height: 1.4;
+            width: 100%;
+            box-sizing: border-box;
+            pointer-events: auto;
         }
 
         .toast.success {
-            border-left-color: var(--success);
+            border-left-color: #27ae60;
+            background: linear-gradient(135deg, rgba(39,174,96,0.96), rgba(34,153,84,0.96));
         }
 
         .toast.error {
-            border-left-color: var(--danger);
+            border-left-color: #e74c3c;
+            background: linear-gradient(135deg, rgba(231,76,60,0.96), rgba(192,57,43,0.96));
         }
 
         .toast.warning {
-            border-left-color: var(--accent);
+            border-left-color: #f39c12;
+            background: linear-gradient(135deg, rgba(243,156,18,0.96), rgba(211,84,0,0.96));
         }
 
-        @keyframes slideIn {
+        @keyframes toastSlideIn {
             from {
-                transform: translateX(400px);
+                transform: translateY(40px) scale(0.9);
                 opacity: 0;
             }
             to {
-                transform: translateX(0);
+                transform: translateY(0) scale(1);
                 opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(40px) scale(0.9);
+                opacity: 0;
             }
         }
 
@@ -1754,6 +1783,22 @@
 
 
 
+            <!-- ═════════════════════════════════════════════
+                 📤 แชร์ลิงก์ระบบให้ user
+                 ═════════════════════════════════════════════ -->
+            <div class="card" style="border-left:4px solid #3498db;">
+                <h2>📤 แชร์ลิงก์ระบบ</h2>
+                <p style="color:#888;font-size:0.85rem;margin-bottom:1rem;">
+                    ส่งลิงก์ display.html ให้ user ใหม่ — กดเพื่อสร้าง QR Code + คัดลอกลิงก์
+                </p>
+
+                <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                    <button onclick="App.showShareLink()" style="background:linear-gradient(135deg,#3498db,#2980b9);color:#fff;border:none;padding:0.7rem 1.2rem;border-radius:8px;font-weight:700;cursor:pointer;">
+                        📤 แชร์ลิงก์ + QR Code
+                    </button>
+                </div>
+            </div>
+
             <!-- เครื่องมืออื่น -->
             <div class="card">
                 <h2>เครื่องมือผู้ดูแลระบบ</h2>
@@ -2563,6 +2608,69 @@
         showToast(`⚠️ ${message}`, 'warning');
     }
 
+    // ✅ Modern Confirm Modal — แทน confirm() ดิบๆ ของ browser
+    // ใช้: const ok = await showConfirm('ลบใช่ไหม?', { danger: true });
+    function showConfirm(message, options = {}) {
+        return new Promise((resolve) => {
+            const isDanger = options.danger === true;
+            const okText = options.okText || (isDanger ? '✅ ยืนยัน' : '✅ ตกลง');
+            const cancelText = options.cancelText || 'ยกเลิก';
+            const title = options.title || (isDanger ? '⚠️ ยืนยันการกระทำ' : 'ยืนยัน');
+            const subtitle = options.subtitle || '';
+
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:99999;
+                display:flex; align-items:center; justify-content:center; padding:1rem;
+                animation: fadeIn 0.2s ease-out;
+            `;
+            const headerBg = isDanger
+                ? 'linear-gradient(135deg,#e74c3c,#c0392b)'
+                : 'linear-gradient(135deg,#3498db,#2980b9)';
+            const okBg = isDanger
+                ? 'linear-gradient(135deg,#e74c3c,#c0392b)'
+                : 'linear-gradient(135deg,#27ae60,#229954)';
+
+            overlay.innerHTML = `
+                <div style="background:#fff;border-radius:16px;max-width:420px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.4);animation:popIn 0.25s cubic-bezier(0.34,1.56,0.64,1);overflow:hidden;">
+                    <div style="background:${headerBg};color:#fff;padding:1.1rem 1.25rem;text-align:center;">
+                        <div style="font-size:1.05rem;font-weight:700;">${title}</div>
+                        ${subtitle ? `<div style="font-size:0.78rem;opacity:0.9;margin-top:0.2rem;">${subtitle}</div>` : ''}
+                    </div>
+                    <div style="padding:1.25rem 1.25rem 1rem;color:#444;font-size:0.92rem;line-height:1.55;white-space:pre-wrap;">${message}</div>
+                    <div style="padding:0 1.25rem 1.25rem;display:flex;gap:0.5rem;">
+                        <button id="confirm-cancel-btn" style="flex:1;padding:0.7rem;background:#ecf0f1;color:#7f8c8d;border:none;border-radius:10px;font-weight:600;font-size:0.9rem;cursor:pointer;">${cancelText}</button>
+                        <button id="confirm-ok-btn" style="flex:1.3;padding:0.7rem;background:${okBg};color:#fff;border:none;border-radius:10px;font-weight:700;font-size:0.92rem;cursor:pointer;">${okText}</button>
+                    </div>
+                </div>
+            `;
+            // Inject animations if not exist
+            if (!document.getElementById('confirm-modal-styles')) {
+                const style = document.createElement('style');
+                style.id = 'confirm-modal-styles';
+                style.textContent = `
+                    @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
+                    @keyframes popIn  { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
+                `;
+                document.head.appendChild(style);
+            }
+
+            document.body.appendChild(overlay);
+            const cleanup = (result) => {
+                overlay.style.animation = 'fadeIn 0.2s reverse';
+                setTimeout(() => overlay.remove(), 200);
+                resolve(result);
+            };
+            document.getElementById('confirm-ok-btn').onclick     = () => cleanup(true);
+            document.getElementById('confirm-cancel-btn').onclick = () => cleanup(false);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) cleanup(false);
+            });
+        });
+    }
+    // expose globally
+    window.showConfirm = showConfirm;
+
     // ============================================================
     // UTILITY FUNCTIONS
     // ============================================================
@@ -3282,6 +3390,86 @@
 
 
         // ── Backup Management ──────────────────────────────────────
+        // ── 📤 Share Link + QR Code ──────────────────────────
+        showShareLink: function() {
+            // คำนวณ display.html URL จาก URL ปัจจุบัน
+            const currentUrl = window.location.href;
+            const baseUrl = currentUrl.replace(/[^/]*$/, ''); // ตัดชื่อไฟล์ออก
+            const displayUrl = baseUrl + 'display.html';
+
+            // สร้าง modal
+            const overlay = document.createElement('div');
+            overlay.id = 'share-link-overlay';
+            overlay.style.cssText = `
+                position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:99998;
+                display:flex; align-items:center; justify-content:center; padding:1rem;
+            `;
+            overlay.innerHTML = `
+                <div style="background:#fff;border-radius:18px;max-width:420px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4);">
+                    <div style="background:linear-gradient(135deg,#3498db,#2980b9);color:#fff;padding:1.25rem;border-radius:18px 18px 0 0;text-align:center;">
+                        <div style="font-size:2rem;margin-bottom:0.3rem;">📤</div>
+                        <div style="font-size:1.2rem;font-weight:800;">แชร์ลิงก์ระบบ</div>
+                        <div style="font-size:0.85rem;opacity:0.9;margin-top:0.2rem;">ส่งให้ user เพื่อเปิดแอป</div>
+                    </div>
+                    <div style="padding:1.25rem;">
+                        <div style="text-align:center;margin-bottom:1rem;">
+                            <img id="share-qr-img" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(displayUrl)}&margin=8" style="max-width:240px;width:100%;border-radius:12px;border:1px solid #eee;" alt="QR Code">
+                        </div>
+                        <div style="background:#f8f9fa;border-radius:10px;padding:0.85rem;margin-bottom:1rem;font-size:0.82rem;color:#555;word-break:break-all;font-family:monospace;">
+                            ${displayUrl}
+                        </div>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                            <button onclick="App._copyShareLink('${displayUrl.replace(/'/g, "\\'")}')" style="flex:1;padding:0.75rem;background:linear-gradient(135deg,#27ae60,#229954);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">
+                                📋 คัดลอกลิงก์
+                            </button>
+                            <button onclick="App._shareViaSystem('${displayUrl.replace(/'/g, "\\'")}')" style="flex:1;padding:0.75rem;background:linear-gradient(135deg,#3498db,#2980b9);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;">
+                                📲 แชร์ผ่านแอป
+                            </button>
+                        </div>
+                        <button onclick="document.getElementById('share-link-overlay').remove()" style="width:100%;margin-top:0.75rem;padding:0.75rem;background:#ecf0f1;color:#7f8c8d;border:none;border-radius:10px;font-weight:600;cursor:pointer;">
+                            ปิด
+                        </button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            // ปิดเมื่อกดที่ overlay
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) overlay.remove();
+            });
+        },
+
+        _copyShareLink: function(url) {
+            try {
+                navigator.clipboard.writeText(url).then(() => {
+                    showToast('✅ คัดลอกลิงก์แล้ว — paste ส่งให้ user ได้เลย', 'success');
+                }).catch(() => {
+                    // Fallback
+                    const ta = document.createElement('textarea');
+                    ta.value = url;
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(ta);
+                    showToast('✅ คัดลอกแล้ว', 'success');
+                });
+            } catch(e) {
+                showError('คัดลอกไม่สำเร็จ: ' + (e.message || e));
+            }
+        },
+
+        _shareViaSystem: function(url) {
+            if (navigator.share) {
+                navigator.share({
+                    title: 'B&B Badminton',
+                    text: '🏸 เปิดแอปจัดการคิว/สนาม',
+                    url: url
+                }).catch(()=>{});
+            } else {
+                this._copyShareLink(url);
+            }
+        },
+
         showBackups: function() {
             const listEl = document.getElementById('backup-list');
             if (!listEl) return;
@@ -4175,38 +4363,42 @@
                 });
         },
 
-        clearAllPlayers: function() {
+        clearAllPlayers: async function() {
             if (appState.matches.length > 0) {
                 showError('ไม่สามารถลบผู้เล่นได้! มีผู้เล่นบางคนกำลังแข่ง');
                 return;
             }
 
-            if (confirm(`คุณแน่ใจว่าต้องการลบข้อมูลผู้เล่นทั้งหมด?\n⚠️ การกระทำนี้ไม่สามารถถอยกลับได้`)) {
-                // ✅ เก็บ snapshot ก่อนลบ — สำหรับ Undo
-                const playersBackup = JSON.parse(JSON.stringify(appState.players || []));
-                const queuesBackup  = JSON.parse(JSON.stringify(appState.matchQueues || []));
+            const ok = await showConfirm(
+                `ลบผู้เล่นทั้งหมดออกจากระบบ?\n\n• ผู้เล่น: ${appState.players.length} คน\n• ประวัติเกม: คงอยู่\n\n💡 หลังลบ จะมีปุ่ม "ยกเลิก" 30 วินาที — กดได้ถ้าเปลี่ยนใจ`,
+                { danger: true, title: '⚠️ ลบผู้เล่นทั้งหมด', okText: '🗑️ ลบ', cancelText: 'ยกเลิก' }
+            );
+            if (!ok) return;
 
-                appState.players = [];
-                appState.nextId.player = 1;
-                auditLog('clear_all_players');
+            // ✅ เก็บ snapshot ก่อนลบ — สำหรับ Undo
+            const playersBackup = JSON.parse(JSON.stringify(appState.players || []));
+            const queuesBackup  = JSON.parse(JSON.stringify(appState.matchQueues || []));
+
+            appState.players = [];
+            appState.nextId.player = 1;
+            auditLog('clear_all_players');
+            saveState();
+            this.renderDashboard();
+            this.renderPlayerList();
+            this.renderCheckInList();
+            showSuccess('ลบข้อมูลผู้เล่นทั้งหมดสำเร็จ');
+
+            // ✅ แสดง Undo Toast — กดได้ภายใน 30 วินาที
+            this._showUndoToast(`ลบผู้เล่น ${playersBackup.length} คน`, 30, () => {
+                appState.players = playersBackup;
+                appState.matchQueues = queuesBackup;
+                auditLog('undo_clear_all_players', { restored: playersBackup.length });
                 saveState();
                 this.renderDashboard();
                 this.renderPlayerList();
                 this.renderCheckInList();
-                showSuccess('ลบข้อมูลผู้เล่นทั้งหมดสำเร็จ');
-
-                // ✅ แสดง Undo Toast — กดได้ภายใน 30 วินาที
-                this._showUndoToast(`ลบผู้เล่น ${playersBackup.length} คน`, 30, () => {
-                    appState.players = playersBackup;
-                    appState.matchQueues = queuesBackup;
-                    auditLog('undo_clear_all_players', { restored: playersBackup.length });
-                    saveState();
-                    this.renderDashboard();
-                    this.renderPlayerList();
-                    this.renderCheckInList();
-                    showSuccess(`✅ กู้คืน ${playersBackup.length} คนสำเร็จ`);
-                });
-            }
+                showSuccess(`✅ กู้คืน ${playersBackup.length} คนสำเร็จ`);
+            });
         },
 
         // ✅ Undo Toast — แสดง 30 วินาที + ปุ่ม Undo
