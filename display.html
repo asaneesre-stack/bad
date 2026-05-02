@@ -1627,7 +1627,7 @@
   <div class="alert-overlay" id="alert-overlay">
     <div class="alert-box">
       <div class="alert-icon" id="alert-icon">🏸</div>
-      <div class="alert-title" id="alert-title">ถึงคิวของคุณแล้ว!</div>
+      <div class="alert-title" id="alert-title">🏸 คิวที่ 1 เตรียมตัว</div>
       <div class="alert-name" id="alert-name"></div>
       <button class="alert-close" onclick="closeAlert()">รับทราบ</button>
     </div>
@@ -2966,16 +2966,30 @@
         const key1   = `${pid}-next`;
         const key2   = `${pid}-court`;
 
-        // ลงสนามแล้ว (pos=0 หรือ isPlaying=true) → แจ้งเตือน level 2 ครั้งเดียว
-        // ต้องเช็คก่อน isPlaying guard เพราะ isPlaying=true เกิดพร้อมกับออกจากคิว
-        if ((pos === 0 || (player && player.isPlaying)) && alertShown.has(key1) && !alertShown.has(key2)) {
+        // ✅ FIX: ตรวจว่า player อยู่ใน match จริงไหม (ไม่ใช่แค่ pos=0)
+        // กันกรณี admin ลบ queue แล้ว pos=0 แต่ user ไม่ได้ลงสนาม
+        const isActuallyInMatch = player && player.isPlaying;
+        const isInActiveMatch = (state.matches || []).some(m =>
+          [...(m.team1 || []), ...(m.team2 || [])].some(p => +p.id === +pid || +p === +pid)
+        );
+
+        // ลงสนามแล้ว (อยู่ใน match จริงๆ) → แจ้งเตือน level 2 ครั้งเดียว
+        // ต้องเช็ค isPlaying + อยู่ใน matches array จริง — ไม่ใช่แค่ pos=0
+        if ((isActuallyInMatch || isInActiveMatch) && alertShown.has(key1) && !alertShown.has(key2)) {
           alertShown.add(key2);
           if (!_justReturned) triggerAlert(player ? player.name : '???', 2);
           return;
         }
 
         // กำลังเล่นอยู่แล้ว ไม่ต้องทำอะไรเพิ่ม
-        if (player && player.isPlaying) return;
+        if (isActuallyInMatch || isInActiveMatch) return;
+
+        // ✅ ถ้า pos = 0 และไม่ได้อยู่ใน match → admin ลบ queue → reset alert state
+        if (pos === 0) {
+          alertShown.delete(key1);
+          alertShown.delete(key2);
+          return;
+        }
 
         if (pos >= 2) {
           // ถอยออกจากคิวต้นๆ → reset
@@ -3007,8 +3021,8 @@
       } else {
         // Level 1 — prepare alert (gold theme)
         document.getElementById('alert-icon').textContent  = '🏸';
-        document.getElementById('alert-title').textContent = 'ถึงคิวของคุณแล้ว!';
-        document.getElementById('alert-name').textContent  = name + ' — เตรียมพร้อม!';
+        document.getElementById('alert-title').textContent = '🏸 คิวที่ 1 เตรียมตัว';
+        document.getElementById('alert-name').textContent  = name + ' — รอลงสนาม';
         try { navigator.vibrate && navigator.vibrate([300, 100, 300, 100, 500]); } catch(e){}
       }
 
@@ -3019,7 +3033,7 @@
       if (level === 2) {
         sendPushNotification('✅ สนามว่างแล้ว!', name + ' — ลงสนามได้เลย!', 'court-' + name);
       } else {
-        sendPushNotification('🏸 ถึงคิวของคุณแล้ว!', name + ' — เตรียมพร้อม!', 'queue-' + name);
+        sendPushNotification('🏸 คิวที่ 1 เตรียมตัว', name + ' — รอลงสนาม', 'queue-' + name);
       }
 
       // Auto-close after 8s
