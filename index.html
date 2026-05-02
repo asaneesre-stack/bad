@@ -5577,34 +5577,61 @@ if (btnViewQueue) {
 
         deleteQueue: function(queueId) {
             if (confirm(`ลบคิวเล่น #${queueId} ออกจากระบบ?`)) {
-                // ✅ ก่อนลบ — เก็บข้อมูลผู้เล่นในคิวเพื่อ notify
+                // เก็บข้อมูลผู้เล่นในคิว
                 const queue = appState.matchQueues.find(q => q.id === queueId);
                 const playerIds = queue ? [
                     ...(queue.team1 || []).map(p => p.id || p),
                     ...(queue.team2 || []).map(p => p.id || p)
                 ].filter(Boolean) : [];
 
-                appState.matchQueues = appState.matchQueues.filter(q => q.id !== queueId);
-                saveState();
-                this.updateQueueDisplay();
-                this.renderQueueList();
-                showSuccess('ลบคิวเล่นสำเร็จ');
-
-                // ✅ ส่ง direct message แจ้งผู้เล่น "ยกเลิก" ไม่ใช่ "ลงสนาม"
-                if (playerIds.length > 0 && typeof firebase !== 'undefined' && firebase.database) {
+                // ✅ Step 1: ส่งข้อความ "ยกเลิก" ก่อน (สำคัญ — ก่อนแก้ queue array)
+                // ทำให้ user เห็น message ยกเลิกก่อน notification ที่ CF อาจส่ง
+                const sendCancelPromise = new Promise((resolve) => {
+                    if (playerIds.length === 0 || typeof firebase === 'undefined' || !firebase.database) {
+                        return resolve();
+                    }
                     const ts = Date.now();
-                    playerIds.forEach(pid => {
+                    const promises = playerIds.map(pid =>
+                        firebase.database().ref(`directMessages/${pid}`).set({
+                            message: '❌ คิวของคุณถูกยกเลิก กรุณารอจัดคู่ใหม่',
+                            playerName: '',
+                            ts: ts,
+                            sentBy: 'admin-cancel-queue',
+                            type: 'cancel'
+                        }).catch(()=>{})
+                    );
+                    Promise.all(promises).then(resolve).catch(resolve);
+                });
+
+                // ✅ Step 2: ตั้ง flag suppress (เผื่อ CF อนาคตจะอ่าน)
+                try {
+                    if (typeof firebase !== 'undefined' && firebase.database) {
+                        firebase.database().ref('_meta/skipQueueNotif').set({
+                            ts: Date.now(),
+                            reason: 'cancel-queue',
+                            queueId: queueId,
+                            playerIds: playerIds
+                        }).catch(()=>{});
+                    }
+                } catch(_) {}
+
+                // ✅ Step 3: หลังส่ง cancel message เสร็จ → ค่อยแก้ queue array
+                sendCancelPromise.then(() => {
+                    appState.matchQueues = appState.matchQueues.filter(q => q.id !== queueId);
+                    saveState();
+                    this.updateQueueDisplay();
+                    this.renderQueueList();
+                    showSuccess('ลบคิวเล่นสำเร็จ');
+
+                    // ลบ flag หลัง 10 วินาที
+                    setTimeout(() => {
                         try {
-                            firebase.database().ref(`directMessages/${pid}`).set({
-                                message: '❌ คิวของคุณถูกยกเลิก',
-                                playerName: '',
-                                ts: ts,
-                                sentBy: 'admin-cancel-queue',
-                                type: 'cancel'
-                            }).catch(()=>{});
-                        } catch(e) { console.warn('notify cancel failed:', e); }
-                    });
-                }
+                            if (typeof firebase !== 'undefined' && firebase.database) {
+                                firebase.database().ref('_meta/skipQueueNotif').remove();
+                            }
+                        } catch(_) {}
+                    }, 10000);
+                });
             }
         },
 
