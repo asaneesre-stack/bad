@@ -2006,8 +2006,11 @@
 
     // ── Save Protection (Level 1) ────────────────────────────────
     let _isLoaded = false;        // เริ่มเป็น false — ห้าม save จน load เสร็จ
-    let _lastKnownPlayerCount = 0; // จำนวน player ครั้งล่าสุดที่ load — ใช้ตรวจ data loss
+    let _lastKnownPlayerCount = 0;
     let _lastKnownMatchCount  = 0;
+    let _lastKnownCourtCount  = 0;
+    let _lastKnownHistorySize = 0;
+    let _lastKnownShuttleTotal = 0;
     const SAFE_BACKUP_KEY = 'badminton_safe_backup'; // localStorage key สำหรับ auto-backup
     const MAX_BACKUPS     = 10;    // เก็บ backup ล่าสุด 10 อัน
 
@@ -2088,16 +2091,31 @@
             return false;
         }
 
-        // Block 2: Sanity check — ตรวจว่า players ลดลงผิดปกติ
-        const currentPlayerCount = (appState.players || []).length;
-        const currentMatchCount  = (appState.matches || []).length;
-        if (_lastKnownPlayerCount >= 3 && currentPlayerCount === 0) {
-            console.error('🚨 SUSPICIOUS SAVE BLOCKED — players เคยมี ' + _lastKnownPlayerCount + ' คน แต่ตอนนี้ 0');
+        // Block 2: Sanity check — ตรวจว่าข้อมูลสำคัญลดลงผิดปกติ
+        const currentPlayerCount   = (appState.players || []).length;
+        const currentMatchCount    = (appState.matches || []).length;
+        const currentCourtCount    = (appState.courts || []).length;
+        const currentHistorySize   = appState.history ? Object.keys(appState.history).length : 0;
+        const currentShuttleTotal  = (appState.shuttlecocks?.newTotal || 0) + (appState.shuttlecocks?.practiceTotal || 0);
+
+        // ตรวจหลายจุดพร้อมกัน — ถ้าจุดใดจุดหนึ่งหายผิดปกติ → block
+        const playerLoss   = (_lastKnownPlayerCount  >= 3   && currentPlayerCount  === 0);
+        const courtLoss    = (_lastKnownCourtCount   >= 2   && currentCourtCount   === 0);
+        const historyLoss  = (_lastKnownHistorySize  >= 5   && currentHistorySize  === 0);
+        const shuttleLoss  = (_lastKnownShuttleTotal >= 100 && currentShuttleTotal === 0);
+
+        if (playerLoss || courtLoss || historyLoss || shuttleLoss) {
+            const lostFields = [];
+            if (playerLoss)  lostFields.push(`ผู้เล่น ${_lastKnownPlayerCount} → 0`);
+            if (courtLoss)   lostFields.push(`สนาม ${_lastKnownCourtCount} → 0`);
+            if (historyLoss) lostFields.push(`ประวัติ ${_lastKnownHistorySize} → 0`);
+            if (shuttleLoss) lostFields.push(`ลูกแบด ${_lastKnownShuttleTotal} → 0`);
+
+            console.error('🚨 SUSPICIOUS SAVE BLOCKED — ข้อมูลหาย:', lostFields.join(', '));
             const ok = confirm(
-                `⚠️ ตรวจพบความผิดปกติ!\n\n` +
-                `ผู้เล่นเคยมี ${_lastKnownPlayerCount} คน\n` +
-                `แต่ตอนนี้เหลือ 0 คน\n\n` +
-                `ต้องการบันทึก (ทำให้ข้อมูลใน Firebase หาย) จริงๆ หรือ?\n\n` +
+                `⚠️ ตรวจพบข้อมูลหายผิดปกติ!\n\n` +
+                lostFields.join('\n') + `\n\n` +
+                `ต้องการบันทึก (ข้อมูลใน Firebase จะหาย) จริงๆ หรือ?\n\n` +
                 `❌ กดยกเลิก = ป้องกันข้อมูลหาย (แนะนำ)\n` +
                 `✅ กดตกลง = ยอมรับว่าเคลียร์เอง`
             );
@@ -2117,15 +2135,76 @@
         if (!ref) return true;
 
         clearTimeout(_saveDebounce);
-        _saveDebounce = setTimeout(() => {
+        _saveDebounce = setTimeout(async () => {
             showSyncStatus('⏫ กำลังบันทึก...', '#e67e22');
+
+            // ⚠️ DEFENSIVE PRE-CHECK: ถ้า local มีข้อมูลน้อย → ตรวจ Firebase ว่ามี data จริงเยอะกว่าไหม
+            // ครอบคลุม players, courts, history, shuttlecocks
+            const localIsEmpty =
+                currentPlayerCount  === 0 &&
+                currentCourtCount   === 0 &&
+                currentHistorySize  === 0 &&
+                currentShuttleTotal === 0;
+            const localIsSparse =
+                currentPlayerCount  === 0 ||
+                currentCourtCount   === 0 ||
+                currentShuttleTotal === 0;
+
+            if (localIsEmpty || localIsSparse) {
+                try {
+                    const snap = await ref.once('value');
+                    const remoteData = snap.val();
+                    if (remoteData) {
+                        const remotePlayerCount  = (remoteData.players)  ? (Array.isArray(remoteData.players)  ? remoteData.players.length  : Object.keys(remoteData.players).length)  : 0;
+                        const remoteCourtCount   = (remoteData.courts)   ? (Array.isArray(remoteData.courts)   ? remoteData.courts.length   : Object.keys(remoteData.courts).length)   : 0;
+                        const remoteHistorySize  = (remoteData.history) ? Object.keys(remoteData.history).length : 0;
+                        const remoteShuttleTotal = (remoteData.shuttlecocks?.newTotal || 0) + (remoteData.shuttlecocks?.practiceTotal || 0);
+
+                        // Firebase มีข้อมูลครบ แต่ local ไม่มี = ผิดปกติ
+                        const remoteHasData = remotePlayerCount >= 3 || remoteCourtCount >= 2 || remoteHistorySize >= 5 || remoteShuttleTotal >= 100;
+                        const localHasMuchLess =
+                            (currentPlayerCount  < remotePlayerCount  / 2) ||
+                            (currentCourtCount   < remoteCourtCount   / 2) ||
+                            (currentHistorySize  < remoteHistorySize  / 2) ||
+                            (currentShuttleTotal < remoteShuttleTotal / 2);
+
+                        if (remoteHasData && localHasMuchLess) {
+                            const diffs = [];
+                            if (remotePlayerCount  > currentPlayerCount)  diffs.push(`ผู้เล่น ${currentPlayerCount} → ${remotePlayerCount}`);
+                            if (remoteCourtCount   > currentCourtCount)   diffs.push(`สนาม ${currentCourtCount} → ${remoteCourtCount}`);
+                            if (remoteHistorySize  > currentHistorySize)  diffs.push(`ประวัติ ${currentHistorySize} → ${remoteHistorySize}`);
+                            if (remoteShuttleTotal > currentShuttleTotal) diffs.push(`ลูกแบด ${currentShuttleTotal} → ${remoteShuttleTotal}`);
+
+                            console.error('🛡️ FIREBASE OVERWRITE BLOCKED — ข้อมูลใน Firebase เยอะกว่า:', diffs.join(', '));
+                            showSyncStatus('🛡️ บล็อก save (ป้องกันข้อมูลหาย)', '#e74c3c');
+                            const recover = confirm(
+                                `🛡️ ป้องกันข้อมูลหาย!\n\n` +
+                                `Firebase มีข้อมูลเยอะกว่าหน้านี้:\n` +
+                                diffs.join('\n') + `\n\n` +
+                                `กดตกลง = ดึงข้อมูลจาก Firebase กลับมา (แนะนำ)\n` +
+                                `กดยกเลิก = save ทับ (อันตราย!)`
+                            );
+                            if (recover) {
+                                _applyRemoteData(remoteData);
+                                App.showView('dashboard');
+                                showSyncStatus('✅ ดึงข้อมูลกลับมาแล้ว', '#27ae60');
+                                return;
+                            }
+                        }
+                    }
+                } catch(e) { console.warn('pre-check failed:', e); }
+            }
+
             // Embed our deviceId so other devices know who saved this
             const payload = { ...appState, _savedBy: _deviceId };
             ref.set(payload)
                 .then(() => {
                     // อัปเดต known counts หลัง save สำเร็จ
-                    _lastKnownPlayerCount = currentPlayerCount;
-                    _lastKnownMatchCount  = currentMatchCount;
+                    _lastKnownPlayerCount   = currentPlayerCount;
+                    _lastKnownMatchCount    = currentMatchCount;
+                    _lastKnownCourtCount    = currentCourtCount;
+                    _lastKnownHistorySize   = currentHistorySize;
+                    _lastKnownShuttleTotal  = currentShuttleTotal;
                     showSyncStatus('☁️ sync แล้ว', '#27ae60');
                 })
                 .catch(e => {
@@ -2164,8 +2243,11 @@
         appState = _fixFirebaseArrays(cleanData);
         validateAndFixState();
         // อัปเดต known counts ทุกครั้งที่มี remote data (ป้องกัน sanity check trigger ผิดเวลา)
-        _lastKnownPlayerCount = (appState.players || []).length;
-        _lastKnownMatchCount  = (appState.matches || []).length;
+        _lastKnownPlayerCount   = (appState.players || []).length;
+        _lastKnownMatchCount    = (appState.matches || []).length;
+        _lastKnownCourtCount    = (appState.courts || []).length;
+        _lastKnownHistorySize   = appState.history ? Object.keys(appState.history).length : 0;
+        _lastKnownShuttleTotal  = (appState.shuttlecocks?.newTotal || 0) + (appState.shuttlecocks?.practiceTotal || 0);
     }
 
     function _startRealtimeSync() {
@@ -2308,19 +2390,27 @@
                     showSyncStatus('☁️ โหลดจาก Firebase', '#27ae60');
                 } else {
                     _loadFromLocalStorage();
+                    // ⚠️ DEFENSIVE: upload local state ขึ้น Firebase **เฉพาะเมื่อมีข้อมูลจริง** เท่านั้น
+                    // ป้องกันกรณีเครื่องใหม่/ลบแอปแล้วเปิดใหม่ → ไม่เผลอทับข้อมูลใน Firebase ด้วย empty state
                     if (appState.players && appState.players.length > 0) {
                         ref.set(appState).catch(()=>{});
                         showSyncStatus('☁️ อัปโหลดข้อมูล local สำเร็จ', '#27ae60');
                     } else {
+                        // Firebase ก็ไม่มี + local ก็ไม่มี → ไม่ต้อง set อะไร
+                        // ถ้า Firebase น่าจะมีจริงๆ แต่ตอบ null = network glitch — ไม่ทับ
                         showSyncStatus('☁️ เชื่อมต่อแล้ว (ยังไม่มีข้อมูล)', '#27ae60');
+                        console.log('ℹ️ Firebase returned null & local empty — not writing anything');
                     }
                 }
                 // ✅ Mark loaded — เปิดให้ saveState() ทำงานได้
                 _isLoaded = true;
-                _lastKnownPlayerCount = (appState.players || []).length;
-                _lastKnownMatchCount  = (appState.matches || []).length;
+                _lastKnownPlayerCount   = (appState.players || []).length;
+                _lastKnownMatchCount    = (appState.matches || []).length;
+                _lastKnownCourtCount    = (appState.courts || []).length;
+                _lastKnownHistorySize   = appState.history ? Object.keys(appState.history).length : 0;
+                _lastKnownShuttleTotal  = (appState.shuttlecocks?.newTotal || 0) + (appState.shuttlecocks?.practiceTotal || 0);
                 _autoBackup('after_load');
-                console.log('✅ State loaded —', _lastKnownPlayerCount, 'players,', _lastKnownMatchCount, 'matches');
+                console.log('✅ State loaded —', _lastKnownPlayerCount, 'players,', _lastKnownCourtCount, 'courts,', _lastKnownHistorySize, 'history,', _lastKnownShuttleTotal, 'shuttles');
                 _startRealtimeSync();
                 App.showView('dashboard');
             })
