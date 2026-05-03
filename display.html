@@ -1634,6 +1634,57 @@
     </div>
   </div>
 
+  <!-- ═════════════════════════════════════════════════════════
+       🎯 My Status Card — สถานะตัวเองเด่นบนสุด
+       ═════════════════════════════════════════════════════════ -->
+  <div id="my-status-card" style="display:none; position:relative; z-index:5; max-width:560px; margin:10px auto 0; padding:0 12px;">
+    <div style="background: linear-gradient(135deg, rgba(0,168,204,0.15), rgba(0,168,204,0.05)); backdrop-filter: blur(12px); border: 1px solid rgba(0,168,204,0.3); border-radius: 16px; padding: 14px;">
+
+      <!-- Greeting -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div id="my-status-avatar" style="width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,#00a8cc,#0088aa); display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; font-weight:700;">?</div>
+          <div>
+            <div style="color:rgba(255,255,255,0.55); font-size:11px;">สวัสดี 👋</div>
+            <div id="my-status-name" style="color:#fff; font-size:18px; font-weight:600;">—</div>
+          </div>
+        </div>
+        <!-- Notification Status -->
+        <div onclick="testNotification()" style="cursor:pointer; padding:6px 10px; background:rgba(39,174,96,0.15); border:1px solid rgba(39,174,96,0.35); border-radius:999px; font-size:11px; color:#86efac; display:flex; align-items:center; gap:5px;" id="notif-status-badge">
+          <span style="width:6px; height:6px; background:#27ae60; border-radius:50%;"></span>
+          <span id="notif-status-text">noti เปิด</span>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <div style="flex:1; background:rgba(255,255,255,0.05); border-radius:10px; padding:8px 10px;">
+          <div style="color:rgba(255,255,255,0.5); font-size:10px;">เกมที่เล่น</div>
+          <div id="my-status-games" style="color:#fff; font-size:18px; font-weight:700;">0</div>
+        </div>
+        <div style="flex:1; background:rgba(255,255,255,0.05); border-radius:10px; padding:8px 10px;">
+          <div style="color:rgba(255,255,255,0.5); font-size:10px;">ค่าสนาม</div>
+          <div id="my-status-fee" style="color:#fff; font-size:18px; font-weight:700;">฿0</div>
+        </div>
+      </div>
+
+      <!-- Status Banner -->
+      <div id="my-status-banner" style="border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+        <div id="my-status-icon" style="width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; background:rgba(255,255,255,0.1);">💤</div>
+        <div style="flex:1; min-width:0;">
+          <div id="my-status-banner-label" style="font-size:10px; opacity:0.7;">สถานะ</div>
+          <div id="my-status-banner-title" style="color:#fff; font-size:14px; font-weight:600; margin-top:1px;">—</div>
+          <div id="my-status-banner-detail" style="font-size:10px; opacity:0.65; margin-top:1px;">—</div>
+        </div>
+      </div>
+
+      <!-- Pay Button (โผล่เมื่อมีค่าจ่าย) -->
+      <button id="my-status-pay-btn" onclick="showPaymentQR()" style="display:none; width:100%; margin-top:10px; background:linear-gradient(135deg,#e74c3c,#c0392b); border:none; border-radius:12px; padding:12px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(231,76,60,0.3);">
+        💳 จ่ายค่าสนาม
+      </button>
+    </div>
+  </div>
+
   <!-- Main -->
   <div class="main" id="view-courts">
 
@@ -2135,6 +2186,71 @@
     initPWA();
     checkOnboarding();
     bmTryRestore();
+
+    // ── 🔔 Notification Status Badge + Test ─────────────────
+    window.testNotification = function() {
+      try {
+        if (!('Notification' in window)) {
+          alert('เบราว์เซอร์นี้ไม่รองรับ notification');
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          alert('⛔ Notification ถูกปิด\n\nกรุณาเปิดใน Settings → B&B Badminton → Notifications');
+          return;
+        }
+        if (Notification.permission === 'default') {
+          Notification.requestPermission().then(p => {
+            if (p === 'granted') updateNotifBadge();
+          });
+          return;
+        }
+        // ทดสอบส่ง notification
+        const title = '🔔 ทดสอบสำเร็จ!';
+        const body = 'การแจ้งเตือนทำงานปกติ';
+        if (_swRegistration) {
+          _swRegistration.showNotification(title, {
+            body, tag: 'test-' + Date.now(), icon: 'apple-touch-icon.png',
+            vibrate: [200, 80, 200], requireInteraction: false
+          });
+        } else {
+          new Notification(title, { body, icon: 'apple-touch-icon.png' });
+        }
+      } catch(e) { alert('ทดสอบล้มเหลว: ' + (e.message||e)); }
+    };
+
+    function updateNotifBadge() {
+      const badge = document.getElementById('notif-status-badge');
+      const text  = document.getElementById('notif-status-text');
+      if (!badge || !text) return;
+      try {
+        if (!('Notification' in window)) {
+          badge.style.background = 'rgba(149,165,166,0.15)';
+          badge.style.borderColor = 'rgba(149,165,166,0.35)';
+          badge.style.color = '#bdc3c7';
+          text.textContent = 'ไม่รองรับ';
+          return;
+        }
+        const perm = Notification.permission;
+        if (perm === 'granted') {
+          badge.style.background = 'rgba(39,174,96,0.15)';
+          badge.style.borderColor = 'rgba(39,174,96,0.35)';
+          badge.style.color = '#86efac';
+          text.textContent = 'noti เปิด • กดทดสอบ';
+        } else if (perm === 'denied') {
+          badge.style.background = 'rgba(231,76,60,0.15)';
+          badge.style.borderColor = 'rgba(231,76,60,0.35)';
+          badge.style.color = '#ff8a80';
+          text.textContent = 'noti ปิด!';
+        } else {
+          badge.style.background = 'rgba(243,156,18,0.15)';
+          badge.style.borderColor = 'rgba(243,156,18,0.35)';
+          badge.style.color = '#fcd34d';
+          text.textContent = 'กดเพื่อเปิด';
+        }
+      } catch(_) {}
+    }
+    setInterval(updateNotifBadge, 5000);
+    setTimeout(updateNotifBadge, 1500);
 
     // Hidden feature: tap logo 5 ครั้งเพื่อเปิด Boxing Mode (advanced)
     (function setupLogoTap() {
@@ -2715,7 +2831,234 @@
       renderCourts(matches);
       renderQueue(queues, players);
       renderWaiting(queues, players);
+      renderMyStatusCard(matches, queues, players);
     }
+
+    // ── 🎯 My Status Card ───────────────────────────────────
+    function renderMyStatusCard(matches, queues, players) {
+      const card = document.getElementById('my-status-card');
+      if (!card) return;
+      const myId = watchedIds.size > 0 ? Array.from(watchedIds)[0] : null;
+      if (!myId) {
+        card.style.display = 'none';
+        return;
+      }
+      const me = players.find(p => +p.id === +myId);
+      if (!me) {
+        card.style.display = 'none';
+        return;
+      }
+      card.style.display = 'block';
+
+      // Name + Avatar
+      const name = me.name || '???';
+      document.getElementById('my-status-name').textContent = name;
+      document.getElementById('my-status-avatar').textContent = name.charAt(0);
+
+      // Games + Fee
+      const games = me.games || 0;
+      const fee = me.totalCost !== undefined ? me.totalCost : (state.paymentSettings?.price || 0);
+      document.getElementById('my-status-games').textContent = games;
+      document.getElementById('my-status-fee').textContent = '฿' + fee;
+
+      // Status — หาว่าอยู่ที่ไหน
+      const inMatch = matches.find(m =>
+        (m.team1 || []).some(p => +p.id === +myId) || (m.team2 || []).some(p => +p.id === +myId)
+      );
+      const queueIdx = queues.findIndex(q =>
+        (q.team1 || []).some(p => +p.id === +myId) || (q.team2 || []).some(p => +p.id === +myId)
+      );
+
+      const banner = document.getElementById('my-status-banner');
+      const icon = document.getElementById('my-status-icon');
+      const label = document.getElementById('my-status-banner-label');
+      const title = document.getElementById('my-status-banner-title');
+      const detail = document.getElementById('my-status-banner-detail');
+
+      if (inMatch) {
+        const courtName = (state.courts.find(c => c.id == inMatch.courtId) || {}).name || 'สนาม';
+        const inTeam1 = (inMatch.team1 || []).some(p => +p.id === +myId);
+        const teammate = inTeam1 ? (inMatch.team1 || []) : (inMatch.team2 || []);
+        const opponent = inTeam1 ? (inMatch.team2 || []) : (inMatch.team1 || []);
+        const myTeamNames = teammate.filter(p => +p.id !== +myId).map(p => p.name).join(' + ') || '(เดี่ยว)';
+        const oppNames = opponent.map(p => p.name).join(' + ');
+        const elapsedMin = inMatch.startTime ? Math.floor((Date.now() - inMatch.startTime) / 60000) : 0;
+
+        banner.style.background = 'linear-gradient(135deg, rgba(34,197,94,0.25), rgba(34,197,94,0.1))';
+        banner.style.border = '1px solid rgba(34,197,94,0.4)';
+        icon.style.background = 'rgba(34,197,94,0.3)';
+        icon.textContent = '🏸';
+        label.textContent = 'คุณอยู่ที่';
+        label.style.color = 'rgba(134,239,172,0.85)';
+        title.textContent = courtName;
+        detail.textContent = `กับ ${myTeamNames} vs ${oppNames} · ${elapsedMin} นาที`;
+      } else if (queueIdx >= 0) {
+        const queueOrder = queueIdx + 1;
+        banner.style.background = 'linear-gradient(135deg, rgba(251,191,36,0.2), rgba(251,191,36,0.08))';
+        banner.style.border = '1px solid rgba(251,191,36,0.4)';
+        icon.style.background = 'rgba(251,191,36,0.3)';
+        icon.textContent = '⏳';
+        label.textContent = 'รอคิว';
+        label.style.color = 'rgba(252,211,77,0.85)';
+        title.textContent = `ลำดับที่ ${queueOrder}`;
+        detail.textContent = queueOrder === 1 ? 'เตรียมตัว — ใกล้จะลงสนาม' : `รออีก ${queueOrder - 1} คิว`;
+      } else {
+        banner.style.background = 'rgba(255,255,255,0.04)';
+        banner.style.border = '1px solid rgba(255,255,255,0.1)';
+        icon.style.background = 'rgba(108,99,255,0.2)';
+        icon.textContent = '💤';
+        label.textContent = 'สถานะ';
+        label.style.color = 'rgba(255,255,255,0.55)';
+        title.textContent = 'รอจัดคู่';
+        detail.textContent = 'admin จะเรียกเมื่อถึงคิว';
+      }
+
+      // Pay Button
+      const payBtn = document.getElementById('my-status-pay-btn');
+      if (payBtn) {
+        payBtn.style.display = (fee > 0 && !me.paid) ? 'block' : 'none';
+      }
+
+      // Notification status badge
+      updateNotifStatusBadge();
+    }
+
+    // ── 🔔 Notification Status + Test ───────────────────────
+    function updateNotifStatusBadge() {
+      const badge = document.getElementById('notif-status-badge');
+      const text  = document.getElementById('notif-status-text');
+      if (!badge || !text) return;
+      if (typeof Notification === 'undefined') {
+        badge.style.background = 'rgba(149,165,166,0.15)';
+        badge.style.borderColor = 'rgba(149,165,166,0.4)';
+        text.textContent = 'noti N/A';
+        return;
+      }
+      const perm = Notification.permission;
+      if (perm === 'granted' && _pushGranted) {
+        badge.style.background = 'rgba(39,174,96,0.15)';
+        badge.style.borderColor = 'rgba(39,174,96,0.4)';
+        text.textContent = 'noti ✓ กดทดสอบ';
+      } else if (perm === 'denied') {
+        badge.style.background = 'rgba(231,76,60,0.15)';
+        badge.style.borderColor = 'rgba(231,76,60,0.4)';
+        text.textContent = 'noti ปิดอยู่';
+      } else {
+        badge.style.background = 'rgba(243,156,18,0.15)';
+        badge.style.borderColor = 'rgba(243,156,18,0.4)';
+        text.textContent = 'กดเพื่อเปิด noti';
+      }
+    }
+
+    window.testNotification = function() {
+      if (Notification.permission !== 'granted') {
+        if (typeof requestNotificationPermission === 'function') {
+          requestNotificationPermission();
+        }
+        return;
+      }
+      // ส่ง test notification ผ่าน SW
+      if (_swRegistration) {
+        _swRegistration.showNotification('🔔 ทดสอบ Notification', {
+          body: 'ระบบแจ้งเตือนของคุณทำงานปกติ ✅',
+          tag: 'test-' + Date.now(),
+          icon: 'apple-touch-icon.png',
+          badge: 'apple-touch-icon.png',
+          vibrate: [200, 80, 200]
+        }).catch(()=>{});
+        try {
+          if (typeof playBeep1 === 'function') playBeep1();
+        } catch(_) {}
+      } else if ('Notification' in window) {
+        new Notification('🔔 ทดสอบ Notification', {
+          body: 'ระบบแจ้งเตือนทำงานปกติ ✅',
+          icon: 'apple-touch-icon.png'
+        });
+      }
+    };
+
+    // ── 🔇 Vibrate-only Mode ─────────────────────────────────
+    const VIBRATE_ONLY_KEY = 'bb-vibrate-only';
+    window.isVibrateOnly = function() {
+      try { return localStorage.getItem(VIBRATE_ONLY_KEY) === '1'; } catch(_) { return false; }
+    };
+    window.toggleVibrateOnly = function() {
+      const newVal = !isVibrateOnly();
+      try { localStorage.setItem(VIBRATE_ONLY_KEY, newVal ? '1' : '0'); } catch(_) {}
+      return newVal;
+    };
+
+    // ── 🌗 Dark/Light Mode Toggle ───────────────────────────
+    const THEME_KEY = 'bb-theme';
+    function applyTheme(theme) {
+      document.body.setAttribute('data-theme', theme);
+      try { localStorage.setItem(THEME_KEY, theme); } catch(_) {}
+    }
+    window.toggleTheme = function() {
+      const cur = document.body.getAttribute('data-theme') || 'dark';
+      applyTheme(cur === 'dark' ? 'light' : 'dark');
+    };
+    // Apply saved theme on load
+    try {
+      const saved = localStorage.getItem(THEME_KEY);
+      if (saved) applyTheme(saved);
+    } catch(_) {}
+
+    // ── 🔄 Pull-to-Refresh ──────────────────────────────────
+    (function setupPullToRefresh() {
+      let startY = 0;
+      let pulling = false;
+      const indicator = document.createElement('div');
+      indicator.id = 'pull-refresh-indicator';
+      indicator.style.cssText = `
+        position: fixed; top: -50px; left: 50%; transform: translateX(-50%);
+        background: linear-gradient(135deg,#3498db,#2980b9); color: #fff;
+        padding: 8px 18px; border-radius: 999px; font-size: 0.85rem; font-weight: 700;
+        z-index: 9999; transition: top 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        pointer-events: none;
+      `;
+      indicator.textContent = '🔄 ดึงเพื่อรีเฟรช';
+      document.body.appendChild(indicator);
+
+      document.addEventListener('touchstart', (e) => {
+        if (window.scrollY === 0) {
+          startY = e.touches[0].clientY;
+          pulling = true;
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchmove', (e) => {
+        if (!pulling) return;
+        const y = e.touches[0].clientY;
+        const diff = y - startY;
+        if (diff > 0 && diff < 200) {
+          indicator.style.top = Math.min(diff - 50, 20) + 'px';
+          if (diff > 100) {
+            indicator.textContent = '🔄 ปล่อยเพื่อรีเฟรช';
+            indicator.style.background = 'linear-gradient(135deg,#27ae60,#229954)';
+          } else {
+            indicator.textContent = '🔄 ดึงเพื่อรีเฟรช';
+            indicator.style.background = 'linear-gradient(135deg,#3498db,#2980b9)';
+          }
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', (e) => {
+        if (!pulling) return;
+        pulling = false;
+        const finalTop = parseInt(indicator.style.top || '-50', 10);
+        if (finalTop > 0 && (e.changedTouches[0].clientY - startY) > 100) {
+          indicator.textContent = '🔄 กำลังรีเฟรช...';
+          indicator.style.top = '20px';
+          // Trigger reload data
+          setTimeout(() => {
+            window.location.reload();
+          }, 400);
+        } else {
+          indicator.style.top = '-50px';
+        }
+      }, { passive: true });
+    })();
 
     // ── Courts ────────────────────────────────────────────────────
     function renderCourts(matches) {
