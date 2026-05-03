@@ -1666,10 +1666,10 @@
             <div id="my-status-name" style="color:#fff; font-size:18px; font-weight:600;">—</div>
           </div>
         </div>
-        <!-- Notification Status -->
-        <div onclick="testNotification()" style="cursor:pointer; padding:6px 10px; background:rgba(39,174,96,0.15); border:1px solid rgba(39,174,96,0.35); border-radius:999px; font-size:11px; color:#86efac; display:flex; align-items:center; gap:5px;" id="notif-status-badge">
-          <span style="width:6px; height:6px; background:#27ae60; border-radius:50%;"></span>
-          <span id="notif-status-text">noti เปิด</span>
+        <!-- Notification Status — แสดงสถานะ + คำแนะนำ -->
+        <div onclick="onNotifStatusClick()" style="cursor:pointer; padding:5px 11px; background:rgba(149,165,166,0.15); border:1px solid rgba(149,165,166,0.35); border-radius:999px; font-size:10.5px; color:#bdc3c7; display:flex; align-items:center; gap:5px; min-width:100px; justify-content:center;" id="notif-status-badge" title="กดเพื่อดูรายละเอียด">
+          <span id="notif-status-dot" style="width:6px; height:6px; background:#95a5a6; border-radius:50%;"></span>
+          <span id="notif-status-text">ตรวจสอบ...</span>
         </div>
       </div>
 
@@ -1694,11 +1694,6 @@
           <div id="my-status-banner-detail" style="font-size:10px; opacity:0.65; margin-top:1px;">—</div>
         </div>
       </div>
-
-      <!-- Pay Button (โผล่เมื่อมีค่าจ่าย) -->
-      <button id="my-status-pay-btn" onclick="showPaymentQR()" style="display:none; width:100%; margin-top:10px; background:linear-gradient(135deg,#e74c3c,#c0392b); border:none; border-radius:12px; padding:12px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(231,76,60,0.3);">
-        💳 จ่ายค่าสนาม
-      </button>
 
       <!-- Action Row: ประวัติ / Big Mode -->
       <div style="display:flex; gap:6px; margin-top:8px;">
@@ -2296,37 +2291,163 @@
       } catch(e) { alert('ทดสอบล้มเหลว: ' + (e.message||e)); }
     };
 
-    function updateNotifBadge() {
-      const badge = document.getElementById('notif-status-badge');
-      const text  = document.getElementById('notif-status-text');
-      if (!badge || !text) return;
+    // ── 🔔 Notification Status — 5-tier badge + details modal ──
+    let _lastTokenAgeCheck = 0;
+    let _cachedTokenAge = null;
+
+    async function getMyTokenAge() {
+      try {
+        const did = localStorage.getItem('bb-device-id');
+        if (!did || watchedIds.size === 0) return null;
+        const myId = Array.from(watchedIds)[0];
+        const snap = await db.ref(`pushTokens/${myId}/${did}/ts`).once('value');
+        const ts = snap.val();
+        if (!ts) return null;
+        return Date.now() - ts;
+      } catch(_) { return null; }
+    }
+
+    function getNotifStatus() {
+      // returns { tier, color, dotColor, text, details, advice }
       try {
         if (!('Notification' in window)) {
-          badge.style.background = 'rgba(149,165,166,0.15)';
-          badge.style.borderColor = 'rgba(149,165,166,0.35)';
-          badge.style.color = '#bdc3c7';
-          text.textContent = 'ไม่รองรับ';
-          return;
+          return { tier:'unsupported', color:'149,165,166', text:'ไม่รองรับ', details:'เบราว์เซอร์นี้ไม่รองรับการแจ้งเตือน',
+                   advice:'ลองใช้ Safari บน iPhone หรือ Chrome บน Android' };
         }
         const perm = Notification.permission;
-        if (perm === 'granted') {
-          badge.style.background = 'rgba(39,174,96,0.15)';
-          badge.style.borderColor = 'rgba(39,174,96,0.35)';
-          badge.style.color = '#86efac';
-          text.textContent = 'noti เปิด • กดทดสอบ';
-        } else if (perm === 'denied') {
-          badge.style.background = 'rgba(231,76,60,0.15)';
-          badge.style.borderColor = 'rgba(231,76,60,0.35)';
-          badge.style.color = '#ff8a80';
-          text.textContent = 'noti ปิด!';
-        } else {
-          badge.style.background = 'rgba(243,156,18,0.15)';
-          badge.style.borderColor = 'rgba(243,156,18,0.35)';
-          badge.style.color = '#fcd34d';
-          text.textContent = 'กดเพื่อเปิด';
+        if (perm === 'denied') {
+          return { tier:'denied', color:'231,76,60', text:'🔴 ปิดอยู่!', details:'การแจ้งเตือนถูกบล็อก',
+                   advice:'เปิดใน Settings → B&B Badminton → Notifications → Allow' };
         }
-      } catch(_) {}
+        if (perm === 'default') {
+          return { tier:'pending', color:'243,156,18', text:'🟡 ยังไม่อนุญาต', details:'ยังไม่ได้ขอสิทธิ์',
+                   advice:'กดเพื่อขออนุญาตแจ้งเตือน' };
+        }
+        // granted — check token age + audio
+        const audioBtn = document.getElementById('sound-unlock-btn');
+        const audioOn = audioBtn && audioBtn.classList.contains('unlocked');
+        const watchedCount = (typeof watchedIds !== 'undefined') ? watchedIds.size : 0;
+
+        if (watchedCount === 0) {
+          return { tier:'no-watch', color:'149,165,166', text:'⚪ ยังไม่ติดตาม', details:'ไม่ได้ติดตามใคร',
+                   advice:'กดชื่อตัวเองเพื่อเริ่มติดตามคิว' };
+        }
+
+        // ดู token age ใน Firebase
+        const age = _cachedTokenAge;
+        const ageMin = age !== null ? age / 60000 : null;
+
+        if (!audioOn) {
+          return { tier:'no-audio', color:'243,156,18', text:'🟡 ยังไม่เปิดเสียง', details:'ไม่ได้กด "เปิดเสียง"',
+                   advice:'⚠️ กดปุ่ม "🔇 เปิดเสียง" บนสุดเพื่อรับแจ้งเตือนพร้อมเสียง' };
+        }
+
+        if (ageMin === null) {
+          return { tier:'checking', color:'52,152,219', text:'🔵 กำลังเช็ค...', details:'กำลังตรวจสอบสถานะ',
+                   advice:'รอสักครู่...' };
+        }
+
+        if (ageMin < 30) {
+          return { tier:'active', color:'39,174,96', text:'🟢 พร้อมรับ', details:`token ใหม่ (${Math.round(ageMin)} นาที)`,
+                   advice:'✅ การแจ้งเตือนทำงานปกติ' };
+        }
+        if (ageMin < 120) {
+          return { tier:'recent', color:'241,196,15', text:'🟡 น่าจะได้', details:`token ใช้มาแล้ว ${Math.round(ageMin)} นาที`,
+                   advice:'ควรเปิดแอปสักครั้งเพื่อ refresh' };
+        }
+        if (ageMin < 360) {
+          return { tier:'stale', color:'230,126,34', text:'🟠 เริ่มเสี่ยง', details:`token ${Math.round(ageMin/60)} ชม.`,
+                   advice:'⚠️ iOS อาจ hibernate — เปิดแอปเพื่อ refresh' };
+        }
+        return { tier:'hibernate', color:'231,76,60', text:'🔴 อาจไม่เด้ง', details:`token เก่า ${Math.round(ageMin/60)} ชม.`,
+                 advice:'❗ กดติดตามใหม่เพื่อ register token ใหม่' };
+      } catch(e) { return { tier:'error', color:'149,165,166', text:'?', details:'', advice:'' }; }
     }
+
+    async function updateNotifBadge() {
+      const badge = document.getElementById('notif-status-badge');
+      const text  = document.getElementById('notif-status-text');
+      const dot   = document.getElementById('notif-status-dot');
+      if (!badge || !text || !dot) return;
+
+      // Update token age cache (every 30s)
+      const now = Date.now();
+      if (now - _lastTokenAgeCheck > 30000) {
+        _lastTokenAgeCheck = now;
+        _cachedTokenAge = await getMyTokenAge();
+      }
+
+      const s = getNotifStatus();
+      badge.style.background = `rgba(${s.color},0.15)`;
+      badge.style.borderColor = `rgba(${s.color},0.4)`;
+      badge.style.color = `rgb(${s.color})`;
+      dot.style.background = `rgb(${s.color})`;
+      text.textContent = s.text;
+    }
+
+    window.onNotifStatusClick = function() {
+      const s = getNotifStatus();
+
+      // กรณี denied — แนะนำเปิด Settings
+      if (s.tier === 'denied') {
+        alert(`🔴 การแจ้งเตือนถูกปิด\n\n${s.advice}`);
+        return;
+      }
+      // กรณียังไม่ขอ permission
+      if (s.tier === 'pending') {
+        Notification.requestPermission().then(p => {
+          if (p === 'granted') {
+            alert('✅ เปิดการแจ้งเตือนสำเร็จ!\n\nลองให้ admin ส่งแจ้งเตือนทดสอบ');
+          }
+          updateNotifBadge();
+        });
+        return;
+      }
+      // กรณีไม่ได้เปิดเสียง
+      if (s.tier === 'no-audio') {
+        const btn = document.getElementById('sound-unlock-btn');
+        if (btn) btn.click();
+        return;
+      }
+      // กรณี hibernate / stale — แนะนำกดติดตามใหม่
+      if (s.tier === 'hibernate' || s.tier === 'stale') {
+        if (confirm(`${s.details}\n\n${s.advice}\n\n→ ทดสอบส่ง notification เพื่อ refresh?`)) {
+          testNotification();
+        }
+        return;
+      }
+
+      // แสดง modal รายละเอียด + ปุ่มทดสอบ
+      const overlay = document.createElement('div');
+      overlay.style.cssText = `position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99996;
+        display:flex; align-items:center; justify-content:center; padding:1rem;`;
+      overlay.innerHTML = `
+        <div style="background:#1a2533; border:1px solid rgba(${s.color},0.4); border-radius:18px; max-width:380px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.5);">
+          <div style="background:linear-gradient(135deg,rgba(${s.color},0.4),rgba(${s.color},0.2)); color:#fff; padding:1.1rem; border-radius:18px 18px 0 0; text-align:center;">
+            <div style="font-size:1.8rem;">🔔</div>
+            <div style="font-size:1.1rem; font-weight:800; margin-top:0.2rem;">${s.text}</div>
+          </div>
+          <div style="padding:1rem;">
+            <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:10px 12px; margin-bottom:10px; color:rgba(255,255,255,0.85); font-size:0.85rem;">
+              📊 <b>สถานะ</b>: ${s.details || '-'}
+            </div>
+            <div style="background:rgba(${s.color},0.12); border:1px solid rgba(${s.color},0.3); border-radius:10px; padding:10px 12px; margin-bottom:14px; color:rgb(${s.color}); font-size:0.85rem; line-height:1.5;">
+              💡 ${s.advice}
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button id="ns-close-btn" style="flex:1; padding:10px; background:#34495e; color:#fff; border:none; border-radius:10px; font-weight:700; cursor:pointer;">ปิด</button>
+              <button id="ns-test-btn" style="flex:1.3; padding:10px; background:linear-gradient(135deg,#3498db,#2980b9); color:#fff; border:none; border-radius:10px; font-weight:700; cursor:pointer;">🔔 ทดสอบ noti</button>
+            </div>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+      const close = () => overlay.remove();
+      document.getElementById('ns-close-btn').onclick = close;
+      document.getElementById('ns-test-btn').onclick = () => { close(); testNotification(); };
+      overlay.onclick = (e) => { if (e.target === overlay) close(); };
+    };
+
     setInterval(updateNotifBadge, 5000);
     setTimeout(updateNotifBadge, 1500);
 
@@ -3100,19 +3221,59 @@
       document.getElementById('my-status-name').textContent = name;
       document.getElementById('my-status-avatar').textContent = name.charAt(0);
 
-      // Games + Fee
-      const games = me.games || 0;
-      const fee = me.totalCost !== undefined ? me.totalCost : (state.paymentSettings?.price || 0);
-      document.getElementById('my-status-games').textContent = games;
-      document.getElementById('my-status-fee').textContent = '฿' + fee;
+      // ✅ Games — อ่านจาก history (เหมือนที่ admin คำนวณ)
+      let games = 0;
+      try {
+        const myHist = (state.history && state.history[myId]) ? state.history[myId] : null;
+        if (myHist) {
+          if (Array.isArray(myHist.games)) games = myHist.games.length;
+          else if (myHist.games && typeof myHist.games === 'object') games = Object.keys(myHist.games).length;
+        }
+      } catch(_) {}
 
-      // Status — หาว่าอยู่ที่ไหน
-      const inMatch = matches.find(m =>
-        (m.team1 || []).some(p => +p.id === +myId) || (m.team2 || []).some(p => +p.id === +myId)
-      );
-      const queueIdx = queues.findIndex(q =>
-        (q.team1 || []).some(p => +p.id === +myId) || (q.team2 || []).some(p => +p.id === +myId)
-      );
+      // ✅ Fee — คำนวณตามสูตรเหมือน admin
+      let fee = 0;
+      try {
+        const payMode = (state.playerPayMode || {})[myId] || 'buffet';
+        const priceSettings = state.priceSettings || {};
+        const buffet = priceSettings.buffet ?? state.paymentSettings?.price ?? 210;
+        const courtG = priceSettings.courtGame ?? 90;
+        const perG   = priceSettings.perGame ?? 27;
+        const base = (payMode === 'pergame') ? (courtG + perG * games) : buffet;
+        // Extras
+        const extras = Array.isArray((state.playerPayExtra || {})[myId]) ? state.playerPayExtra[myId] : [];
+        const extraSum = extras.reduce((s, e) => s + (parseFloat(e?.amount) || 0), 0);
+        fee = base + extraSum;
+      } catch(_) {
+        fee = state.paymentSettings?.price ?? 0;
+      }
+
+      // ✅ Paid status
+      const paid = (state.payments && state.payments[myId]?.paid) || false;
+      const pending = (state.payments && state.payments[myId]?.pending && !paid) || false;
+
+      document.getElementById('my-status-games').textContent = games;
+      document.getElementById('my-status-fee').textContent = paid ? '✅ จ่ายแล้ว' : ('฿' + fee);
+
+      // Update fee card style
+      const feeCard = document.getElementById('my-status-fee-card');
+      if (feeCard) {
+        if (paid) {
+          feeCard.style.background = 'rgba(39,174,96,0.2)';
+          feeCard.style.borderColor = 'rgba(39,174,96,0.5)';
+        } else if (pending) {
+          feeCard.style.background = 'rgba(243,156,18,0.2)';
+          feeCard.style.borderColor = 'rgba(243,156,18,0.5)';
+        } else if (fee > 0) {
+          feeCard.style.background = 'rgba(231,76,60,0.2)';
+          feeCard.style.borderColor = 'rgba(231,76,60,0.5)';
+        }
+      }
+
+      // Status — หาว่าอยู่ที่ไหน (handle ทั้ง id และ {id:N} format)
+      const inTeam = (team) => (team || []).some(p => +(p?.id ?? p) === +myId);
+      const inMatch = matches.find(m => inTeam(m.team1) || inTeam(m.team2));
+      const queueIdx = queues.findIndex(q => inTeam(q.team1) || inTeam(q.team2));
 
       const banner = document.getElementById('my-status-banner');
       const icon = document.getElementById('my-status-icon');
@@ -3122,11 +3283,19 @@
 
       if (inMatch) {
         const courtName = (state.courts.find(c => c.id == inMatch.courtId) || {}).name || 'สนาม';
-        const inTeam1 = (inMatch.team1 || []).some(p => +p.id === +myId);
+        const inTeam1 = inTeam(inMatch.team1);
         const teammate = inTeam1 ? (inMatch.team1 || []) : (inMatch.team2 || []);
         const opponent = inTeam1 ? (inMatch.team2 || []) : (inMatch.team1 || []);
-        const myTeamNames = teammate.filter(p => +p.id !== +myId).map(p => p.name).join(' + ') || '(เดี่ยว)';
-        const oppNames = opponent.map(p => p.name).join(' + ');
+
+        // Helper: ดึงชื่อจาก team item (อาจเป็น id หรือ object)
+        const getName = (p) => {
+          if (typeof p === 'object' && p?.name) return p.name;
+          const id = (typeof p === 'object') ? p?.id : p;
+          const found = (state.players || []).find(pp => +pp.id === +id);
+          return found?.name || '?';
+        };
+        const myTeamNames = teammate.filter(p => +(p?.id ?? p) !== +myId).map(getName).join(' + ') || '(เดี่ยว)';
+        const oppNames = opponent.map(getName).join(' + ');
         const elapsedMin = inMatch.startTime ? Math.floor((Date.now() - inMatch.startTime) / 60000) : 0;
 
         banner.style.background = 'linear-gradient(135deg, rgba(34,197,94,0.25), rgba(34,197,94,0.1))';
@@ -3156,12 +3325,6 @@
         label.style.color = 'rgba(255,255,255,0.55)';
         title.textContent = 'รอจัดคู่';
         detail.textContent = 'admin จะเรียกเมื่อถึงคิว';
-      }
-
-      // Pay Button
-      const payBtn = document.getElementById('my-status-pay-btn');
-      if (payBtn) {
-        payBtn.style.display = (fee > 0 && !me.paid) ? 'block' : 'none';
       }
 
       // Notification status badge
