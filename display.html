@@ -1695,6 +1695,12 @@
         </div>
       </div>
 
+      <!-- Ready / Resting Toggle — สถานะของผู้เล่น -->
+      <button id="my-status-availability-btn" onclick="toggleMyAvailability()" style="width:100%; margin-top:10px; background:linear-gradient(135deg,#27ae60,#229954); border:none; border-radius:12px; padding:11px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(39,174,96,0.3); display:flex; align-items:center; justify-content:center; gap:8px;">
+        <span id="my-status-availability-icon">✅</span>
+        <span id="my-status-availability-text">พร้อมเล่น</span>
+      </button>
+
       <!-- Action Row: ประวัติ / Big Mode -->
       <div style="display:flex; gap:6px; margin-top:8px;">
         <button onclick="showMyHistory()" style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:rgba(255,255,255,0.85); border-radius:10px; padding:8px; font-size:12px; font-weight:600; cursor:pointer;">
@@ -3194,6 +3200,72 @@
       } catch(e) { console.error('showMyHistory:', e); alert('Error: '+(e.message||e)); }
     };
 
+    // ── ✅ Toggle Ready / Resting ────────────────────────────
+    window.toggleMyAvailability = async function() {
+      try {
+        const myId = (typeof watchedIds !== 'undefined' && watchedIds.size > 0)
+          ? Array.from(watchedIds)[0] : null;
+        if (!myId) {
+          alert('กรุณากดติดตามชื่อตัวเองก่อน');
+          return;
+        }
+        const me = (state.players || []).find(p => +p.id === +myId);
+        if (!me) { alert('ไม่พบข้อมูลของคุณ'); return; }
+
+        // ห้ามเปลี่ยนตอนกำลังเล่น
+        if (me.isPlaying) {
+          alert('⚠️ คุณกำลังเล่นอยู่ — เปลี่ยนสถานะหลังจบเกม');
+          return;
+        }
+
+        const currentStatus = me.availability || 'ready';
+        const newStatus = currentStatus === 'ready' ? 'resting' : 'ready';
+
+        // อัปเดตที่ Firebase ตรงๆ (path เฉพาะ field ของ player)
+        const players = state.players || [];
+        const idx = players.findIndex(p => +p.id === +myId);
+        if (idx === -1) return;
+
+        await db.ref(`badmintonState/players/${idx}/availability`).set(newStatus);
+        await db.ref(`badmintonState/players/${idx}/availabilityChangedAt`).set(Date.now());
+
+        // Update UI ทันที (แม้ realtime listener ยังไม่มา)
+        updateAvailabilityButton(newStatus);
+
+        // Toast feedback
+        const t = document.createElement('div');
+        t.style.cssText = `position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+          background:${newStatus === 'ready' ? '#27ae60' : '#e67e22'}; color:#fff;
+          padding:10px 18px; border-radius:999px; font-weight:700; z-index:99998;
+          box-shadow:0 8px 24px rgba(0,0,0,0.3);`;
+        t.textContent = newStatus === 'ready' ? '✅ พร้อมเล่นแล้ว' : '🛑 ขอพักแล้ว';
+        document.body.appendChild(t);
+        setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 1500);
+        setTimeout(() => t.remove(), 1900);
+      } catch(e) {
+        console.error('toggleMyAvailability:', e);
+        alert('เปลี่ยนสถานะล้มเหลว: ' + (e.message||e));
+      }
+    };
+
+    function updateAvailabilityButton(status) {
+      const btn = document.getElementById('my-status-availability-btn');
+      const icon = document.getElementById('my-status-availability-icon');
+      const text = document.getElementById('my-status-availability-text');
+      if (!btn || !icon || !text) return;
+      if (status === 'resting') {
+        btn.style.background = 'linear-gradient(135deg,#e67e22,#d35400)';
+        btn.style.boxShadow = '0 4px 12px rgba(230,126,34,0.3)';
+        icon.textContent = '🛑';
+        text.textContent = 'พักอยู่ (กดเพื่อพร้อมเล่น)';
+      } else {
+        btn.style.background = 'linear-gradient(135deg,#27ae60,#229954)';
+        btn.style.boxShadow = '0 4px 12px rgba(39,174,96,0.3)';
+        icon.textContent = '✅';
+        text.textContent = 'พร้อมเล่น (กดเพื่อขอพัก)';
+      }
+    }
+
     // ── 🎯 My Status Card ───────────────────────────────────
     function renderMyStatusCard(matches, queues, players) {
       const card = document.getElementById('my-status-card');
@@ -3326,6 +3398,9 @@
         title.textContent = 'รอจัดคู่';
         detail.textContent = 'admin จะเรียกเมื่อถึงคิว';
       }
+
+      // Update availability button (พร้อมเล่น/พัก)
+      updateAvailabilityButton(me.availability || 'ready');
 
       // Notification status badge
       updateNotifStatusBadge();

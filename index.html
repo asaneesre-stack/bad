@@ -1154,6 +1154,11 @@
                     <div class="value" id="dash-checked-in">0</div>
                     <div class="label">เช็คอินแล้ว</div>
                 </div>
+                <div class="dashboard-card" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
+                    <div class="icon">🛑</div>
+                    <div class="value" id="dash-resting" style="color:#e67e22;">0</div>
+                    <div class="label">ขอพัก</div>
+                </div>
                 <div class="dashboard-card">
                     <div class="icon">🏐️</div>
                     <div class="value" id="dash-active-matches">0</div>
@@ -2730,7 +2735,7 @@
         },
 
         isAvailable: (player) => {
-            return player && player.isCheckedIn && !player.isPlaying;
+            return player && player.isCheckedIn && !player.isPlaying && player.availability !== 'resting';
         },
 
         getGameCount: (playerId) => {
@@ -3001,6 +3006,9 @@
 
             document.getElementById('dash-total-players').textContent = totalPlayers;
             document.getElementById('dash-checked-in').textContent = checkedInPlayers;
+            const restingCount = appState.players.filter(p => p.isCheckedIn && !p.isPlaying && p.availability === 'resting').length;
+            const restingEl = document.getElementById('dash-resting');
+            if (restingEl) restingEl.textContent = restingCount;
             document.getElementById('dash-active-matches').textContent = activeMatches;
             document.getElementById('dash-shuttle-in-play').textContent = newShuttleInPlay;
 
@@ -5308,6 +5316,11 @@
                     card.classList.add('playing-now');
                     card.style.borderColor = 'var(--accent)';
                     card.style.borderWidth = '3px';
+                } else if (player.isCheckedIn && player.availability === 'resting') {
+                    card.classList.add('resting');
+                    card.style.borderColor = '#e67e22';
+                    card.style.borderWidth = '3px';
+                    card.style.background = 'linear-gradient(135deg, rgba(230,126,34,0.1), rgba(230,126,34,0.03))';
                 } else if (player.isCheckedIn) {
                     card.classList.add('checked-in');
                     card.style.borderColor = 'var(--success)';
@@ -5322,8 +5335,15 @@
 
                 let statusIcon = player.isCheckedIn ? '✅' : '❌';
                 if (player.isPlaying) statusIcon = '🏸';
+                if (!player.isPlaying && player.availability === 'resting') statusIcon = '🛑';
+
+                const restingBadge = (player.isCheckedIn && !player.isPlaying && player.availability === 'resting')
+                    ? `<div style="position:absolute;top:6px;right:6px;background:#e67e22;color:#fff;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:999px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">🛑 พักอยู่</div>`
+                    : '';
+                if (restingBadge) card.style.position = 'relative';
 
                 card.innerHTML = `
+                    ${restingBadge}
                     <div class="player-name">${escapeHtml(player.name)}</div>
                     <div class="player-skill"><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></div>
                     <div style="font-size:0.8rem; color:#888;">${gameCount} เกม</div>
@@ -5751,7 +5771,12 @@ if (btnViewQueue) {
                     const em = (window.__queueEnhanceV13 ? '' : '');
                     const games = PlayerUtils.getGameCount(id);
                     const pill = `<span style="display:inline-block;background:#e8f4fd;color:#1a6fa8;font-size:0.68rem;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:5px;vertical-align:middle;white-space:nowrap;">${games}→<strong>${games+1}</strong></span>`;
-                    return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;"><span style="font-weight:600;">${name}</span>${pill}</div>`;
+                    const isResting = p && p.isCheckedIn && !p.isPlaying && p.availability === 'resting';
+                    const restBadge = isResting
+                        ? `<span style="display:inline-block;background:#e67e22;color:#fff;font-size:0.65rem;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:5px;vertical-align:middle;white-space:nowrap;">🛑 พักอยู่</span>`
+                        : '';
+                    const nameStyle = isResting ? 'font-weight:600;color:#e67e22;' : 'font-weight:600;';
+                    return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;flex-wrap:wrap;"><span style="${nameStyle}">${name}</span>${pill}${restBadge}</div>`;
                 };
 
                 const team1Html = queue.team1.map(buildPlayerLine).join('');
@@ -5767,6 +5792,16 @@ if (btnViewQueue) {
                 card.classList.add('queue-card');
                 if (isNew) card.classList.add('created-just-now');
 
+                // ตรวจว่ามีคนพักในคิวหรือไม่
+                const restingInQueue = [...queue.team1, ...queue.team2]
+                    .map(id => PlayerUtils.getById(id))
+                    .filter(p => p && p.isCheckedIn && !p.isPlaying && p.availability === 'resting');
+                const restingWarning = restingInQueue.length > 0
+                    ? `<div style="background:linear-gradient(135deg,#fff3e0,#ffe0b2); border-left:4px solid #e67e22; padding:8px 12px; margin:0 0 10px 0; border-radius:8px; font-size:0.82rem; color:#7d5e00; font-weight:600;">
+                        🛑 มีผู้เล่น <b>${restingInQueue.length} คน</b> ขอพักในคิวนี้: ${restingInQueue.map(p => escapeHtml(p.name)).join(', ')}
+                       </div>`
+                    : '';
+
                 card.innerHTML = `
                     <div class="queue-card-header">
                         <div style="display: flex; align-items: center; gap: 1rem;">
@@ -5775,6 +5810,8 @@ if (btnViewQueue) {
                         </div>
                         <span style="font-size: 0.85rem; color: #888;">สร้างเมื่อ ${createdTime}</span>
                     </div>
+
+                    ${restingWarning}
 
                     <div class="queue-card-teams">
                         <div class="queue-team">
@@ -5855,7 +5892,7 @@ if (btnViewQueue) {
             const queuePlayers = [...queue.team1, ...queue.team2];
             const allPlayersAvailable = queuePlayers.every(id => {
                 const player = PlayerUtils.getById(id);
-                return player && player.isCheckedIn && !player.isPlaying;
+                return player && player.isCheckedIn && !player.isPlaying && player.availability !== 'resting';
             });
 
             if (!allPlayersAvailable) {
@@ -5957,7 +5994,7 @@ if (btnViewQueue) {
             const queuePlayers = [...queue.team1, ...queue.team2];
             const allPlayersAvailable = queuePlayers.every(id => {
                 const player = PlayerUtils.getById(id);
-                return player && player.isCheckedIn && !player.isPlaying;
+                return player && player.isCheckedIn && !player.isPlaying && player.availability !== 'resting';
             });
 
             if (!allPlayersAvailable) {
@@ -6007,7 +6044,7 @@ if (btnViewQueue) {
             const queuePlayers = [...queue.team1, ...queue.team2];
             const allPlayersAvailable = queuePlayers.every(id => {
                 const player = PlayerUtils.getById(id);
-                return player && player.isCheckedIn && !player.isPlaying;
+                return player && player.isCheckedIn && !player.isPlaying && player.availability !== 'resting';
             });
 
             if (!allPlayersAvailable) {
@@ -6123,11 +6160,17 @@ if (btnViewQueue) {
                 const isSelected = uiState.manualSelectionOrder.includes(player.id);
                 const queueNums = inQueueMap[player.id] || [];
                 const isInQueue = queueNums.length > 0;
+                const isResting = player.availability === 'resting' && !player.isPlaying;
 
                 const card = document.createElement('div');
                 card.classList.add('check-in-card');
                 card.style.position = 'relative';
                 if (isSelected) card.style.backgroundColor = '#e0f7fa';
+                else if (isResting) {
+                    card.style.backgroundColor = 'rgba(230,126,34,0.08)';
+                    card.style.borderColor = '#e67e22';
+                    card.style.borderWidth = '2px';
+                }
                 else if (isInQueue) card.style.backgroundColor = '#fff8e1';
                 card.onclick = () => this.toggleManualSelection(player.id, players);
 
@@ -6137,6 +6180,11 @@ if (btnViewQueue) {
                     orderBadge = `<div style="position:absolute;top:5px;right:5px;background:var(--secondary);color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;">${order}</div>`;
                 }
 
+                // Resting badge — มุมซ้ายบน (กันชนกับ order badge ที่อยู่ขวา)
+                const restingBadge = isResting && !isSelected
+                    ? `<div style="position:absolute;top:5px;left:5px;background:#e67e22;color:#fff;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:999px;box-shadow:0 2px 4px rgba(0,0,0,0.2);z-index:1;">🛑 พักอยู่</div>`
+                    : '';
+
                 const queueTag = isInQueue
                     ? `<div style="font-size:0.7rem;color:#e67e22;font-weight:700;margin-top:2px;">📋 คิว #${queueNums.join(', #')}</div>`
                     : '';
@@ -6144,6 +6192,7 @@ if (btnViewQueue) {
                 card.dataset.playerId = player.id;
                 card.innerHTML = `
                     ${orderBadge}
+                    ${restingBadge}
                     <div class="player-name">${escapeHtml(player.name)}</div>
                     <div class="player-skill"><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></div>
                     <div style="font-size:0.8rem;color:#888;">${gameCount} เกม</div>
@@ -6228,7 +6277,7 @@ if (btnViewQueue) {
             const inQueueIds = new Set(
                 (appState.matchQueues || []).flatMap(q => [...q.team1, ...q.team2])
             );
-            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying && !inQueueIds.has(p.id));
+            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying && p.availability !== 'resting' && !inQueueIds.has(p.id));
             if (checkedInPlayers.length < MIN_PLAYERS_FOR_MATCH) {
                 showError(`ต้องมีผู้เล่นที่เช็คอินแล้วและไม่ได้อยู่ในคิว ${MIN_PLAYERS_FOR_MATCH} คน`);
                 return;
@@ -6304,7 +6353,7 @@ if (btnViewQueue) {
             const inQueueIds = new Set(
                 (appState.matchQueues || []).flatMap(q => [...q.team1, ...q.team2])
             );
-            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying && !inQueueIds.has(p.id));
+            const checkedInPlayers = appState.players.filter(p => p.isCheckedIn && !p.isPlaying && p.availability !== 'resting' && !inQueueIds.has(p.id));
             if (checkedInPlayers.length < MIN_PLAYERS_FOR_MATCH) {
                 showError(`ต้องมีผู้เล่นที่เช็คอินและไม่ได้อยู่ในคิว ${MIN_PLAYERS_FOR_MATCH} คนขึ้นไป`);
                 return;
@@ -7312,7 +7361,7 @@ if (btnViewQueue) {
     const excludeWithin = new Set([...queue.team1, ...queue.team2].filter(id => id !== currentId));
     const usedAcross = getUsedAcross({queueId: queue.id, teamNo, slotIndex});
     const candidates = (appState.players||[])
-      .filter(p => p.isCheckedIn && !p.isPlaying && !excludeWithin.has(p.id) && !usedAcross.has(p.id))
+      .filter(p => p.isCheckedIn && !p.isPlaying && p.availability !== 'resting' && !excludeWithin.has(p.id) && !usedAcross.has(p.id))
       .sort((a,b) => a.name.localeCompare(b.name, 'th'));
 
     const cur = PlayerUtils.getById(currentId);
@@ -7361,7 +7410,7 @@ if (btnViewQueue) {
     // Candidates: checked-in, not playing, and not used in any queue
     const usedAcross = getUsedAcross();
     const candidates = (appState.players||[])
-      .filter(p => p.isCheckedIn && !p.isPlaying && !usedAcross.has(p.id))
+      .filter(p => p.isCheckedIn && !p.isPlaying && p.availability !== 'resting' && !usedAcross.has(p.id))
       .slice();
     if (candidates.length < 4){
       showWarning('ผู้เล่นว่างไม่พอสำหรับจัดคิวอัตโนมัติ');
