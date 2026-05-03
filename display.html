@@ -2838,11 +2838,17 @@
     function renderMyStatusCard(matches, queues, players) {
       const card = document.getElementById('my-status-card');
       if (!card) return;
-      const myId = watchedIds.size > 0 ? Array.from(watchedIds)[0] : null;
-      if (!myId) {
+      let myId = null;
+      try {
+        // Safety: watchedIds อาจยังไม่ initialize (TDZ)
+        if (typeof watchedIds !== 'undefined' && watchedIds && watchedIds.size > 0) {
+          myId = Array.from(watchedIds)[0];
+        }
+      } catch(_) {
         card.style.display = 'none';
         return;
       }
+      if (!myId) { card.style.display = 'none'; return; }
       const me = players.find(p => +p.id === +myId);
       if (!me) {
         card.style.display = 'none';
