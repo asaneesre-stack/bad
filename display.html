@@ -1044,6 +1044,23 @@
     }
 
     /* ═══════════════════════════════════════════════════════════
+       🔍 Big Mode — ตัวอักษรใหญ่ (วางมือถือไกล)
+       ═══════════════════════════════════════════════════════════ */
+    body.big-mode {
+      font-size: 18px;
+    }
+    body.big-mode .header-title { font-size: 1.4rem; }
+    body.big-mode .court-card { padding: 1.5rem 1.5rem; font-size: 1.2rem; }
+    body.big-mode .stats-bar .stat-item .stat-value { font-size: 2.2rem; }
+    body.big-mode .court-name { font-size: 1.7rem; }
+    body.big-mode .player-pill { font-size: 1.05rem; padding: 0.5rem 0.9rem; }
+    body.big-mode #my-status-name { font-size: 1.5rem !important; }
+    body.big-mode #my-status-banner-title { font-size: 1.2rem !important; }
+    body.big-mode #my-status-games,
+    body.big-mode #my-status-fee { font-size: 1.4rem !important; }
+    body.big-mode .watch-chip { font-size: 1rem; padding: 6px 14px; }
+
+    /* ═══════════════════════════════════════════════════════════
        Boxing Mode (โหมดก๊วน) — ป้องกัน iOS hibernate
        ═══════════════════════════════════════════════════════════ */
     .boxing-mode-btn {
@@ -1682,6 +1699,67 @@
       <button id="my-status-pay-btn" onclick="showPaymentQR()" style="display:none; width:100%; margin-top:10px; background:linear-gradient(135deg,#e74c3c,#c0392b); border:none; border-radius:12px; padding:12px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(231,76,60,0.3);">
         💳 จ่ายค่าสนาม
       </button>
+
+      <!-- Action Row: ประวัติ / Big Mode -->
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <button onclick="showMyHistory()" style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:rgba(255,255,255,0.85); border-radius:10px; padding:8px; font-size:12px; font-weight:600; cursor:pointer;">
+          📋 ประวัติ
+        </button>
+        <button onclick="toggleBigMode()" style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:rgba(255,255,255,0.85); border-radius:10px; padding:8px; font-size:12px; font-weight:600; cursor:pointer;">
+          🔍 ตัวใหญ่
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═════════════════════════════════════════════════════════
+       📋 My History Modal — ประวัติส่วนตัวของ user
+       ═════════════════════════════════════════════════════════ -->
+  <div id="my-history-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:99996; align-items:center; justify-content:center; padding:1rem;">
+    <div style="background:#1a2533; border:1px solid rgba(0,168,204,0.3); border-radius:18px; max-width:480px; width:100%; max-height:88vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+      <div style="background:linear-gradient(135deg,#00a8cc,#0088aa); color:#fff; padding:1.1rem; border-radius:18px 18px 0 0; text-align:center; position:relative;">
+        <div style="font-size:1.6rem;">📋</div>
+        <div style="font-size:1.1rem; font-weight:800; margin-top:0.2rem;">ประวัติของฉัน</div>
+        <div id="my-history-name" style="font-size:0.82rem; opacity:0.9; margin-top:2px;">—</div>
+        <button onclick="document.getElementById('my-history-overlay').style.display='none'" style="position:absolute; top:14px; right:14px; background:rgba(255,255,255,0.2); border:none; color:#fff; width:32px; height:32px; border-radius:50%; font-size:1.1rem; cursor:pointer;">×</button>
+      </div>
+      <div style="padding:1rem;">
+
+        <!-- Stats Row -->
+        <div id="my-history-stats" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:14px;">
+          <div style="background:rgba(0,168,204,0.12); border-radius:12px; padding:10px; text-align:center;">
+            <div style="color:rgba(255,255,255,0.5); font-size:10px;">เกมรวม</div>
+            <div id="hist-total-games" style="color:#00a8cc; font-size:20px; font-weight:800;">0</div>
+          </div>
+          <div style="background:rgba(39,174,96,0.12); border-radius:12px; padding:10px; text-align:center;">
+            <div style="color:rgba(255,255,255,0.5); font-size:10px;">ชนะ</div>
+            <div id="hist-wins" style="color:#27ae60; font-size:20px; font-weight:800;">0</div>
+          </div>
+          <div style="background:rgba(231,76,60,0.12); border-radius:12px; padding:10px; text-align:center;">
+            <div style="color:rgba(255,255,255,0.5); font-size:10px;">แพ้</div>
+            <div id="hist-losses" style="color:#e74c3c; font-size:20px; font-weight:800;">0</div>
+          </div>
+        </div>
+
+        <!-- Top Partners -->
+        <div style="margin-bottom:1rem;">
+          <div style="color:rgba(255,255,255,0.7); font-size:0.82rem; font-weight:700; margin-bottom:6px;">👥 เพื่อนคู่ที่เล่นด้วยบ่อย</div>
+          <div id="hist-partners" style="display:flex; flex-direction:column; gap:5px;"></div>
+        </div>
+
+        <!-- Top Opponents -->
+        <div style="margin-bottom:1rem;">
+          <div style="color:rgba(255,255,255,0.7); font-size:0.82rem; font-weight:700; margin-bottom:6px;">⚔️ คู่แข่งที่เจอบ่อย</div>
+          <div id="hist-opponents" style="display:flex; flex-direction:column; gap:5px;"></div>
+        </div>
+
+        <!-- Recent Games -->
+        <div>
+          <div style="color:rgba(255,255,255,0.7); font-size:0.82rem; font-weight:700; margin-bottom:6px;">🏸 เกมล่าสุด</div>
+          <div id="hist-recent-games" style="display:flex; flex-direction:column; gap:6px; max-height:200px; overflow-y:auto;"></div>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -2833,6 +2911,167 @@
       renderWaiting(queues, players);
       renderMyStatusCard(matches, queues, players);
     }
+
+    // ── 🔄 Pull-to-refresh ─────────────────────────────────────
+    (function setupPullToRefresh() {
+      let startY = 0;
+      let pullDistance = 0;
+      let isRefreshing = false;
+      const indicator = document.createElement('div');
+      indicator.id = 'pull-refresh-indicator';
+      indicator.style.cssText = `
+        position:fixed; top:0; left:50%; transform:translateX(-50%) translateY(-100%);
+        background:rgba(0,168,204,0.95); color:#fff; padding:12px 24px;
+        border-radius:0 0 20px 20px; font-weight:700; font-size:0.9rem;
+        box-shadow:0 8px 24px rgba(0,168,204,0.4); z-index:99997;
+        transition:transform 0.2s; pointer-events:none;
+      `;
+      indicator.innerHTML = '⬇ ลากลงเพื่อรีเฟรช';
+      document.body.appendChild(indicator);
+
+      document.addEventListener('touchstart', (e) => {
+        if (window.scrollY === 0) startY = e.touches[0].clientY;
+      }, { passive: true });
+
+      document.addEventListener('touchmove', (e) => {
+        if (window.scrollY > 0 || isRefreshing || startY === 0) return;
+        pullDistance = e.touches[0].clientY - startY;
+        if (pullDistance > 0 && pullDistance < 200) {
+          const progress = Math.min(pullDistance / 100, 1);
+          indicator.style.transform = `translateX(-50%) translateY(${pullDistance > 100 ? 0 : -100 + pullDistance}%)`;
+          if (pullDistance > 100) {
+            indicator.innerHTML = '🔄 ปล่อยเพื่อรีเฟรช';
+            indicator.style.background = 'rgba(39,174,96,0.95)';
+          } else {
+            indicator.innerHTML = '⬇ ลากลงเพื่อรีเฟรช';
+            indicator.style.background = 'rgba(0,168,204,0.95)';
+          }
+        }
+      }, { passive: true });
+
+      document.addEventListener('touchend', () => {
+        if (pullDistance > 100 && !isRefreshing) {
+          isRefreshing = true;
+          indicator.innerHTML = '⏳ กำลังรีเฟรช...';
+          indicator.style.transform = 'translateX(-50%) translateY(0)';
+          // ทำการ refresh
+          try {
+            if (typeof render === 'function') render();
+          } catch(_) {}
+          setTimeout(() => {
+            indicator.innerHTML = '✅ รีเฟรชแล้ว';
+            indicator.style.background = 'rgba(39,174,96,0.95)';
+            setTimeout(() => {
+              indicator.style.transform = 'translateX(-50%) translateY(-100%)';
+              isRefreshing = false;
+            }, 800);
+          }, 600);
+        } else {
+          indicator.style.transform = 'translateX(-50%) translateY(-100%)';
+        }
+        startY = 0;
+        pullDistance = 0;
+      }, { passive: true });
+    })();
+
+    // ── 🔍 Big Mode (ตัวอักษรใหญ่) ──────────────────────────
+    window.toggleBigMode = function() {
+      const isOn = document.body.classList.toggle('big-mode');
+      try { localStorage.setItem('bb-big-mode', isOn ? '1' : '0'); } catch(_) {}
+      // โชว์ toast
+      const t = document.createElement('div');
+      t.style.cssText = `position:fixed; bottom:80px; left:50%; transform:translateX(-50%);
+        background:rgba(0,168,204,0.95); color:#fff; padding:10px 18px; border-radius:999px;
+        font-weight:700; z-index:99998; box-shadow:0 8px 24px rgba(0,168,204,0.4);
+        animation:fadeIn 0.2s ease-out;`;
+      t.textContent = isOn ? '🔍 เปิดโหมดตัวใหญ่' : '🔍 ปิดโหมดตัวใหญ่';
+      document.body.appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 1500);
+      setTimeout(() => t.remove(), 1900);
+    };
+
+    // Restore Big Mode on load
+    try {
+      if (localStorage.getItem('bb-big-mode') === '1') {
+        document.body.classList.add('big-mode');
+      }
+    } catch(_) {}
+
+    // ── 📋 My History Modal ────────────────────────────────────
+    window.showMyHistory = function() {
+      try {
+        const myId = (typeof watchedIds !== 'undefined' && watchedIds.size > 0)
+          ? Array.from(watchedIds)[0] : null;
+        if (!myId) { alert('กรุณากดติดตามชื่อตัวเองก่อน'); return; }
+        const me = (state.players || []).find(p => +p.id === +myId);
+        if (!me) { alert('ไม่พบข้อมูลของคุณ'); return; }
+
+        const overlay = document.getElementById('my-history-overlay');
+        if (!overlay) return;
+        overlay.style.display = 'flex';
+        document.getElementById('my-history-name').textContent = me.name + (me.realName ? ` (${me.realName})` : '');
+
+        const myHist = (state.history && state.history[myId]) ? state.history[myId] : { games: [] };
+        const games = Array.isArray(myHist.games) ? myHist.games : Object.values(myHist.games || {});
+        const wins = games.filter(g => g.result === 'win').length;
+        const losses = games.filter(g => g.result === 'lose').length;
+        document.getElementById('hist-total-games').textContent = games.length;
+        document.getElementById('hist-wins').textContent = wins;
+        document.getElementById('hist-losses').textContent = losses;
+
+        const partnerCount = {}, opponentCount = {};
+        games.forEach(g => {
+          (g.teammates || []).forEach(p => { const n = p.name || p; if (n) partnerCount[n] = (partnerCount[n]||0)+1; });
+          (g.opponents || []).forEach(p => { const n = p.name || p; if (n) opponentCount[n] = (opponentCount[n]||0)+1; });
+        });
+
+        const renderTopList = (containerId, counts, color) => {
+          const c = document.getElementById(containerId);
+          if (!c) return;
+          const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0, 5);
+          if (sorted.length === 0) { c.innerHTML = '<div style="color:rgba(255,255,255,0.4); font-size:0.78rem; text-align:center; padding:0.6rem;">ยังไม่มีข้อมูล</div>'; return; }
+          c.innerHTML = sorted.map(([name, count], idx) =>
+            `<div style="display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,0.04); border-radius:8px;">
+              <div style="width:20px; height:20px; border-radius:50%; background:${color}; color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700;">${idx+1}</div>
+              <div style="flex:1; color:#fff; font-size:0.85rem; font-weight:600;">${name}</div>
+              <div style="background:${color}; color:#fff; padding:2px 8px; border-radius:999px; font-size:0.72rem; font-weight:700;">${count}</div>
+            </div>`
+          ).join('');
+        };
+        renderTopList('hist-partners', partnerCount, '#00a8cc');
+        renderTopList('hist-opponents', opponentCount, '#e67e22');
+
+        const recent = [...games].reverse().slice(0, 10);
+        const recentEl = document.getElementById('hist-recent-games');
+        if (recentEl) {
+          if (recent.length === 0) {
+            recentEl.innerHTML = '<div style="color:rgba(255,255,255,0.4); font-size:0.78rem; text-align:center; padding:0.8rem;">ยังไม่มีประวัติเกม</div>';
+          } else {
+            recentEl.innerHTML = recent.map(g => {
+              const time = g.endTime || g.startTime;
+              const timeStr = time ? new Date(time).toLocaleString('th-TH', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '?';
+              const teamNames = (g.teammates || []).map(p => p.name || p).join(' + ') || '(เดี่ยว)';
+              const oppNames = (g.opponents || []).map(p => p.name || p).join(' + ');
+              const result = g.result === 'win' ? { txt:'✅ ชนะ', color:'#27ae60' } :
+                             g.result === 'lose' ? { txt:'❌ แพ้', color:'#e74c3c' } :
+                             { txt:'⚪', color:'#95a5a6' };
+              const dur = (g.startTime && g.endTime) ? Math.round((g.endTime - g.startTime)/60000) : null;
+              return `<div style="background:rgba(255,255,255,0.04); border-radius:10px; padding:8px 10px; border-left:3px solid ${result.color};">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                  <span style="color:${result.color}; font-size:0.78rem; font-weight:700;">${result.txt}</span>
+                  <span style="color:rgba(255,255,255,0.45); font-size:0.7rem;">${timeStr}${dur?' · '+dur+'น':''}</span>
+                </div>
+                <div style="color:rgba(255,255,255,0.85); font-size:0.78rem;">
+                  <span style="color:#86efac;">${teamNames}</span>
+                  <span style="opacity:0.5; margin:0 4px;">vs</span>
+                  <span style="color:#fcd34d;">${oppNames}</span>
+                </div>
+              </div>`;
+            }).join('');
+          }
+        }
+      } catch(e) { console.error('showMyHistory:', e); alert('Error: '+(e.message||e)); }
+    };
 
     // ── 🎯 My Status Card ───────────────────────────────────
     function renderMyStatusCard(matches, queues, players) {
