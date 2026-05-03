@@ -2326,9 +2326,54 @@
             const view = document.querySelector('.view.active');
             const viewId = view ? view.id : 'dashboard';
             App.showView(viewId);
+
+            // ✅ Re-render queue list ถ้าอยู่หน้าจัดคู่/จับสลาก
+            if (viewId === 'match-setup') {
+                if (App.renderQueueList) {
+                    try { App.renderQueueList(); } catch(_) {}
+                }
+            }
+            // ✅ Re-render check-in list ด้วย
+            if (viewId === 'check-in') {
+                if (App.renderCheckInList) {
+                    try { App.renderCheckInList(); } catch(_) {}
+                }
+            }
+
             showSyncStatus('🔄 อัปเดตจากอุปกรณ์อื่น', '#00a8cc');
             setTimeout(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'), 2000);
         });
+
+        // ✅ Dedicated listener สำหรับ availability ของผู้เล่น
+        // ทำงานทันทีทุกครั้งที่ user เปลี่ยนสถานะ พร้อมเล่น/พัก
+        // ไม่ผ่าน _savedBy check — guarantees realtime
+        try {
+            firebase.database().ref('badmintonState/players').on('child_changed', (snap) => {
+                try {
+                    const updatedPlayer = snap.val();
+                    if (!updatedPlayer || !appState.players) return;
+                    // Update local player object
+                    const localIdx = appState.players.findIndex(p => +p.id === +updatedPlayer.id);
+                    if (localIdx !== -1) {
+                        appState.players[localIdx] = { ...appState.players[localIdx], ...updatedPlayer };
+                    }
+                    // Re-render relevant view
+                    const view = document.querySelector('.view.active');
+                    const viewId = view ? view.id : '';
+                    if (viewId === 'match-setup' && App.renderQueueList) {
+                        try { App.renderQueueList(); } catch(_) {}
+                    }
+                    if (viewId === 'check-in' && App.renderCheckInList) {
+                        try { App.renderCheckInList(); } catch(_) {}
+                    }
+                    if (viewId === 'dashboard' && App.renderDashboard) {
+                        try { App.renderDashboard(); } catch(_) {}
+                    }
+                    showSyncStatus('🛑 ' + (updatedPlayer.name || '?') + ' เปลี่ยนสถานะ', '#e67e22');
+                    setTimeout(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'), 2000);
+                } catch(e) { console.warn('availability listener:', e); }
+            });
+        } catch(e) { console.warn('child_changed listener failed:', e); }
 
         // Global payment listener — ทำงานตลอด ไม่ขึ้นกับแท็บที่เปิด
         // เก็บ snapshot เก่าเพื่อเทียบหา pending ใหม่

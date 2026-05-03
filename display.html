@@ -3228,6 +3228,9 @@
 
         await db.ref(`badmintonState/players/${idx}/availability`).set(newStatus);
         await db.ref(`badmintonState/players/${idx}/availabilityChangedAt`).set(Date.now());
+        // ✅ ล้าง _savedBy เพื่อบังคับให้ admin's root listener trigger
+        // (ไม่งั้น admin จะ skip update เพราะคิดว่าเป็น echo ของตัวเอง)
+        try { await db.ref('badmintonState/_savedBy').set('display-update-' + Date.now()); } catch(_) {}
 
         // Update UI ทันที (แม้ realtime listener ยังไม่มา)
         updateAvailabilityButton(newStatus);
