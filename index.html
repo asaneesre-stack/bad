@@ -7561,8 +7561,15 @@ if (btnViewQueue) {
         vertical-align:middle;
         white-space:nowrap;
       ">${games}→<strong>${games+1}</strong></span>`;
-      return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;">
-        <span class="queue-player-line ${cls}" style="font-weight:600;">${em} ${nm}</span>${pill}
+      // ✅ Resting badge
+      const isResting = p && p.isCheckedIn && !p.isPlaying && p.availability === 'resting';
+      const restBadge = isResting
+        ? `<span style="display:inline-block;background:#e67e22;color:#fff;font-size:0.65rem;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:3px;vertical-align:middle;white-space:nowrap;">🛑 พักอยู่</span>`
+        : '';
+      const nameStyle = isResting ? 'font-weight:700;color:#e67e22;' : 'font-weight:600;';
+      const namePrefix = isResting ? '🛑 ' : '';
+      return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;flex-wrap:wrap;">
+        <span class="queue-player-line ${cls}" style="${nameStyle}">${namePrefix}${em} ${nm}</span>${pill}${restBadge}
       </div>`;
     }).join('');
   }
