@@ -406,46 +406,188 @@
         }
 
         .dashboard-player-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 1rem;
-            max-height: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+            max-height: 360px;
             overflow-y: auto;
-            padding: 1rem;
-            border: 1px solid #e0e0e0;
-            border-radius: var(--border-radius);
+            padding: 0.5rem;
+            background: #f8fafc;
+            border-radius: 12px;
         }
 
         .dashboard-player-card {
-            background-color: var(--white);
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-            transition: box-shadow 0.3s;
+            background: #fff;
+            border-radius: 10px;
+            padding: 0.55rem 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            transition: all 0.2s;
             cursor: pointer;
+            border: 1px solid transparent;
         }
 
         .dashboard-player-card:hover {
-            box-shadow: var(--shadow);
+            background: #f0f9ff;
+            border-color: #bae6fd;
+            transform: translateX(2px);
+        }
+
+        .dashboard-player-card .rank-badge {
+            background: #94a3b8;
+            color: #fff;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .dashboard-player-card.rank-low .rank-badge {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+        }
+
+        .dashboard-player-card .player-info {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
         }
 
         .dashboard-player-card .player-name {
-            font-weight: 600;
+            font-weight: 700;
             font-size: 0.9rem;
-            word-break: break-word;
+            color: #0f172a;
         }
 
         .dashboard-player-card .player-skill {
+            margin: 0;
             font-size: 0.7rem;
-            margin: 0.25rem 0;
         }
 
         .dashboard-player-card .game-count {
-            font-size: 1.1rem;
-            font-weight: bold;
-            color: var(--accent);
-            margin-top: 0.5rem;
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 2px 9px;
+            border-radius: 6px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            margin: 0;
+            flex-shrink: 0;
+        }
+
+        .dashboard-player-card.rank-high .game-count {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        /* ── 🏆 Frequent Pair / Opponent Row ─────────────────── */
+        .pair-row {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 7px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s;
+        }
+
+        .pair-row:hover {
+            transform: translateX(2px);
+        }
+
+        .pair-row .pair-rank-icon {
+            font-size: 1.15rem;
+            line-height: 1;
+            width: 18px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .pair-row .pair-rank-num {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            font-weight: 700;
+            width: 18px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .pair-row .pair-names {
+            flex: 1;
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #0f172a;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pair-row .pair-count {
+            color: #fff;
+            padding: 2px 11px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* Top 3 — medal style */
+        .pair-row.rank-1 {
+            background: linear-gradient(90deg, #fef3c7, #fff);
+            border-left: 3px solid #fbbf24;
+        }
+        .pair-row.rank-1 .pair-count { background: #fbbf24; }
+
+        .pair-row.rank-2 {
+            background: linear-gradient(90deg, #f3f4f6, #fff);
+            border-left: 3px solid #9ca3af;
+        }
+        .pair-row.rank-2 .pair-count { background: #9ca3af; }
+
+        .pair-row.rank-3 {
+            background: linear-gradient(90deg, #fed7aa, #fff);
+            border-left: 3px solid #fb923c;
+        }
+        .pair-row.rank-3 .pair-count { background: #fb923c; }
+
+        .pair-row.rank-4, .pair-row.rank-5 {
+            background: #f8fafc;
+        }
+        .pair-row.rank-4 .pair-count, .pair-row.rank-5 .pair-count {
+            background: #94a3b8;
+        }
+
+        /* Variant: opponents (red/orange tone) */
+        .pair-row.opponent.rank-1 {
+            background: linear-gradient(90deg, #fee2e2, #fff);
+            border-left-color: #ef4444;
+        }
+        .pair-row.opponent.rank-1 .pair-count { background: #ef4444; }
+        .pair-row.opponent.rank-2 {
+            background: linear-gradient(90deg, #ffedd5, #fff);
+            border-left-color: #f97316;
+        }
+        .pair-row.opponent.rank-2 .pair-count { background: #f97316; }
+        .pair-row.opponent.rank-3 {
+            background: linear-gradient(90deg, #fef3c7, #fff);
+            border-left-color: #eab308;
+        }
+        .pair-row.opponent.rank-3 .pair-count { background: #eab308; }
+
+        /* ── Frequent Lists Container ────────────────────────── */
+        .frequent-list {
+            display: flex !important;
+            flex-direction: column;
+            gap: 0.3rem !important;
+            grid-template-columns: none !important;
         }
 
         .timeline {
