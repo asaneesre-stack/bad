@@ -1220,7 +1220,11 @@
         const historyLoss  = (_lastKnownHistorySize  >= 5   && currentHistorySize  === 0);
         const shuttleLoss  = (_lastKnownShuttleTotal >= 100 && currentShuttleTotal === 0);
 
-        if (playerLoss || courtLoss || historyLoss || shuttleLoss) {
+        // ✅ Bypass: ถ้า admin ยืนยันลบเอง (set window._intentionalClear = true ก่อน saveState)
+        if (window._intentionalClear) {
+            window._intentionalClear = false; // reset
+            // skip sanity check — admin ยืนยันแล้ว
+        } else if (playerLoss || courtLoss || historyLoss || shuttleLoss) {
             const lostFields = [];
             if (playerLoss)  lostFields.push(`ผู้เล่น ${_lastKnownPlayerCount} → 0`);
             if (courtLoss)   lostFields.push(`สนาม ${_lastKnownCourtCount} → 0`);
@@ -1266,7 +1270,10 @@
                 currentCourtCount   === 0 ||
                 currentShuttleTotal === 0;
 
-            if (localIsEmpty || localIsSparse) {
+            // ✅ Skip pre-check ถ้า admin ตั้งใจลบ (intentional clear)
+            const skipPreCheck = window._intentionalClearTime && (Date.now() - window._intentionalClearTime < 5000);
+
+            if (!skipPreCheck && (localIsEmpty || localIsSparse)) {
                 try {
                     const snap = await ref.once('value');
                     const remoteData = snap.val();
@@ -1481,8 +1488,8 @@
             if ('Notification' in window && Notification.permission === 'granted') {
                 const n = new Notification(title, {
                     body: body,
-                    icon: '/icon-192.png',
-                    badge: '/icon-192.png',
+                    icon: 'icon-192.png',
+                    badge: 'icon-192.png',
                     tag: `payment-${pid}`,
                     requireInteraction: false,
                     silent: false,
@@ -3489,6 +3496,10 @@
             const playersBackup = JSON.parse(JSON.stringify(appState.players || []));
             const queuesBackup  = JSON.parse(JSON.stringify(appState.matchQueues || []));
 
+            // ✅ ตั้ง flag ให้ saveState() รู้ว่าตั้งใจลบ — bypass sanity check
+            window._intentionalClear = true;
+            window._intentionalClearTime = Date.now();
+
             appState.players = [];
             appState.nextId.player = 1;
             auditLog('clear_all_players');
@@ -3503,6 +3514,8 @@
                 appState.players = playersBackup;
                 appState.matchQueues = queuesBackup;
                 auditLog('undo_clear_all_players', { restored: playersBackup.length });
+                window._intentionalClear = true;
+                window._intentionalClearTime = Date.now();
                 saveState();
                 this.renderDashboard();
                 this.renderPlayerList();
