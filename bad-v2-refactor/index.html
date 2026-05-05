@@ -256,15 +256,13 @@
             </div>
 
             <div class="card">
-                <h3>👥 ผู้เล่นคู่ที่เล่นด้วยกันบ่อยสุด</h3>
-                <p style="font-size: 0.9rem; color: #888;">แสดงชื่อผู้เล่นคู่ที่เล่นด้วยกันบ่อย</p>
-                <div id="frequent-partners-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;"></div>
+                <h3>👥 ผู้เล่นคู่ที่เล่นด้วยกันบ่อยสุด <span style="font-size:0.75rem;color:#94a3b8;font-weight:500;">Top 5</span></h3>
+                <div id="frequent-partners-list" class="frequent-list"></div>
             </div>
 
             <div class="card">
-                <h3>⚔️ คู่แข่งที่เจอบ่อยสุด</h3>
-                <p style="font-size: 0.9rem; color: #888;">แสดงชื่อผู้เล่นที่เป็นฝ่ายตรงข้ามบ่อย</p>
-                <div id="frequent-opponents-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;"></div>
+                <h3>⚔️ คู่แข่งที่เจอบ่อยสุด <span style="font-size:0.75rem;color:#94a3b8;font-weight:500;">Top 5</span></h3>
+                <div id="frequent-opponents-list" class="frequent-list"></div>
             </div>
 
             <div class="quick-actions">
@@ -2198,16 +2196,21 @@
                 return a.name.localeCompare(b.name, 'th');
             });
 
-            sortedPlayers.forEach(player => {
+            sortedPlayers.forEach((player, idx) => {
                 const skillClass = getSkillClass(player.skill);
                 const card = document.createElement('div');
                 card.classList.add('dashboard-player-card');
+                // Top 3 น้อยสุด = highlight ฟ้า, รายสูง = highlight เหลือง
+                if (idx < 3) card.classList.add('rank-low');
+                else if (idx >= sortedPlayers.length - 3) card.classList.add('rank-high');
                 card.style.cursor = 'pointer';
                 card.onclick = () => this.openPlayerHistoryModal(player.id);
                 card.innerHTML = `
-                    <div class="player-name">${escapeHtml(player.name)}</div>
-                    <div class="wait-badge"></div>
-                    <div class="player-skill"><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></div>
+                    <div class="rank-badge">${idx + 1}</div>
+                    <div class="player-info">
+                        <span class="player-name">${escapeHtml(player.name)}</span>
+                        <span class="player-skill"><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></span>
+                    </div>
                     <div class="game-count">${playerGameCounts[player.id]} เกม</div>
                 `;
                 listEl.appendChild(card);
@@ -2240,27 +2243,31 @@
             const sortedPairs = Object.entries(pairMap)
                 .map(([key, count]) => ({ key, count: Math.round(count / 2) }))
                 .sort((a, b) => b.count - a.count)
-                .slice(0, 10);
+                .slice(0, 5);
 
             if (sortedPairs.length === 0) {
-                listEl.innerHTML = '<p style="text-align: center; color: #888; grid-column: 1/-1;">ยังไม่มีประวัติการจับคู่</p>';
+                listEl.innerHTML = '<p style="text-align: center; color: #888; padding:1rem;">ยังไม่มีประวัติการจับคู่</p>';
                 return;
             }
 
-            sortedPairs.forEach(({ key, count }) => {
+            const medals = ['🥇','🥈','🥉'];
+            sortedPairs.forEach(({ key, count }, idx) => {
                 const [idA, idB] = key.split('-').map(Number);
                 const pA = PlayerUtils.getById(idA);
                 const pB = PlayerUtils.getById(idB);
                 if (!pA || !pB) return;
 
-                const card = document.createElement('div');
-                card.style.cssText = 'background-color: var(--light); padding: 1rem; border-radius: 8px; text-align: center; border: 2px solid var(--success);';
-                card.innerHTML = `
-                    <div style="font-weight: bold; color: var(--primary); margin-bottom: 0.5rem;">${escapeHtml(pA.name)} & ${escapeHtml(pB.name)}</div>
-                    <div style="font-size: 1.5rem; font-weight: bold; color: var(--success);">${count}</div>
-                    <div style="font-size: 0.85rem; color: #888;">ครั้งที่เล่นด้วยกัน</div>
+                const row = document.createElement('div');
+                row.className = `pair-row rank-${idx+1}`;
+                const rankIcon = idx < 3
+                    ? `<div class="pair-rank-icon">${medals[idx]}</div>`
+                    : `<div class="pair-rank-num">${idx+1}</div>`;
+                row.innerHTML = `
+                    ${rankIcon}
+                    <div class="pair-names">${escapeHtml(pA.name)} & ${escapeHtml(pB.name)}</div>
+                    <div class="pair-count">${count}</div>
                 `;
-                listEl.appendChild(card);
+                listEl.appendChild(row);
             });
         },
 
@@ -2308,28 +2315,32 @@
                     total: stats.wins + stats.losses
                 }))
                 .sort((a, b) => b.total - a.total)
-                .slice(0, 10);
+                .slice(0, 5);
 
             if (sortedOpponents.length === 0) {
-                listEl.innerHTML = '<p style="text-align: center; color: #888; grid-column: 1/-1;">ยังไม่มีประวัติการเจอหน้า</p>';
+                listEl.innerHTML = '<p style="text-align: center; color: #888; padding:1rem;">ยังไม่มีประวัติการเจอหน้า</p>';
                 return;
             }
 
-            sortedOpponents.forEach(({ id, wins, losses, total }) => {
+            const medals = ['🥇','🥈','🥉'];
+            sortedOpponents.forEach(({ id, wins, losses, total }, idx) => {
                 const opponent = PlayerUtils.getById(parseInt(id));
                 if (!opponent) return;
-
                 const winRate = total > 0 ? ((wins / total) * 100).toFixed(0) : 0;
-                const card = document.createElement('div');
-                card.style.cssText = 'background-color: var(--light); padding: 1rem; border-radius: 8px; text-align: center; border: 2px solid var(--danger);';
-                card.innerHTML = `
-                    <div style="font-weight: bold; color: var(--primary); margin-bottom: 0.5rem;">${escapeHtml(opponent.name)}</div>
-                    <div style="font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem;">
-                        <span style="color: var(--success);">${wins}W</span> <span style="color: var(--danger);">${losses}L</span>
+
+                const row = document.createElement('div');
+                row.className = `pair-row opponent rank-${idx+1}`;
+                const rankIcon = idx < 3
+                    ? `<div class="pair-rank-icon">${medals[idx]}</div>`
+                    : `<div class="pair-rank-num">${idx+1}</div>`;
+                row.innerHTML = `
+                    ${rankIcon}
+                    <div class="pair-names">${escapeHtml(opponent.name)}
+                        <span style="font-weight:500;color:#64748b;font-size:0.72rem;margin-left:6px;">${wins}W ${losses}L · ${winRate}%</span>
                     </div>
-                    <div style="font-size: 0.85rem; color: #888;">${total} ครั้ง (ชนะ ${winRate}%)</div>
+                    <div class="pair-count">${total}</div>
                 `;
-                listEl.appendChild(card);
+                listEl.appendChild(row);
             });
         },
 
