@@ -413,19 +413,11 @@
                         border:2px solid #ddd;background:#fff;color:#888;">P</button>
                 </div>
                 <div id="player-count" style="font-size:0.82rem;color:#888;margin-bottom:0.5rem;"></div>
-                <div style="overflow-x: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>ชื่อผู้เล่น</th>
-                                <th style="width: 100px;">ระดับมือ</th>
-                                <th>เกม</th>
-                                <th style="width: 300px;">จัดการ</th>
-                            </tr>
-                        </thead>
-                        <tbody id="player-list"></tbody>
-                    </table>
-                </div>
+                <div id="player-list-container" class="player-list-cards"></div>
+                <!-- ซ่อนตารางเก่าไว้ — กันโค้ดที่อ้างอิง -->
+                <table style="display:none;">
+                    <tbody id="player-list"></tbody>
+                </table>
             </div>
 
             <div class="card bulk-edit-section">
@@ -2390,6 +2382,135 @@
             this.renderPlayerList(uiState.currentFilter);
         },
 
+        // ✅ Render player card — Mobile-friendly with expand-to-edit
+        _renderPlayerCard: function(container, player) {
+            const skillClass = getSkillClass(player.skill);
+            const games = PlayerUtils.getGameCount(player.id);
+            const initial = (player.name || '?').charAt(0);
+            const avatarColors = {
+                'BG': 'linear-gradient(135deg,#94a3b8,#64748b)',
+                'N-': 'linear-gradient(135deg,#10b981,#059669)',
+                'N':  'linear-gradient(135deg,#0ea5e9,#0284c7)',
+                'N+': 'linear-gradient(135deg,#9b59b6,#7c3aed)',
+                'P':  'linear-gradient(135deg,#ef4444,#dc2626)',
+            };
+            const avatarBg = avatarColors[player.skill] || avatarColors['N'];
+
+            const card = document.createElement('div');
+            card.className = 'player-card-row';
+            card.dataset.playerId = player.id;
+
+            // ── Compact view (default) ─────────────────────────
+            const compactView = `
+                <div class="player-card-compact" onclick="App._togglePlayerCardEdit(${player.id})">
+                    <div class="player-avatar" style="background:${avatarBg};">${escapeHtml(initial)}</div>
+                    <div class="player-info">
+                        <div class="player-info-top">
+                            <span class="player-name-text">${escapeHtml(player.name)}</span>
+                            <span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span>
+                        </div>
+                        <div class="player-info-sub">
+                            ${player.realName ? escapeHtml(player.realName) + ' · ' : ''}${games} เกม
+                        </div>
+                    </div>
+                    <button class="player-edit-btn" type="button" aria-label="แก้ไข">⋯</button>
+                </div>
+            `;
+
+            // ── Edit view (hidden by default) ──────────────────
+            const editView = `
+                <div class="player-card-edit" style="display:none;">
+                    <div class="player-card-edit-header">
+                        <div class="player-avatar" style="background:${avatarBg};">${escapeHtml(initial)}</div>
+                        <div class="player-info">
+                            <div class="player-name-text">${escapeHtml(player.name)}</div>
+                            <div class="player-info-sub">${games} เกม</div>
+                        </div>
+                        <button class="player-collapse-btn" onclick="App._togglePlayerCardEdit(${player.id})" type="button">▼</button>
+                    </div>
+
+                    <div class="player-edit-fields">
+                        <div class="form-field">
+                            <label>ชื่อเล่น</label>
+                            <input type="text" id="name-edit-${player.id}" value="${escapeHtml(player.name)}"
+                                   placeholder="ชื่อเล่น" maxlength="50">
+                        </div>
+                        <div class="form-field">
+                            <label>ชื่อจริง <span style="font-weight:400;color:#94a3b8;">(บัญชีธนาคาร)</span></label>
+                            <input type="text" id="realname-edit-${player.id}" value="${escapeHtml(player.realName||'')}"
+                                   placeholder="ยังไม่ระบุ" maxlength="100">
+                        </div>
+                        <div class="form-field">
+                            <label>ระดับมือ</label>
+                            <div class="skill-chips">
+                                ${SKILLS_LIST.map(s => `
+                                    <button type="button" class="skill-chip ${s === player.skill ? 'active skill-chip-' + getSkillClass(s) : ''}"
+                                            onclick="App._setSkillForCard(${player.id}, '${s}')">${s}</button>
+                                `).join('')}
+                                <input type="hidden" id="edit-skill-${player.id}" value="${escapeHtml(player.skill)}">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="player-edit-actions">
+                        <button class="btn-save-player" type="button"
+                            onclick="App._savePlayerCard(${player.id})">
+                            💾 บันทึกข้อมูล
+                        </button>
+                        <button class="btn-delete-player" type="button"
+                            onclick="App.deletePlayer(${player.id})" aria-label="ลบ">🗑</button>
+                    </div>
+                </div>
+            `;
+
+            card.innerHTML = compactView + editView;
+            container.appendChild(card);
+        },
+
+        _togglePlayerCardEdit: function(playerId) {
+            const card = document.querySelector(`.player-card-row[data-player-id="${playerId}"]`);
+            if (!card) return;
+            const compact = card.querySelector('.player-card-compact');
+            const edit = card.querySelector('.player-card-edit');
+            const isExpanded = edit.style.display !== 'none';
+            // ปิด card อื่นทั้งหมดก่อน (single-expand)
+            document.querySelectorAll('.player-card-row .player-card-edit').forEach(el => {
+                el.style.display = 'none';
+                el.parentElement.classList.remove('expanded');
+            });
+            document.querySelectorAll('.player-card-row .player-card-compact').forEach(el => {
+                el.style.display = 'flex';
+            });
+            if (!isExpanded) {
+                compact.style.display = 'none';
+                edit.style.display = 'block';
+                card.classList.add('expanded');
+            }
+        },
+
+        _setSkillForCard: function(playerId, skill) {
+            const hiddenInput = document.getElementById(`edit-skill-${playerId}`);
+            if (hiddenInput) hiddenInput.value = skill;
+            // Update active chip
+            const card = document.querySelector(`.player-card-row[data-player-id="${playerId}"]`);
+            if (!card) return;
+            card.querySelectorAll('.skill-chip').forEach(c => {
+                c.classList.remove('active', 'skill-chip-bg', 'skill-chip-n-minus', 'skill-chip-n', 'skill-chip-n-plus', 'skill-chip-p');
+            });
+            const cls = getSkillClass(skill);
+            const activeChip = card.querySelector(`.skill-chip[onclick*="'${skill}'"]`);
+            if (activeChip) activeChip.classList.add('active', 'skill-chip-' + cls);
+        },
+
+        _savePlayerCard: function(playerId) {
+            const name = document.getElementById(`name-edit-${playerId}`)?.value || '';
+            const realName = document.getElementById(`realname-edit-${playerId}`)?.value || '';
+            const skill = document.getElementById(`edit-skill-${playerId}`)?.value || '';
+            // ใช้ logic เดิม
+            this.updatePlayerInfo(playerId, name, realName);
+            if (skill) this.updatePlayerSkill(playerId, skill);
+        },
+
         renderPlayerList: function(filter = '') {
             uiState.currentFilter = filter;
             const listEl = document.getElementById('player-list');
@@ -2412,6 +2533,18 @@
             const countEl = document.getElementById('player-count');
             if (countEl) countEl.textContent = `แสดง ${filteredPlayers.length} จาก ${appState.players.length} คน`;
 
+            // ✅ Render เป็น Card list (mobile-friendly)
+            const cardsEl = document.getElementById('player-list-container');
+            if (cardsEl) {
+                cardsEl.innerHTML = '';
+                if (filteredPlayers.length === 0 && filter.length > 0) {
+                    cardsEl.innerHTML = '<div style="text-align:center;color:#888;padding:1.5rem;font-size:0.9rem;">ไม่พบผู้เล่นที่ตรงกัน</div>';
+                } else {
+                    filteredPlayers.forEach(player => this._renderPlayerCard(cardsEl, player));
+                }
+            }
+
+            // ยังเก็บ table render ไว้สำหรับ backward compat (ซ่อนอยู่)
             if (filteredPlayers.length === 0 && filter.length > 0) {
                 listEl.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #888;">ไม่พบผู้เล่นที่ตรงกัน</td></tr>';
             }
