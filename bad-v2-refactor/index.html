@@ -1220,11 +1220,10 @@
         const historyLoss  = (_lastKnownHistorySize  >= 5   && currentHistorySize  === 0);
         const shuttleLoss  = (_lastKnownShuttleTotal >= 100 && currentShuttleTotal === 0);
 
-        // ✅ Bypass: ถ้า admin ยืนยันลบเอง (set window._intentionalClear = true ก่อน saveState)
-        if (window._intentionalClear) {
-            window._intentionalClear = false; // reset
-            // skip sanity check — admin ยืนยันแล้ว
-        } else if (playerLoss || courtLoss || historyLoss || shuttleLoss) {
+        // ✅ Bypass ทุก check ถ้า admin ยืนยันลบเอง (ภายใน 5 วินาที)
+        const isIntentionalClear = window._intentionalClearTime && (Date.now() - window._intentionalClearTime < 5000);
+
+        if (!isIntentionalClear && (playerLoss || courtLoss || historyLoss || shuttleLoss)) {
             const lostFields = [];
             if (playerLoss)  lostFields.push(`ผู้เล่น ${_lastKnownPlayerCount} → 0`);
             if (courtLoss)   lostFields.push(`สนาม ${_lastKnownCourtCount} → 0`);
@@ -3495,6 +3494,10 @@
             // ✅ เก็บ snapshot ก่อนลบ — สำหรับ Undo
             const playersBackup = JSON.parse(JSON.stringify(appState.players || []));
             const queuesBackup  = JSON.parse(JSON.stringify(appState.matchQueues || []));
+
+            // ✅ บันทึก backup ก่อนลบ — เพื่อให้กู้คืนผ่านเมนู Backup ได้
+            // (auto-backup ที่ทำใน saveState() จะเก็บ state หลังลบ ซึ่งไม่มีประโยชน์)
+            _autoBackup('before_clear_all_players');
 
             // ✅ ตั้ง flag ให้ saveState() รู้ว่าตั้งใจลบ — bypass sanity check
             window._intentionalClear = true;
