@@ -1219,3 +1219,234 @@
 
 .wait-badge.orange { color:#ff8c00;font-weight:700; }
 .wait-badge.red { color:#ff0000;font-weight:700; }
+        /* ═══════════════════════════════════════════════════════════
+           👥 Player Card List — Modern mobile-friendly
+           ═══════════════════════════════════════════════════════════ */
+        .player-list-cards {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .player-card-row {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid rgba(0,0,0,0.04);
+            transition: all 0.25s;
+            overflow: hidden;
+        }
+
+        .player-card-row.expanded {
+            box-shadow: 0 8px 24px rgba(14,165,233,0.18);
+            border-color: #0ea5e9;
+        }
+
+        /* Compact row */
+        .player-card-compact {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.65rem 0.85rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .player-card-compact:hover {
+            background: #f8fafc;
+        }
+
+        .player-avatar {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1rem;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+
+        .player-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .player-info-top {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
+
+        .player-name-text {
+            font-weight: 700;
+            font-size: 0.92rem;
+            color: #0f172a;
+        }
+
+        .player-info-sub {
+            font-size: 0.75rem;
+            color: #64748b;
+            margin-top: 0.1rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .player-edit-btn,
+        .player-collapse-btn {
+            background: #f1f5f9;
+            border: none;
+            color: #64748b;
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 700;
+            min-height: unset;
+            transition: all 0.15s;
+            line-height: 1;
+        }
+
+        .player-edit-btn:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+        .player-collapse-btn {
+            background: #0ea5e9;
+            color: #fff;
+        }
+
+        /* Edit view */
+        .player-card-edit {
+            padding: 0.85rem 1rem 1rem;
+            background: linear-gradient(180deg, #f0f9ff, #fff);
+        }
+
+        .player-card-edit-header {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding-bottom: 0.85rem;
+            margin-bottom: 0.85rem;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .player-edit-fields {
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+        }
+
+        .form-field label {
+            display: block;
+            font-size: 0.72rem;
+            color: #64748b;
+            font-weight: 700;
+            margin-bottom: 0.2rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-field input[type="text"] {
+            width: 100%;
+            padding: 0.55rem 0.85rem;
+            font-size: 0.9rem;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            background: #fff;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        .form-field input[type="text"]:focus {
+            outline: none;
+            border-color: #0ea5e9;
+        }
+
+        /* Skill chips */
+        .skill-chips {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+
+        .skill-chip {
+            flex: 1;
+            min-width: 50px;
+            padding: 0.55rem 0.5rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            background: #f1f5f9;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            color: #64748b;
+            cursor: pointer;
+            transition: all 0.15s;
+            min-height: unset;
+        }
+
+        .skill-chip:hover {
+            background: #e2e8f0;
+        }
+
+        .skill-chip.active {
+            color: #fff;
+            border-color: transparent;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        .skill-chip.skill-chip-bg.active { background: linear-gradient(135deg,#94a3b8,#64748b); }
+        .skill-chip.skill-chip-n-minus.active { background: linear-gradient(135deg,#10b981,#059669); }
+        .skill-chip.skill-chip-n.active { background: linear-gradient(135deg,#0ea5e9,#0284c7); }
+        .skill-chip.skill-chip-n-plus.active { background: linear-gradient(135deg,#9b59b6,#7c3aed); }
+        .skill-chip.skill-chip-p.active { background: linear-gradient(135deg,#ef4444,#dc2626); }
+
+        /* Edit actions */
+        .player-edit-actions {
+            display: flex;
+            gap: 0.4rem;
+            margin-top: 0.85rem;
+        }
+
+        .btn-save-player {
+            flex: 1;
+            padding: 0.7rem;
+            background: linear-gradient(135deg,#10b981,#059669);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.92rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(16,185,129,0.3);
+            min-height: unset;
+            transition: transform 0.1s;
+        }
+
+        .btn-save-player:active {
+            transform: translateY(1px);
+        }
+
+        .btn-delete-player {
+            padding: 0.7rem 1rem;
+            background: #fee2e2;
+            color: #dc2626;
+            border: none;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            min-height: unset;
+            transition: all 0.15s;
+        }
+
+        .btn-delete-player:hover {
+            background: #fecaca;
+        }
+
