@@ -199,40 +199,54 @@
         <!-- DASHBOARD VIEW -->
         <section id="dashboard" class="view active">
             <div class="dashboard-grid">
-                <div class="dashboard-card">
+                <div class="dashboard-card" data-variant="brand">
                     <div class="icon">👥</div>
-                    <div class="value" id="dash-total-players">0</div>
-                    <div class="label">ผู้เล่นทั้งหมด</div>
+                    <div>
+                        <div class="value" id="dash-total-players">0</div>
+                        <div class="label">ผู้เล่นทั้งหมด</div>
+                    </div>
                 </div>
-                <div class="dashboard-card">
+                <div class="dashboard-card" data-variant="success">
                     <div class="icon">✅</div>
-                    <div class="value" id="dash-checked-in">0</div>
-                    <div class="label">เช็คอินแล้ว</div>
+                    <div>
+                        <div class="value" id="dash-checked-in">0</div>
+                        <div class="label">เช็คอินแล้ว</div>
+                    </div>
                 </div>
-                <div class="dashboard-card" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
+                <div class="dashboard-card" data-variant="warning">
                     <div class="icon">🛑</div>
-                    <div class="value" id="dash-resting" style="color:#e67e22;">0</div>
-                    <div class="label">ขอพัก</div>
+                    <div>
+                        <div class="value" id="dash-resting" style="color:#e67e22;">0</div>
+                        <div class="label">ขอพัก</div>
+                    </div>
                 </div>
-                <div class="dashboard-card">
+                <div class="dashboard-card" data-variant="info">
                     <div class="icon">🏐️</div>
-                    <div class="value" id="dash-active-matches">0</div>
-                    <div class="label">กำลังแข่ง</div>
+                    <div>
+                        <div class="value" id="dash-active-matches">0</div>
+                        <div class="label">กำลังแข่ง</div>
+                    </div>
                 </div>
-                <div class="dashboard-card">
+                <div class="dashboard-card" data-variant="info">
                     <div class="icon">🏸</div>
-                    <div class="value" id="dash-shuttle-in-play">0</div>
-                    <div class="label">ลูกแบดพร้อมใช้</div>
+                    <div>
+                        <div class="value" id="dash-shuttle-in-play">0</div>
+                        <div class="label">ลูกแบดพร้อมใช้</div>
+                    </div>
                 </div>
-                <div class="dashboard-card" style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);">
+                <div class="dashboard-card" data-variant="brand">
                     <div class="icon">⏱️</div>
-                    <div class="value" id="dash-avg-game-time" style="color:#2e7d32;">--</div>
-                    <div class="label">เวลาเฉลี่ย/เกม</div>
+                    <div>
+                        <div class="value" id="dash-avg-game-time" style="color:#7c3aed;">--</div>
+                        <div class="label">เวลาเฉลี่ย/เกม</div>
+                    </div>
                 </div>
-                <div class="dashboard-card" style="background:linear-gradient(135deg,#fff3e0,#ffe0b2);">
+                <div class="dashboard-card" data-variant="warning">
                     <div class="icon">📊</div>
-                    <div class="value" id="dash-est-queue-time" style="color:#e65100;">--</div>
-                    <div class="label">ประมาณรอคิว</div>
+                    <div>
+                        <div class="value" id="dash-est-queue-time" style="color:#d97706;">--</div>
+                        <div class="label">ประมาณรอคิว</div>
+                    </div>
                 </div>
             </div>
 
