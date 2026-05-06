@@ -2386,34 +2386,29 @@
         _renderPlayerCard: function(container, player) {
             const skillClass = getSkillClass(player.skill);
             const games = PlayerUtils.getGameCount(player.id);
-            const initial = (player.name || '?').charAt(0);
-            const avatarColors = {
-                'BG': 'linear-gradient(135deg,#94a3b8,#64748b)',
-                'N-': 'linear-gradient(135deg,#10b981,#059669)',
-                'N':  'linear-gradient(135deg,#0ea5e9,#0284c7)',
-                'N+': 'linear-gradient(135deg,#9b59b6,#7c3aed)',
-                'P':  'linear-gradient(135deg,#ef4444,#dc2626)',
-            };
-            const avatarBg = avatarColors[player.skill] || avatarColors['N'];
+            const photoURL = player.photoURL || '';
 
             const card = document.createElement('div');
             card.className = 'player-card-row';
             card.dataset.playerId = player.id;
 
-            // ── Compact view (default) ─────────────────────────
+            // Avatar inner — รูปจริง หรือ Person SVG
+            const avatarInner = photoURL
+                ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(player.name)}" class="photo">`
+                : `<svg viewBox="0 0 24 24" fill="none">
+                       <circle cx="12" cy="8" r="4" fill="white" opacity="0.95"/>
+                       <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="white" opacity="0.95"/>
+                   </svg>`;
+
+            // ── Compact view (default) — Card grid ─────────────
             const compactView = `
                 <div class="player-card-compact" onclick="App._togglePlayerCardEdit(${player.id})">
-                    <div class="player-avatar" style="background:${avatarBg};">${escapeHtml(initial)}</div>
-                    <div class="player-info">
-                        <div class="player-info-top">
-                            <span class="player-name-text">${escapeHtml(player.name)}</span>
-                            <span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span>
-                        </div>
-                        <div class="player-info-sub">
-                            ${player.realName ? escapeHtml(player.realName) + ' · ' : ''}${games} เกม
-                        </div>
+                    <div class="player-avatar avatar-${skillClass}">
+                        ${avatarInner}
+                        <span class="ava-skill-tag skill-${skillClass}">${escapeHtml(player.skill)}</span>
                     </div>
-                    <button class="player-edit-btn" type="button" aria-label="แก้ไข">⋯</button>
+                    <div class="player-name-text">${escapeHtml(player.name)}</div>
+                    <span class="game-pill">${games}</span>
                 </div>
             `;
 
@@ -2421,10 +2416,14 @@
             const editView = `
                 <div class="player-card-edit" style="display:none;">
                     <div class="player-card-edit-header">
-                        <div class="player-avatar" style="background:${avatarBg};">${escapeHtml(initial)}</div>
+                        <div class="player-avatar avatar-${skillClass} avatar-edit-trigger" onclick="App._uploadPlayerPhoto(${player.id})" style="cursor:pointer; width:64px; height:64px;">
+                            ${avatarInner}
+                            <div class="avatar-edit-overlay">📸</div>
+                        </div>
                         <div class="player-info">
-                            <div class="player-name-text">${escapeHtml(player.name)}</div>
-                            <div class="player-info-sub">${games} เกม</div>
+                            <div class="player-name-text" style="text-align:left; font-size:1rem; margin-top:0;">${escapeHtml(player.name)}</div>
+                            <div class="player-info-sub">${games} เกม${player.realName ? ' · ' + escapeHtml(player.realName) : ''}</div>
+                            <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px;">📸 แตะที่รูปเพื่อเปลี่ยน</div>
                         </div>
                         <button class="player-collapse-btn" onclick="App._togglePlayerCardEdit(${player.id})" type="button">▼</button>
                     </div>
@@ -2467,6 +2466,93 @@
             container.appendChild(card);
         },
 
+        // ✅ Upload photo เข้า Firebase Storage
+        _uploadPlayerPhoto: function(playerId) {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) {
+                    showError('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+                    return;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                    showError('ไฟล์ใหญ่เกินไป (ขนาดสูงสุด 5MB)');
+                    return;
+                }
+
+                showSyncStatus('🖼️ กำลังย่อรูป...', '#0ea5e9');
+
+                try {
+                    // Resize to 300x300 max via Canvas
+                    const resizedBlob = await this._resizeImage(file, 300, 0.85);
+
+                    showSyncStatus('⏫ กำลังอัพโหลด...', '#0ea5e9');
+
+                    // Upload to Firebase Storage
+                    const fileName = `players/${playerId}_${Date.now()}.jpg`;
+                    const storageRef = firebase.storage().ref(fileName);
+                    await storageRef.put(resizedBlob);
+                    const photoURL = await storageRef.getDownloadURL();
+
+                    // ลบรูปเก่าถ้ามี
+                    const player = PlayerUtils.getById(playerId);
+                    if (player?.photoPath) {
+                        try { await firebase.storage().ref(player.photoPath).delete(); } catch(_) {}
+                    }
+
+                    // Update player
+                    const idx = appState.players.findIndex(p => p.id === playerId);
+                    if (idx !== -1) {
+                        appState.players[idx].photoURL = photoURL;
+                        appState.players[idx].photoPath = fileName;
+                        saveState();
+                    }
+
+                    showSuccess('✅ อัพโหลดรูปสำเร็จ');
+                    this.renderPlayerList(uiState.currentFilter || '');
+                } catch (err) {
+                    console.error('Upload error:', err);
+                    showError('❌ อัพโหลดล้มเหลว: ' + err.message);
+                } finally {
+                    setTimeout(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'), 1500);
+                }
+            };
+            input.click();
+        },
+
+        // ✅ Resize image via Canvas (return Blob)
+        _resizeImage: function(file, maxSize, quality) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    img.onload = () => {
+                        let { width, height } = img;
+                        if (width > height && width > maxSize) {
+                            height = (height * maxSize) / width;
+                            width = maxSize;
+                        } else if (height > maxSize) {
+                            width = (width * maxSize) / height;
+                            height = maxSize;
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Canvas blob failed')), 'image/jpeg', quality);
+                    };
+                    img.onerror = () => reject(new Error('Image load failed'));
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error('FileReader failed'));
+                reader.readAsDataURL(file);
+            });
+        },
+
         _togglePlayerCardEdit: function(playerId) {
             const card = document.querySelector(`.player-card-row[data-player-id="${playerId}"]`);
             if (!card) return;
@@ -2479,7 +2565,7 @@
                 el.parentElement.classList.remove('expanded');
             });
             document.querySelectorAll('.player-card-row .player-card-compact').forEach(el => {
-                el.style.display = 'flex';
+                el.style.display = '';
             });
             if (!isExpanded) {
                 compact.style.display = 'none';
