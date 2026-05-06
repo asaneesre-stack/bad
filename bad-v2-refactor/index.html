@@ -3294,7 +3294,9 @@
             if (appState.playerProfiles.find(p => p.name.toLowerCase() === name.toLowerCase())) {
                 showError('ชื่อนี้มีอยู่แล้ว'); return;
             }
-            const id = appState.nextId.profile || (appState.playerProfiles.length + 1);
+            // ✅ Generate unique ID — ใช้ max ของ id ทั้งหมด + 1 (ไม่ใช่ length)
+            const maxExistingId = appState.playerProfiles.reduce((max, p) => Math.max(max, p.id || 0), 0);
+            const id = Math.max(appState.nextId.profile || 1, maxExistingId + 1);
             appState.playerProfiles.push({ id, name: sanitizeInput(name), realName: sanitizeInput(realName||''), skill });
             appState.nextId.profile = id + 1;
             saveState();
@@ -3308,6 +3310,26 @@
             const listEl = document.getElementById('profile-list');
             if (!listEl) return;
             const profiles = appState.playerProfiles || [];
+
+            // ✅ Auto-fix: ถ้ามี id ซ้ำกัน → reassign ใหม่ (กัน bug จาก legacy data)
+            const seen = new Set();
+            let hasDuplicates = false;
+            profiles.forEach(p => {
+                if (!p.id || seen.has(p.id)) {
+                    hasDuplicates = true;
+                }
+                if (p.id) seen.add(p.id);
+            });
+            if (hasDuplicates) {
+                console.warn('⚠️ Found duplicate profile IDs — fixing automatically');
+                let nextId = 1;
+                profiles.forEach(p => {
+                    p.id = nextId++;
+                });
+                appState.nextId.profile = nextId;
+                saveState();
+            }
+
             if (profiles.length === 0) {
                 listEl.innerHTML = '<p style="color:#888;text-align:center;">ยังไม่มีโปรไฟล์ กดเพิ่มด้านบน</p>';
                 return;
