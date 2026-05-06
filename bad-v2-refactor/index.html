@@ -3492,15 +3492,120 @@
         editProfile: function(profileId) {
             const profile = (appState.playerProfiles||[]).find(p => p.id === profileId);
             if (!profile) return;
-            const newName     = prompt('ชื่อเล่น:', profile.name);
-            if (newName === null) return;
-            const newRealName = prompt('ชื่อจริง (บัญชีธนาคาร):', profile.realName || '');
-            if (newRealName === null) return;
-            profile.name     = sanitizeInput(newName.trim()) || profile.name;
-            profile.realName = sanitizeInput(newRealName.trim());
-            saveState();
-            this.renderProfileList();
-            showSuccess('แก้ไขโปรไฟล์แล้ว');
+
+            // ✅ สร้าง modal สวยงาม
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position:fixed; inset:0; background:rgba(0,0,0,0.5);
+                z-index:10000; display:flex; align-items:center; justify-content:center;
+                padding:1rem; backdrop-filter:blur(4px);
+            `;
+
+            const skillClass = getSkillClass(profile.skill);
+
+            overlay.innerHTML = `
+                <div style="background:#fff; border-radius:16px; max-width:420px; width:100%;
+                    padding:1.5rem; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; overflow-y:auto;">
+                    <h3 style="margin:0 0 1rem; color:#0f172a; font-size:1.15rem;">
+                        ✏️ แก้ไขโปรไฟล์
+                    </h3>
+
+                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
+                        <div>
+                            <label style="display:block; font-size:0.75rem; color:#64748b; font-weight:700; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">ชื่อเล่น</label>
+                            <input type="text" id="edit-profile-name" value="${escapeHtml(profile.name)}" maxlength="50"
+                                style="width:100%; padding:0.65rem 0.85rem; font-size:1rem; border:1.5px solid #e2e8f0; border-radius:8px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.75rem; color:#64748b; font-weight:700; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">ชื่อจริง <span style="font-weight:400;color:#94a3b8;text-transform:none;">(บัญชีธนาคาร)</span></label>
+                            <input type="text" id="edit-profile-realname" value="${escapeHtml(profile.realName||'')}" maxlength="100" placeholder="ยังไม่ระบุ"
+                                style="width:100%; padding:0.65rem 0.85rem; font-size:1rem; border:1.5px solid #e2e8f0; border-radius:8px; box-sizing:border-box;">
+                        </div>
+                        <div>
+                            <label style="display:block; font-size:0.75rem; color:#64748b; font-weight:700; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">ระดับมือ</label>
+                            <div class="skill-chips" id="edit-profile-skill-chips">
+                                ${SKILLS_LIST.map(s => `
+                                    <button type="button" class="skill-chip ${s === profile.skill ? 'active skill-chip-' + getSkillClass(s) : ''}"
+                                        data-skill="${s}">${s}</button>
+                                `).join('')}
+                            </div>
+                            <input type="hidden" id="edit-profile-skill" value="${escapeHtml(profile.skill)}">
+                        </div>
+                    </div>
+
+                    <div style="display:flex; gap:0.5rem; margin-top:1.25rem;">
+                        <button id="edit-profile-cancel" style="flex:1; padding:0.7rem; background:#f1f5f9; color:#475569; border:none; border-radius:10px; font-weight:700; cursor:pointer;">
+                            ยกเลิก
+                        </button>
+                        <button id="edit-profile-save" style="flex:2; padding:0.7rem; background:linear-gradient(135deg,#10b981,#059669); color:#fff; border:none; border-radius:10px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(16,185,129,0.3);">
+                            💾 บันทึก
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            // Skill chip handlers
+            const chipsContainer = overlay.querySelector('#edit-profile-skill-chips');
+            const skillInput = overlay.querySelector('#edit-profile-skill');
+            chipsContainer.addEventListener('click', (e) => {
+                const btn = e.target.closest('button.skill-chip');
+                if (!btn) return;
+                chipsContainer.querySelectorAll('.skill-chip').forEach(c => {
+                    c.classList.remove('active', 'skill-chip-bg', 'skill-chip-n-minus', 'skill-chip-n', 'skill-chip-n-plus', 'skill-chip-p');
+                });
+                const newSkill = btn.dataset.skill;
+                btn.classList.add('active', 'skill-chip-' + getSkillClass(newSkill));
+                skillInput.value = newSkill;
+            });
+
+            const close = () => overlay.remove();
+            overlay.querySelector('#edit-profile-cancel').onclick = close;
+            overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+            overlay.querySelector('#edit-profile-save').onclick = () => {
+                const newName = overlay.querySelector('#edit-profile-name').value.trim();
+                const newRealName = overlay.querySelector('#edit-profile-realname').value.trim();
+                const newSkill = skillInput.value;
+
+                if (!newName) {
+                    showError('กรุณาใส่ชื่อเล่น');
+                    return;
+                }
+
+                // เช็คชื่อซ้ำ (ยกเว้นตัวเอง)
+                const dup = appState.playerProfiles.find(p =>
+                    p.id !== profileId &&
+                    p.name.toLowerCase() === newName.toLowerCase()
+                );
+                if (dup) {
+                    showError('ชื่อนี้มีอยู่แล้ว');
+                    return;
+                }
+
+                const oldName = profile.name;
+                profile.name = sanitizeInput(newName);
+                profile.realName = sanitizeInput(newRealName);
+                profile.skill = newSkill;
+
+                // ✅ Sync ไป player รายวัน (ถ้ามีชื่อตรงกับ profile เดิม)
+                const matchingPlayer = appState.players.find(pl => pl.name === oldName);
+                if (matchingPlayer) {
+                    matchingPlayer.name = profile.name;
+                    matchingPlayer.realName = profile.realName;
+                    matchingPlayer.skill = profile.skill;
+                }
+
+                saveState();
+                close();
+                this.renderProfileList();
+                if (matchingPlayer) this.renderPlayerList(uiState.currentFilter || '');
+                showSuccess('✅ แก้ไขโปรไฟล์แล้ว');
+            };
+
+            // Auto focus
+            setTimeout(() => overlay.querySelector('#edit-profile-name')?.focus(), 50);
         },
 
         deleteProfile: function(profileId) {
