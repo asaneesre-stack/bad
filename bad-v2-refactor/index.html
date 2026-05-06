@@ -2562,8 +2562,20 @@
                     if (idx !== -1) {
                         appState.players[idx].photoURL = photoURL;
                         appState.players[idx].photoPath = fileName;
-                        saveState();
                     }
+
+                    // ✅ Sync กลับเข้า Profile ถาวร (ถ้ามี profile ที่ชื่อตรงกัน)
+                    // จะได้ใช้ครั้งหน้าโดยไม่ต้อง upload ใหม่
+                    const playerName = appState.players[idx]?.name;
+                    if (playerName && appState.playerProfiles) {
+                        const matchingProfile = appState.playerProfiles.find(prof => prof.name === playerName);
+                        if (matchingProfile) {
+                            matchingProfile.photoURL = photoURL;
+                            matchingProfile.photoPath = fileName;
+                        }
+                    }
+
+                    saveState();
 
                     showSuccess('✅ อัพโหลดรูปสำเร็จ');
                     this.renderPlayerList(uiState.currentFilter || '');
@@ -3302,25 +3314,134 @@
             }
             listEl.innerHTML = profiles.map(p => {
                 const sc = getSkillClass(p.skill);
-                return `<div style="display:flex;align-items:center;justify-content:space-between;
-                    padding:0.75rem 1rem;background:var(--light);border-radius:10px;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
-                    <div style="display:flex;align-items:center;gap:0.75rem;">
-                        <span class="skill-badge skill-${sc}">${escapeHtml(p.skill)}</span>
-                        <div>
-                            <div style="font-weight:700;">${escapeHtml(p.name)}</div>
-                            <div style="font-size:0.78rem;color:#888;">${p.realName ? escapeHtml(p.realName) : '<span style="color:#bbb;">ยังไม่มีชื่อจริง</span>'}</div>
-                        </div>
+                const photoURL = p.photoURL || '';
+                const avatarInner = photoURL
+                    ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(p.name)}" class="photo">`
+                    : `<svg viewBox="0 0 24 24" fill="none">
+                          <circle cx="12" cy="8" r="4" fill="white" opacity="0.95"/>
+                          <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="white" opacity="0.95"/>
+                       </svg>`;
+                return `<div style="display:flex;align-items:center;gap:12px;
+                    padding:10px 14px;background:#fff;border-radius:12px;margin-bottom:8px;
+                    box-shadow:0 2px 8px rgba(0,0,0,0.05);border:1px solid rgba(0,0,0,0.04);">
+                    <div class="player-avatar avatar-${sc}" onclick="App._uploadProfilePhoto(${p.id})"
+                        style="cursor:pointer; width:48px; height:48px; position:relative;">
+                        ${avatarInner}
+                        <div class="avatar-edit-overlay" style="width:20px;height:20px;font-size:10px;">📸</div>
                     </div>
-                    <div style="display:flex;gap:0.5rem;align-items:center;">
-                        <button class="success" style="font-size:0.78rem;padding:4px 10px;min-height:unset;"
+                    <div style="flex:1; min-width:0;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-weight:700; font-size:0.95rem;">${escapeHtml(p.name)}</span>
+                            <span class="skill-badge skill-${sc}">${escapeHtml(p.skill)}</span>
+                        </div>
+                        <div style="font-size:0.75rem;color:#64748b;">${p.realName ? escapeHtml(p.realName) : '<span style="color:#cbd5e1;">ยังไม่มีชื่อจริง</span>'}</div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+                        <button class="success" style="font-size:0.72rem;padding:5px 10px;min-height:unset;font-weight:700;"
                             onclick="App.addPlayerFromProfile(${p.id})">+ เพิ่มรายวัน</button>
-                        <button class="secondary" style="font-size:0.78rem;padding:4px 10px;min-height:unset;"
-                            onclick="App.editProfile(${p.id})">แก้ไข</button>
-                        <button class="danger" style="font-size:0.78rem;padding:4px 10px;min-height:unset;"
-                            onclick="App.deleteProfile(${p.id})">ลบ</button>
+                        <div style="display:flex;gap:4px;">
+                            <button class="secondary" style="font-size:0.7rem;padding:4px 8px;min-height:unset;flex:1;"
+                                onclick="App.editProfile(${p.id})">แก้ไข</button>
+                            ${photoURL ? `<button style="font-size:0.7rem;padding:4px 8px;min-height:unset;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;font-weight:700;"
+                                onclick="App._deleteProfilePhoto(${p.id})" title="ลบรูป">🖼️✕</button>` : ''}
+                            <button class="danger" style="font-size:0.7rem;padding:4px 8px;min-height:unset;flex:1;"
+                                onclick="App.deleteProfile(${p.id})">ลบ</button>
+                        </div>
                     </div>
                 </div>`;
             }).join('');
+        },
+
+        // ✅ Upload รูปใส่ใน Profile (เก็บถาวร)
+        _uploadProfilePhoto: function(profileId) {
+            const profile = (appState.playerProfiles||[]).find(p => p.id === profileId);
+            if (!profile) return;
+
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                if (!file.type.startsWith('image/')) {
+                    showError('กรุณาเลือกไฟล์รูปภาพเท่านั้น');
+                    return;
+                }
+                if (file.size > 5 * 1024 * 1024) {
+                    showError('ไฟล์ใหญ่เกินไป (ขนาดสูงสุด 5MB)');
+                    return;
+                }
+
+                showSyncStatus('🖼️ กำลังย่อรูป...', '#0ea5e9');
+
+                try {
+                    const resizedBlob = await this._resizeImage(file, 300, 0.85);
+                    showSyncStatus('⏫ กำลังอัพโหลด...', '#0ea5e9');
+
+                    const fileName = `profiles/${profileId}_${Date.now()}.jpg`;
+                    const storageRef = firebase.storage().ref(fileName);
+                    await storageRef.put(resizedBlob);
+                    const photoURL = await storageRef.getDownloadURL();
+
+                    // ลบรูปเก่า
+                    if (profile.photoPath) {
+                        try { await firebase.storage().ref(profile.photoPath).delete(); } catch(_) {}
+                    }
+
+                    profile.photoURL = photoURL;
+                    profile.photoPath = fileName;
+
+                    // ✅ ถ้ามี player รายวันที่มาจาก profile นี้ → update รูปด้วย
+                    const matchingPlayer = appState.players.find(pl => pl.name === profile.name);
+                    if (matchingPlayer) {
+                        matchingPlayer.photoURL = photoURL;
+                        matchingPlayer.photoPath = fileName;
+                    }
+
+                    saveState();
+                    showSuccess('✅ อัพโหลดรูปสำเร็จ');
+                    this.renderProfileList();
+                    if (matchingPlayer) this.renderPlayerList(uiState.currentFilter || '');
+                } catch (err) {
+                    console.error('Upload error:', err);
+                    showError('❌ อัพโหลดล้มเหลว: ' + err.message);
+                } finally {
+                    setTimeout(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'), 1500);
+                }
+            };
+            input.click();
+        },
+
+        // ✅ ลบรูปโปรไฟล์ถาวร
+        _deleteProfilePhoto: async function(profileId) {
+            const profile = (appState.playerProfiles||[]).find(p => p.id === profileId);
+            if (!profile || !profile.photoURL) return;
+            if (!confirm(`ลบรูปโปรไฟล์ของ "${profile.name}" ใช่ไหม?`)) return;
+
+            showSyncStatus('🗑 กำลังลบรูป...', '#ef4444');
+            try {
+                if (profile.photoPath) {
+                    try { await firebase.storage().ref(profile.photoPath).delete(); } catch(_) {}
+                }
+                delete profile.photoURL;
+                delete profile.photoPath;
+
+                // ลบจาก player รายวันด้วย (ถ้ามี)
+                const matchingPlayer = appState.players.find(pl => pl.name === profile.name);
+                if (matchingPlayer) {
+                    delete matchingPlayer.photoURL;
+                    delete matchingPlayer.photoPath;
+                }
+
+                saveState();
+                showSuccess('✅ ลบรูปสำเร็จ');
+                this.renderProfileList();
+                if (matchingPlayer) this.renderPlayerList(uiState.currentFilter || '');
+            } catch (err) {
+                showError('❌ ลบรูปล้มเหลว: ' + err.message);
+            } finally {
+                setTimeout(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'), 1500);
+            }
         },
 
         addPlayerFromProfile: function(profileId) {
@@ -3332,6 +3453,14 @@
             }
             const result = this.addPlayer(profile.name, profile.skill, profile.realName);
             if (result.success) {
+                // ✅ Copy รูปจาก profile (ถาวร) → player (รายวัน)
+                if (profile.photoURL) {
+                    const newPlayer = appState.players[appState.players.length - 1];
+                    if (newPlayer) {
+                        newPlayer.photoURL = profile.photoURL;
+                        newPlayer.photoPath = profile.photoPath;
+                    }
+                }
                 saveState();
                 this.renderProfileList();
                 showSuccess(`เพิ่ม ${escapeHtml(profile.name)} ลงรายวันแล้ว`);
