@@ -1582,3 +1582,60 @@
             background: #fecaca;
         }
 
+
+        /* ═══════════════════════════════════════════════════════════
+           👤 Avatar Sizes — ใช้ทั่วระบบ
+           ═══════════════════════════════════════════════════════════ */
+        .player-avatar.avatar-xs {
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .player-avatar.avatar-xs svg { width: 16px; height: 16px; }
+        .player-avatar.avatar-xs .photo {
+            width: 100%; height: 100%;
+            border-radius: 50%; object-fit: cover;
+        }
+
+        .player-avatar.avatar-sm {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.12);
+        }
+        .player-avatar.avatar-sm svg { width: 22px; height: 22px; }
+        .player-avatar.avatar-sm .photo {
+            width: 100%; height: 100%;
+            border-radius: 50%; object-fit: cover;
+        }
+
+        .player-avatar.avatar-md {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+        }
+        .player-avatar.avatar-md svg { width: 26px; height: 26px; }
+        .player-avatar.avatar-md .photo {
+            width: 100%; height: 100%;
+            border-radius: 50%; object-fit: cover;
+        }
+
+        .player-avatar.avatar-lg {
+            width: 56px;
+            height: 56px;
+            display: inline-flex;
+        }
+        .player-avatar.avatar-lg svg { width: 36px; height: 36px; }
+        .player-avatar.avatar-lg .photo {
+            width: 100%; height: 100%;
+            border-radius: 50%; object-fit: cover;
+        }
+
+        /* Avatar inline alignment */
+        .player-avatar[class*="avatar-xs"],
+        .player-avatar[class*="avatar-sm"],
+        .player-avatar[class*="avatar-md"] {
+            vertical-align: middle;
+            flex-shrink: 0;
+        }
