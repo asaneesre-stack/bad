@@ -2512,31 +2512,13 @@
       }).join('');
 
       if (watchedPlayers.length === 0) {
-        // ยังไม่ได้เลือก — แสดงปุ่ม "+ เลือกชื่อ" + picker
+        // ยังไม่ได้เลือก — แสดงปุ่ม "+ เลือกชื่อ" (เด้ง modal เมื่อกด)
         if (checkedIn.length === 0) {
           html = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
         } else {
           html += `<div class="watch-chip" id="watch-add-btn"
-            style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.7;">
+            style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.85;cursor:pointer;">
             + เลือกชื่อ
-          </div>
-          <div id="watch-picker" style="display:none;position:absolute;top:calc(100% + 4px);left:0;
-            background:#0f1829;border:1px solid rgba(0,168,204,0.3);border-radius:12px;
-            padding:0.5rem;z-index:200;gap:0.35rem;max-width:92vw;width:280px;
-            box-shadow:0 8px 32px rgba(0,0,0,0.6);flex-direction:column;">
-            <div style="font-size:0.65rem;color:#666;padding:0 4px 4px;font-weight:700;
-              text-transform:uppercase;letter-spacing:0.06em;">เลือกชื่อของคุณ</div>
-            <input id="watch-search" type="text" placeholder="🔍 พิมพ์ชื่อ..."
-              style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);
-              border:1px solid rgba(0,168,204,0.3);border-radius:8px;color:#fff;
-              font-size:0.85rem;outline:none;box-sizing:border-box;"
-              oninput="filterWatchPicker(this.value)">
-            <div id="watch-picker-list" style="display:flex;flex-wrap:wrap;gap:0.35rem;max-height:200px;overflow-y:auto;">
-              ${checkedIn.map(p =>
-                `<div class="watch-chip" data-watch-pid="${p.id}"
-                  style="-webkit-tap-highlight-color:transparent;display:inline-flex;align-items:center;gap:5px;">${renderAvatar(p, 'xs')}${esc(p.name)}</div>`
-              ).join('')}
-            </div>
           </div>`;
         }
       }
@@ -2546,38 +2528,135 @@
 
       // Attach picker toggle (เฉพาะตอนที่ยังไม่ได้เลือก)
       const addBtn = document.getElementById('watch-add-btn');
-      const picker = document.getElementById('watch-picker');
-      if (addBtn && picker) {
-        function openPicker(e) {
+      if (addBtn) {
+        function openPickerModal(e) {
           e.stopPropagation();
           e.preventDefault();
-          const isOpen = picker.style.display === 'flex';
-          picker.style.display = isOpen ? 'none' : 'flex';
-          if (!isOpen) {
-            // focus search และ reset filter
-            setTimeout(() => {
-              const s = document.getElementById('watch-search');
-              if (s) { s.value = ''; filterWatchPicker(''); s.focus(); }
-            }, 50);
-          }
+          openWatchPickerModal(checkedIn);
         }
-        addBtn.addEventListener('touchend', openPicker, { passive: false });
-        addBtn.addEventListener('click', openPicker);
-        setTimeout(() => {
-          document.addEventListener('touchend', function closePicker(e) {
-            if (!picker.contains(e.target) && e.target !== addBtn) {
-              picker.style.display = 'none';
-              document.removeEventListener('touchend', closePicker);
-            }
-          });
-          document.addEventListener('click', function closePicker2(e) {
-            if (!picker.contains(e.target) && e.target !== addBtn) {
-              picker.style.display = 'none';
-              document.removeEventListener('click', closePicker2);
-            }
-          });
-        }, 50);
+        addBtn.addEventListener('touchend', openPickerModal, { passive: false });
+        addBtn.addEventListener('click', openPickerModal);
       }
+    }
+
+    // ✅ เปิด Watch Picker Modal — popup กลางจอ
+    function openWatchPickerModal(checkedIn) {
+      // ลบ modal เก่า (ถ้ามี)
+      const old = document.getElementById('watch-picker-modal');
+      if (old) old.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'watch-picker-modal';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,0.7);
+        z-index:10000; display:flex; align-items:center; justify-content:center;
+        padding:16px; backdrop-filter:blur(8px);
+        animation: fade-in 0.2s ease-out;
+      `;
+
+      const playerListHTML = checkedIn.map(p => `
+        <div class="wpm-row" data-watch-pid="${p.id}"
+          style="background:rgba(255,255,255,0.04); border-radius:10px; padding:10px 12px;
+          display:flex; align-items:center; gap:10px; cursor:pointer; border:1.5px solid transparent;
+          transition:all 0.15s; -webkit-tap-highlight-color:transparent;">
+          ${renderAvatar(p, 'sm')}
+          <span style="flex:1; font-size:14px; font-weight:700; color:#fff;">${esc(p.name)}</span>
+          <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>
+        </div>
+      `).join('');
+
+      overlay.innerHTML = `
+        <div class="wpm-modal" style="background:rgba(20,30,50,0.98); border-radius:18px;
+          border:1px solid rgba(0,168,204,0.4); padding:18px; max-width:380px; width:100%;
+          box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:80vh; display:flex; flex-direction:column;
+          animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
+
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <div style="font-size:15px; font-weight:800; color:#fff;">
+              👁 เลือกผู้เล่นที่จะติดตาม
+            </div>
+            <button id="wpm-close" style="background:rgba(255,255,255,0.08); border:none; color:#fff;
+              width:30px; height:30px; border-radius:50%; font-size:14px; cursor:pointer; flex-shrink:0;">✕</button>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+            border-radius:10px; padding:9px 12px; display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            <span style="opacity:0.5;">🔍</span>
+            <input id="wpm-search" type="text" placeholder="พิมพ์ชื่อ..."
+              style="flex:1; background:transparent; border:none; outline:none; color:#fff; font-size:14px;">
+          </div>
+
+          <div id="wpm-list" style="display:flex; flex-direction:column; gap:5px;
+            overflow-y:auto; max-height:55vh; padding:2px;">
+            ${playerListHTML}
+          </div>
+
+          <div style="font-size:11px; color:rgba(255,255,255,0.4); text-align:center; margin-top:10px;">
+            👆 กดที่ชื่อเพื่อติดตาม
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      const close = () => overlay.remove();
+      overlay.querySelector('#wpm-close').onclick = close;
+      overlay.onclick = (e) => { if (e.target === overlay) close(); };
+
+      // Search filter
+      const searchEl = overlay.querySelector('#wpm-search');
+      const listEl = overlay.querySelector('#wpm-list');
+      searchEl.addEventListener('input', () => {
+        const q = searchEl.value.toLowerCase();
+        listEl.querySelectorAll('.wpm-row').forEach(row => {
+          const name = row.textContent.toLowerCase();
+          row.style.display = name.includes(q) ? '' : 'none';
+        });
+      });
+
+      // Click row → ติดตาม + ปิด
+      listEl.addEventListener('click', (e) => {
+        const row = e.target.closest('.wpm-row');
+        if (!row) return;
+        const pid = +row.dataset.watchPid;
+        if (!pid) return;
+        // hover effect ก่อนปิด
+        row.style.background = 'rgba(0,168,204,0.3)';
+        row.style.borderColor = 'var(--cyan)';
+        setTimeout(() => {
+          // เพิ่มเข้า watched list
+          watchedIds.add(pid);
+          saveWatchedIds();
+          close();
+          renderWatchBar();
+          // Toast notification
+          const player = state.players.find(p => +p.id === pid);
+          if (player) {
+            showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
+          }
+        }, 150);
+      });
+
+      // Auto focus search
+      setTimeout(() => searchEl.focus(), 100);
+    }
+
+    // Toast helper
+    function showToast(msg, color = '#0ea5e9') {
+      const old = document.getElementById('display-toast');
+      if (old) old.remove();
+      const toast = document.createElement('div');
+      toast.id = 'display-toast';
+      toast.style.cssText = `
+        position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+        background:${color}; color:#fff; padding:14px 24px; border-radius:12px;
+        font-size:14px; font-weight:700; z-index:10001;
+        box-shadow:0 12px 40px rgba(0,0,0,0.5);
+        animation: toast-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      `;
+      toast.textContent = msg;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2200);
     }
 
     window.filterWatchPicker = function(q) {
