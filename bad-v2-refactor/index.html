@@ -1853,6 +1853,24 @@
         getGameCount: (playerId) => {
             const history = appState.history[playerId];
             return (history && Array.isArray(history.games)) ? history.games.length : 0;
+        },
+
+        // ✅ Render avatar HTML — ใช้ทั่วทั้งระบบ
+        // size: 'xs' (24px) | 'sm' (32px) | 'md' (40px) | 'lg' (56px)
+        renderAvatar: (player, size = 'sm', showSkillTag = false) => {
+            if (!player) return '';
+            const skillClass = getSkillClass(player.skill);
+            const photoURL = player.photoURL || '';
+            const inner = photoURL
+                ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(player.name)}" class="photo">`
+                : `<svg viewBox="0 0 24 24" fill="none">
+                       <circle cx="12" cy="8" r="4" fill="white" opacity="0.95"/>
+                       <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="white" opacity="0.95"/>
+                   </svg>`;
+            const tag = showSkillTag
+                ? `<span class="ava-skill-tag skill-${skillClass}">${escapeHtml(player.skill)}</span>`
+                : '';
+            return `<span class="player-avatar avatar-${skillClass} avatar-${size}">${inner}${tag}</span>`;
         }
     };
 
@@ -2423,7 +2441,10 @@
                         <div class="player-info">
                             <div class="player-name-text" style="text-align:left; font-size:1rem; margin-top:0;">${escapeHtml(player.name)}</div>
                             <div class="player-info-sub">${games} เกม${player.realName ? ' · ' + escapeHtml(player.realName) : ''}</div>
-                            <div style="font-size:0.7rem;color:#94a3b8;margin-top:2px;">📸 แตะที่รูปเพื่อเปลี่ยน</div>
+                            <div style="display:flex;gap:8px;align-items:center;margin-top:4px;flex-wrap:wrap;">
+                                <span style="font-size:0.7rem;color:#94a3b8;">📸 แตะที่รูปเพื่อเปลี่ยน</span>
+                                ${photoURL ? `<button onclick="event.stopPropagation(); App._deletePlayerPhoto(${player.id})" type="button" style="background:#fee2e2;color:#dc2626;border:none;padding:2px 8px;border-radius:6px;font-size:0.7rem;font-weight:700;cursor:pointer;min-height:unset;">🗑 ลบรูป</button>` : ''}
+                            </div>
                         </div>
                         <button class="player-collapse-btn" onclick="App._togglePlayerCardEdit(${player.id})" type="button">▼</button>
                     </div>
@@ -2464,6 +2485,39 @@
 
             card.innerHTML = compactView + editView;
             container.appendChild(card);
+        },
+
+        // ✅ ลบรูปโปรไฟล์
+        _deletePlayerPhoto: async function(playerId) {
+            const player = PlayerUtils.getById(playerId);
+            if (!player || !player.photoURL) return;
+
+            if (!confirm(`ลบรูปโปรไฟล์ของ "${player.name}" ใช่ไหม?`)) return;
+
+            showSyncStatus('🗑 กำลังลบรูป...', '#ef4444');
+
+            try {
+                // ลบจาก Firebase Storage (ถ้ามี path)
+                if (player.photoPath) {
+                    try { await firebase.storage().ref(player.photoPath).delete(); } catch(_) {}
+                }
+
+                // ลบจาก state
+                const idx = appState.players.findIndex(p => p.id === playerId);
+                if (idx !== -1) {
+                    delete appState.players[idx].photoURL;
+                    delete appState.players[idx].photoPath;
+                    saveState();
+                }
+
+                showSuccess('✅ ลบรูปสำเร็จ');
+                this.renderPlayerList(uiState.currentFilter || '');
+            } catch (err) {
+                console.error('Delete photo error:', err);
+                showError('❌ ลบรูปล้มเหลว: ' + err.message);
+            } finally {
+                setTimeout(() => showSyncStatus('☁️ sync แล้ว', '#27ae60'), 1500);
+            }
         },
 
         // ✅ Upload photo เข้า Firebase Storage
@@ -4705,6 +4759,9 @@
 
                 card.innerHTML = `
                     ${restingBadge}
+                    <div style="display:flex; justify-content:center; margin-bottom:6px;">
+                        ${PlayerUtils.renderAvatar(player, 'md', false)}
+                    </div>
                     <div class="player-name">${escapeHtml(player.name)}</div>
                     <div class="player-skill"><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></div>
                     <div style="font-size:0.8rem; color:#888;">${gameCount} เกม</div>
@@ -5130,16 +5187,18 @@ if (btnViewQueue) {
                     const p = PlayerUtils.getById(id);
                     const name = escapeHtml(p?.name || '???');
                     const games = PlayerUtils.getGameCount(id);
+                    const avatar = p ? PlayerUtils.renderAvatar(p, 'xs', false) : '';
                     const pill = `<span style="display:inline-block;background:#e8f4fd;color:#1a6fa8;font-size:0.68rem;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:5px;vertical-align:middle;white-space:nowrap;">${games}→<strong>${games+1}</strong></span>`;
                     const isResting = p && p.isCheckedIn && !p.isPlaying && p.availability === 'resting';
                     if (isResting) {
-                        return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;flex-wrap:wrap;">
+                        return `<div style="display:flex;align-items:center;gap:5px;padding:2px 0;flex-wrap:wrap;">
+                            ${avatar}
                             <span style="color:#e67e22;font-weight:700;">🛑 ${name}</span>
                             ${pill}
                             <span style="display:inline-block;background:#e67e22;color:#fff;font-size:0.65rem;font-weight:700;border-radius:999px;padding:1px 7px;margin-left:3px;vertical-align:middle;white-space:nowrap;">พักอยู่</span>
                         </div>`;
                     }
-                    return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;flex-wrap:wrap;"><span style="font-weight:600;">${name}</span>${pill}</div>`;
+                    return `<div style="display:flex;align-items:center;gap:5px;padding:2px 0;flex-wrap:wrap;">${avatar}<span style="font-weight:600;">${name}</span>${pill}</div>`;
                 };
 
                 const team1Html = queue.team1.map(buildPlayerLine).join('');
@@ -5552,6 +5611,9 @@ if (btnViewQueue) {
                 card.innerHTML = `
                     ${orderBadge}
                     ${restingBadge}
+                    <div style="display:flex; justify-content:center; margin-bottom:6px;">
+                        ${PlayerUtils.renderAvatar(player, 'md', false)}
+                    </div>
                     <div class="player-name">${escapeHtml(player.name)}</div>
                     <div class="player-skill"><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></div>
                     <div style="font-size:0.8rem;color:#888;">${gameCount} เกม</div>
@@ -5903,10 +5965,13 @@ if (btnViewQueue) {
 
             appState.matches.forEach(match => {
                 const renderTeamPlayers = (ids, skills) => ids.map((id, i) => {
-                    const name = escapeHtml(PlayerUtils.getById(id)?.name || '???');
+                    const player = PlayerUtils.getById(id);
+                    const name = escapeHtml(player?.name || '???');
                     const skill = skills[i];
                     const games = PlayerUtils.getGameCount(id);
-                    return `<div style="margin:4px 0;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
+                    const avatar = player ? PlayerUtils.renderAvatar(player, 'sm', false) : '';
+                    return `<div style="margin:4px 0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        ${avatar}
                         <span onclick="App.openPlayerHistoryModal(${id})" style="cursor:pointer;font-weight:600;border-bottom:1px dashed var(--secondary);color:var(--primary);" title="ดูประวัติ ${name}">${name}</span>
                         <span class="skill-badge skill-${getSkillClass(skill)}" style="margin-left:2px;">${escapeHtml(skill)}</span>
                         <span style="font-size:0.75rem;color:#888;">${games} เกม</span>
@@ -6885,8 +6950,9 @@ if (btnViewQueue) {
         : '';
       const nameStyle = isResting ? 'font-weight:700;color:#e67e22;' : 'font-weight:600;';
       const namePrefix = isResting ? '🛑 ' : '';
-      return `<div style="display:flex;align-items:center;gap:4px;padding:2px 0;flex-wrap:wrap;">
-        <span class="queue-player-line ${cls}" style="${nameStyle}">${namePrefix}${em} ${nm}</span>${pill}${restBadge}
+      const avatar = p ? PlayerUtils.renderAvatar(p, 'xs', false) : '';
+      return `<div style="display:flex;align-items:center;gap:5px;padding:2px 0;flex-wrap:wrap;">
+        ${avatar}<span class="queue-player-line ${cls}" style="${nameStyle}">${namePrefix}${em} ${nm}</span>${pill}${restBadge}
       </div>`;
     }).join('');
   }
