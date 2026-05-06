@@ -1301,3 +1301,25 @@
 .d-avatar-sm { width: 28px; height: 28px; }
 .d-avatar-md { width: 36px; height: 36px; }
 .d-avatar-lg { width: 54px; height: 54px; box-shadow: 0 4px 14px rgba(0,0,0,0.4); }
+
+/* ═════════════════════════════════════════════════════════════
+   👁 Watch Picker Modal — Popup กลางจอ
+   ═════════════════════════════════════════════════════════════ */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop-in {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes toast-pop {
+  0% { transform: translate(-50%,-50%) scale(0.8); opacity: 0; }
+  70% { transform: translate(-50%,-50%) scale(1.05); }
+  100% { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+}
+
+.wpm-row:hover {
+  background: rgba(0,168,204,0.15) !important;
+  border-color: var(--cyan) !important;
+}
