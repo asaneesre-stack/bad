@@ -20,6 +20,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&family=Teko:wght@600;700&display=swap" rel="stylesheet">
   <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+  <link rel="shortcut icon" href="apple-touch-icon.png">
   <meta name="theme-color" content="#080d1a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -1660,6 +1665,21 @@
 
     function skillColor(skill) { return SKILL_COLOR[skill] || '#00a8cc'; }
 
+    // ✅ Render avatar (รูปจริง หรือ Person SVG) — สำหรับ display
+    // size: 'xs' (20px) | 'sm' (28px) | 'md' (36px) | 'lg' (54px)
+    function renderAvatar(player, size = 'sm') {
+        if (!player) return '';
+        const photoURL = player.photoURL || '';
+        const skillCls = (player.skill || 'N').toLowerCase().replace('+','-plus').replace('-','-minus');
+        const inner = photoURL
+            ? `<img src="${esc(photoURL)}" alt="${esc(player.name)}" class="d-photo">`
+            : `<svg viewBox="0 0 24 24" fill="none">
+                   <circle cx="12" cy="8" r="4" fill="white" opacity="0.95"/>
+                   <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="white" opacity="0.95"/>
+               </svg>`;
+        return `<span class="d-avatar d-avatar-${size}" style="background:${skillColor(player.skill)};">${inner}</span>`;
+    }
+
     function elapsed(startTime) {
       return Math.floor((Date.now() - (startTime || Date.now())) / 1000);
     }
@@ -2020,10 +2040,17 @@
       }
       card.style.display = 'block';
 
-      // Name + Avatar
+      // Name + Avatar (รูปจริง หรือตัวอักษร)
       const name = me.name || '???';
       document.getElementById('my-status-name').textContent = name;
-      document.getElementById('my-status-avatar').textContent = name.charAt(0);
+      const avatarEl = document.getElementById('my-status-avatar');
+      if (avatarEl) {
+          if (me.photoURL) {
+              avatarEl.innerHTML = `<img src="${esc(me.photoURL)}" alt="${esc(name)}" style="width:100%;height:100%;border-radius:12px;object-fit:cover;">`;
+          } else {
+              avatarEl.textContent = name.charAt(0);
+          }
+      }
 
       // ✅ Games — อ่านจาก history (เหมือนที่ admin คำนวณ)
       let games = 0;
@@ -2293,12 +2320,14 @@
           const name  = p ? esc(p.name) : '???';
           const skill = p ? p.skill : '?';
           const isWatched = watchedIds.has(id);
+          const avatar = p ? renderAvatar(p, 'sm') : '';
           const dot = `<div class="skill-dot" style="background:${isWatched?'var(--cyan)':skillColor(skill)};${isWatched?'width:10px;height:10px;box-shadow:0 0 6px var(--cyan);':''}"></div>`;
           const nameEl = `<div class="player-name-txt player-name-clickable" data-pid="${id}"
             style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);
             ${isWatched?'color:var(--cyan);font-size:1.15rem;text-shadow:0 0 10px rgba(0,168,204,0.6);':''}"
           >${isWatched?'👁 ':''}${name}</div>`;
-          return `<div class="player-row ${right?'right':''}">
+          return `<div class="player-row ${right?'right':''}" style="display:flex;align-items:center;gap:6px;${right?'flex-direction:row-reverse;':''}">
+            ${avatar}
             ${right ? nameEl : dot}
             ${right ? dot    : nameEl}
           </div>`;
@@ -2347,10 +2376,11 @@
         const names = ids => ids.map(id => {
           const p = getPlayer(id);
           const isWatched = watchedIds.has(id);
-          return `<div class="queue-player queue-player-clickable" data-pid="${id}"
-            style="cursor:pointer;display:inline;-webkit-tap-highlight-color:rgba(0,168,204,0.2);
-            ${isWatched?'color:var(--cyan);font-size:1.05rem;text-shadow:0 0 8px rgba(0,168,204,0.5);font-size:1rem;':''}"
-          >${isWatched?'👁 ':''}${p ? esc(p.name) : '???'}</div>`;
+          const avatar = p ? renderAvatar(p, 'xs') : '';
+          return `<span class="queue-player queue-player-clickable" data-pid="${id}"
+            style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;-webkit-tap-highlight-color:rgba(0,168,204,0.2);
+            ${isWatched?'color:var(--cyan);font-size:1.05rem;text-shadow:0 0 8px rgba(0,168,204,0.5);':''}"
+          >${avatar}${isWatched?'👁 ':''}${p ? esc(p.name) : '???'}</span>`;
         }).join('<span class="sep">&</span>');
 
         // ประมาณเวลารอ — แสดงเสมอ
@@ -2404,7 +2434,8 @@
             : 'background:rgba(0,168,204,0.15);border:1px solid rgba(0,168,204,0.4);'
           : 'opacity:0.4;border:1px solid rgba(255,255,255,0.15);';
         const icon = playing ? '🏸' : checked ? '✅' : '';
-        return `<div class="waiting-chip" style="${style}cursor:default;">
+        return `<div class="waiting-chip" style="${style}cursor:default;display:inline-flex;align-items:center;gap:5px;">
+          ${renderAvatar(p, 'xs')}
           <span class="waiting-chip-name">${icon} ${esc(p.name)}</span>
           <span class="skill-badge-sm" style="background:${skillColor(p.skill)}">${esc(p.skill)}</span>
         </div>`;
@@ -2430,7 +2461,8 @@
             : '';
           const watchIcon = isWatched ? '👁 ' : '';
           return `<div class="waiting-chip waiting-chip-clickable" data-pid="${p.id}"
-            style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);${watchStyle}">
+            style="cursor:pointer;-webkit-tap-highlight-color:rgba(0,168,204,0.2);display:inline-flex;align-items:center;gap:5px;${watchStyle}">
+            ${renderAvatar(p, 'xs')}
             <span class="waiting-chip-name" style="${isWatched?'color:#00a8cc;font-size:0.95rem;':''}">
               ${watchIcon}${esc(p.name)}
             </span>
@@ -2472,8 +2504,9 @@
         const posLabel = queuePos > 0 ? ` <span style="opacity:0.7;font-size:0.7em;">#${queuePos}</span>` : '';
         const posText = queuePos > 0 ? `<span style="background:${isNext?'var(--gold)':'rgba(0,168,204,0.4)'};color:#fff;font-size:0.72em;padding:1px 7px;border-radius:10px;margin-left:4px;">คิว #${queuePos}</span>` : '';
         return `<div class="watch-chip ${extraClass}" data-watch-pid="${p.id}"
-          style="-webkit-tap-highlight-color:transparent;" title="กดเพื่อเลิกติดตาม">
-          👁 <span style="font-size:1em;">${esc(p.name)}</span>${posText}
+          style="-webkit-tap-highlight-color:transparent;display:inline-flex;align-items:center;gap:5px;" title="กดเพื่อเลิกติดตาม">
+          ${renderAvatar(p, 'xs')}
+          <span style="font-size:1em;">${esc(p.name)}</span>${posText}
           <span style="margin-left:5px;opacity:0.45;font-size:0.8em;">✕</span>
         </div>`;
       }).join('');
@@ -2501,7 +2534,7 @@
             <div id="watch-picker-list" style="display:flex;flex-wrap:wrap;gap:0.35rem;max-height:200px;overflow-y:auto;">
               ${checkedIn.map(p =>
                 `<div class="watch-chip" data-watch-pid="${p.id}"
-                  style="-webkit-tap-highlight-color:transparent;">${esc(p.name)}</div>`
+                  style="-webkit-tap-highlight-color:transparent;display:inline-flex;align-items:center;gap:5px;">${renderAvatar(p, 'xs')}${esc(p.name)}</div>`
               ).join('')}
             </div>
           </div>`;
