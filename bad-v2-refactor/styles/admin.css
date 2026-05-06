@@ -1220,112 +1220,200 @@
 .wait-badge.orange { color:#ff8c00;font-weight:700; }
 .wait-badge.red { color:#ff0000;font-weight:700; }
         /* ═══════════════════════════════════════════════════════════
-           👥 Player Card List — Modern mobile-friendly
+           👥 Player Grid — 4 cols with person SVG + photo support
            ═══════════════════════════════════════════════════════════ */
         .player-list-cards {
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
             gap: 0.5rem;
+        }
+
+        @media (max-width: 360px) {
+            .player-list-cards { grid-template-columns: repeat(3, 1fr); }
+        }
+
+        @media (min-width: 600px) {
+            .player-list-cards { grid-template-columns: repeat(5, 1fr); }
+        }
+
+        @media (min-width: 900px) {
+            .player-list-cards { grid-template-columns: repeat(6, 1fr); }
         }
 
         .player-card-row {
             background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-            border: 1px solid rgba(0,0,0,0.04);
-            transition: all 0.25s;
+            border-radius: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1.5px solid rgba(0,0,0,0.04);
+            transition: all 0.2s;
             overflow: hidden;
         }
 
         .player-card-row.expanded {
+            grid-column: 1 / -1;
             box-shadow: 0 8px 24px rgba(14,165,233,0.18);
             border-color: #0ea5e9;
         }
 
-        /* Compact row */
+        /* Compact view — vertical card */
         .player-card-compact {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 0.7rem;
-            padding: 0.65rem 0.85rem;
+            gap: 0.25rem;
+            padding: 0.7rem 0.4rem 0.6rem;
             cursor: pointer;
-            transition: background 0.2s;
+            position: relative;
+            transition: transform 0.15s;
         }
 
         .player-card-compact:hover {
-            background: #f8fafc;
+            transform: translateY(-2px);
+        }
+
+        .player-card-compact:active {
+            transform: scale(0.97);
         }
 
         .player-avatar {
-            width: 38px;
-            height: 38px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             color: #fff;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 800;
-            font-size: 1rem;
             flex-shrink: 0;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            position: relative;
+            overflow: visible;
         }
 
-        .player-info {
-            flex: 1;
-            min-width: 0;
+        /* Avatar gradient by skill */
+        .player-avatar.avatar-bg { background: linear-gradient(135deg,#94a3b8,#64748b); }
+        .player-avatar.avatar-n-minus { background: linear-gradient(135deg,#10b981,#059669); }
+        .player-avatar.avatar-n { background: linear-gradient(135deg,#0ea5e9,#0284c7); }
+        .player-avatar.avatar-n-plus { background: linear-gradient(135deg,#9b59b6,#7c3aed); }
+        .player-avatar.avatar-p { background: linear-gradient(135deg,#ef4444,#dc2626); }
+
+        .player-avatar svg {
+            width: 32px;
+            height: 32px;
+            color: rgba(255,255,255,0.95);
         }
 
-        .player-info-top {
-            display: flex;
-            align-items: center;
-            gap: 0.4rem;
-            flex-wrap: wrap;
+        .player-avatar img.photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
         }
+
+        /* Skill chip on avatar */
+        .ava-skill-tag {
+            position: absolute;
+            bottom: -3px;
+            right: -3px;
+            background: #fff;
+            color: #0f172a;
+            font-size: 0.62rem;
+            font-weight: 800;
+            padding: 1px 5px;
+            border-radius: 999px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+            border: 2px solid #fff;
+            line-height: 1.2;
+        }
+
+        .ava-skill-tag.skill-bg { color: #475569; }
+        .ava-skill-tag.skill-n-minus { color: #047857; }
+        .ava-skill-tag.skill-n { color: #0369a1; }
+        .ava-skill-tag.skill-n-plus { color: #6d28d9; }
+        .ava-skill-tag.skill-p { color: #b91c1c; }
 
         .player-name-text {
             font-weight: 700;
-            font-size: 0.92rem;
+            font-size: 0.78rem;
             color: #0f172a;
-        }
-
-        .player-info-sub {
-            font-size: 0.75rem;
-            color: #64748b;
-            margin-top: 0.1rem;
+            text-align: center;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            max-width: 100%;
+            line-height: 1.2;
+            margin-top: 0.3rem;
+            display: block;
         }
 
-        .player-edit-btn,
-        .player-collapse-btn {
-            background: #f1f5f9;
-            border: none;
-            color: #64748b;
-            padding: 0.45rem 0.85rem;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 1rem;
+        .game-pill {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 1px 8px;
+            border-radius: 999px;
+            font-size: 0.7rem;
             font-weight: 700;
-            min-height: unset;
-            transition: all 0.15s;
-            line-height: 1;
+            min-width: 24px;
+            text-align: center;
         }
 
-        .player-edit-btn:hover {
-            background: #e2e8f0;
-            color: #0f172a;
-        }
-
-        .player-collapse-btn {
-            background: #0ea5e9;
-            color: #fff;
+        /* hide ⋯ button in grid view */
+        .player-card-compact .player-edit-btn {
+            display: none;
         }
 
         /* Edit view */
         .player-card-edit {
-            padding: 0.85rem 1rem 1rem;
+            padding: 1rem;
             background: linear-gradient(180deg, #f0f9ff, #fff);
+        }
+
+        .player-card-edit-header .player-avatar {
+            width: 64px;
+            height: 64px;
+        }
+
+        .player-card-edit-header .player-avatar svg {
+            width: 40px;
+            height: 40px;
+        }
+
+        .avatar-edit-overlay {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: #0ea5e9;
+            color: #fff;
+            font-size: 12px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            border: 2px solid #fff;
+        }
+
+        .avatar-edit-trigger:hover {
+            transform: scale(1.05);
+        }
+
+        .player-card-edit-header .player-avatar svg {
+            width: 40px;
+            height: 36px;
+        }
+
+        .player-card-edit-header .player-name-text {
+            font-size: 1rem;
+            text-align: left;
+            margin-top: 0;
+        }
+
+        .player-card-edit-header .player-info-sub {
+            font-size: 0.78rem;
+            color: #64748b;
+            margin-top: 0.15rem;
         }
 
         .player-card-edit-header {
@@ -1335,6 +1423,50 @@
             padding-bottom: 0.85rem;
             margin-bottom: 0.85rem;
             border-bottom: 1px solid #e2e8f0;
+        }
+
+        /* Photo upload button */
+        .photo-upload-btn {
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            background: #0ea5e9;
+            color: #fff;
+            border: 2px solid #fff;
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            min-height: unset;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .photo-upload-btn:hover {
+            background: #0284c7;
+        }
+
+        .player-collapse-btn {
+            background: #0ea5e9;
+            color: #fff;
+            border: none;
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 700;
+            min-height: unset;
+            line-height: 1;
+        }
+
+        .player-info {
+            flex: 1;
+            min-width: 0;
         }
 
         .player-edit-fields {
