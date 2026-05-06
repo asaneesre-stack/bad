@@ -3608,11 +3608,24 @@
             setTimeout(() => overlay.querySelector('#edit-profile-name')?.focus(), 50);
         },
 
-        deleteProfile: function(profileId) {
-            if (!confirm('ลบโปรไฟล์นี้?')) return;
+        deleteProfile: async function(profileId) {
+            const profile = (appState.playerProfiles||[]).find(p => p.id === profileId);
+            if (!profile) return;
+            if (!confirm(`ลบโปรไฟล์ "${profile.name}" ใช่ไหม?\n${profile.photoURL ? '⚠️ รูปโปรไฟล์จะถูกลบด้วย' : ''}`)) return;
+
+            // ✅ ลบรูปใน Firebase Storage ด้วย (ถ้ามี)
+            if (profile.photoPath) {
+                try {
+                    await firebase.storage().ref(profile.photoPath).delete();
+                } catch(e) {
+                    console.warn('Delete photo error (skip):', e);
+                }
+            }
+
             appState.playerProfiles = (appState.playerProfiles||[]).filter(p => p.id !== profileId);
             saveState();
             this.renderProfileList();
+            showSuccess(`✅ ลบโปรไฟล์ ${profile.name} แล้ว`);
         },
         // ── Payment Settings ─────────────────────────────────────────
         savePaymentSettings: function() {
