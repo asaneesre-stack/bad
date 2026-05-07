@@ -2686,12 +2686,9 @@
       }
       listEl.innerHTML = checkedIn.map(p => `
         <div class="wpm-row" data-pid="${p.id}"
-          style="background:rgba(255,255,255,0.04); border-radius:10px; padding:9px 12px;
+          style="background:rgba(255,255,255,0.04); border-radius:10px; padding:10px 12px;
           display:flex; align-items:center; gap:10px; cursor:pointer; border:1.5px solid transparent;
           transition:all 0.2s; -webkit-tap-highlight-color:transparent;">
-          <div class="wpm-radio" style="width:22px; height:22px; border-radius:50%;
-            border:2px solid rgba(255,255,255,0.3); display:flex; align-items:center; justify-content:center;
-            flex-shrink:0; transition:all 0.2s;"></div>
           ${renderAvatar(p, 'sm')}
           <span class="wpm-name" style="flex:1; font-size:13px; font-weight:700; color:#fff;">${esc(p.name)}</span>
           <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>
@@ -2723,17 +2720,14 @@
       overlay.querySelectorAll('.wpm-row').forEach(r => {
         r.style.background = 'rgba(255,255,255,0.04)';
         r.style.borderColor = 'transparent';
-        const radio = r.querySelector('.wpm-radio');
-        if (radio) {
-          radio.style.background = 'transparent';
-          radio.style.borderColor = 'rgba(255,255,255,0.3)';
-          radio.innerHTML = '';
-        }
         const name = r.querySelector('.wpm-name');
         if (name) {
           name.style.color = '#fff';
           name.style.fontWeight = '700';
         }
+        // ลบ check ทั้งหมด
+        const oldCheck = r.querySelector('.wpm-check');
+        if (oldCheck) oldCheck.remove();
       });
 
       // Highlight row ที่เลือก
@@ -2755,19 +2749,24 @@
     function _highlightPickerRow(row) {
       row.style.background = 'rgba(0,168,204,0.2)';
       row.style.borderColor = 'var(--cyan)';
-      const radio = row.querySelector('.wpm-radio');
-      if (radio) {
-        radio.style.background = 'var(--cyan)';
-        radio.style.borderColor = 'var(--cyan)';
-        radio.style.color = '#fff';
-        radio.style.fontSize = '12px';
-        radio.style.fontWeight = '800';
-        radio.innerHTML = '✓';
-      }
       const name = row.querySelector('.wpm-name');
       if (name) {
         name.style.color = 'var(--cyan)';
         name.style.fontWeight = '800';
+      }
+      // ✅ เพิ่ม check icon ขวาสุด (แทน radio)
+      if (!row.querySelector('.wpm-check')) {
+        const check = document.createElement('span');
+        check.className = 'wpm-check';
+        check.textContent = '✓';
+        check.style.cssText = `
+          background:var(--cyan); color:#fff; width:22px; height:22px;
+          border-radius:50%; display:flex; align-items:center; justify-content:center;
+          font-size:12px; font-weight:800; flex-shrink:0;
+          box-shadow:0 2px 8px rgba(0,168,204,0.5);
+          animation: check-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        `;
+        row.appendChild(check);
       }
     }
 
