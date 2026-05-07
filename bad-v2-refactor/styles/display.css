@@ -1323,3 +1323,8 @@
   background: rgba(0,168,204,0.15) !important;
   border-color: var(--cyan) !important;
 }
+
+@keyframes check-pop {
+  0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
