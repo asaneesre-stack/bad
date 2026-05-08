@@ -1639,3 +1639,19 @@
             vertical-align: middle;
             flex-shrink: 0;
         }
+
+        /* ═══════════════════════════════════════════════════════════
+           ☑️ Multi-select Mode — Bulk delete players
+           ═══════════════════════════════════════════════════════════ */
+        .player-card-row.player-card-selected {
+            background: linear-gradient(135deg, rgba(14,165,233,0.15), rgba(14,165,233,0.05));
+            border-color: #0ea5e9 !important;
+            box-shadow: 0 4px 14px rgba(14,165,233,0.3) !important;
+            transform: scale(0.97);
+        }
+        .player-card-row.player-card-selected .player-card-compact {
+            background: transparent;
+        }
+        .player-select-check {
+            transition: all 0.2s;
+        }
