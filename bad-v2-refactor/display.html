@@ -2263,6 +2263,8 @@
       document.body.appendChild(indicator);
 
       document.addEventListener('touchstart', (e) => {
+        // ✅ ถ้ามี modal เปิดอยู่ → skip pull-to-refresh
+        if (document.getElementById('watch-picker-modal')) return;
         if (window.scrollY === 0) {
           startY = e.touches[0].clientY;
           pulling = true;
@@ -2271,6 +2273,12 @@
 
       document.addEventListener('touchmove', (e) => {
         if (!pulling) return;
+        // ✅ ถ้า modal เปิดระหว่าง drag → ยกเลิก
+        if (document.getElementById('watch-picker-modal')) {
+          pulling = false;
+          indicator.style.top = '-50px';
+          return;
+        }
         const y = e.touches[0].clientY;
         const diff = y - startY;
         if (diff > 0 && diff < 200) {
@@ -2288,6 +2296,11 @@
       document.addEventListener('touchend', (e) => {
         if (!pulling) return;
         pulling = false;
+        // ✅ ถ้า modal เปิด → ไม่ refresh
+        if (document.getElementById('watch-picker-modal')) {
+          indicator.style.top = '-50px';
+          return;
+        }
         const finalTop = parseInt(indicator.style.top || '-50', 10);
         if (finalTop > 0 && (e.changedTouches[0].clientY - startY) > 100) {
           indicator.textContent = '🔄 กำลังรีเฟรช...';
@@ -2487,6 +2500,11 @@
     let alertShown = new Set();   // avoid repeated alerts for same position
 
     function renderWatchBar() {
+      // ✅ ถ้า modal picker เปิดอยู่ → ห้าม re-render (จะทำให้ modal ปิด)
+      if (document.getElementById('watch-picker-modal')) {
+        updateWatchPickerModal();
+        return;
+      }
       const players = state.players || [];
       const chipsEl = document.getElementById('watch-chips');
       const checkedIn = players.filter(p => p.isCheckedIn);
@@ -2540,10 +2558,13 @@
     }
 
     // ✅ เปิด Watch Picker Modal — popup กลางจอ
+    // ✅ Watch Picker Modal — Confirm Bar pattern + iOS friendly
+    let _pickerSelectedId = null;
+
     function openWatchPickerModal(checkedIn) {
-      // ลบ modal เก่า (ถ้ามี)
       const old = document.getElementById('watch-picker-modal');
       if (old) old.remove();
+      _pickerSelectedId = null;
 
       const overlay = document.createElement('div');
       overlay.id = 'watch-picker-modal';
@@ -2554,24 +2575,13 @@
         animation: fade-in 0.2s ease-out;
       `;
 
-      const playerListHTML = checkedIn.map(p => `
-        <div class="wpm-row" data-watch-pid="${p.id}"
-          style="background:rgba(255,255,255,0.04); border-radius:10px; padding:10px 12px;
-          display:flex; align-items:center; gap:10px; cursor:pointer; border:1.5px solid transparent;
-          transition:all 0.15s; -webkit-tap-highlight-color:transparent;">
-          ${renderAvatar(p, 'sm')}
-          <span style="flex:1; font-size:14px; font-weight:700; color:#fff;">${esc(p.name)}</span>
-          <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>
-        </div>
-      `).join('');
-
       overlay.innerHTML = `
         <div class="wpm-modal" style="background:rgba(20,30,50,0.98); border-radius:18px;
-          border:1px solid rgba(0,168,204,0.4); padding:18px; max-width:380px; width:100%;
-          box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:80vh; display:flex; flex-direction:column;
+          border:1px solid rgba(0,168,204,0.4); padding:16px; max-width:380px; width:100%;
+          box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:85vh; display:flex; flex-direction:column;
           animation: pop-in 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);">
 
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-shrink:0;">
             <div style="font-size:15px; font-weight:800; color:#fff;">
               👁 เลือกผู้เล่นที่จะติดตาม
             </div>
@@ -2580,65 +2590,210 @@
           </div>
 
           <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
-            border-radius:10px; padding:9px 12px; display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+            border-radius:10px; padding:9px 12px; display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-shrink:0;">
             <span style="opacity:0.5;">🔍</span>
             <input id="wpm-search" type="text" placeholder="พิมพ์ชื่อ..."
               style="flex:1; background:transparent; border:none; outline:none; color:#fff; font-size:14px;">
           </div>
 
           <div id="wpm-list" style="display:flex; flex-direction:column; gap:5px;
-            overflow-y:auto; max-height:55vh; padding:2px;">
-            ${playerListHTML}
+            overflow-y:auto; flex:1; padding:2px; -webkit-overflow-scrolling:touch;">
           </div>
 
-          <div style="font-size:11px; color:rgba(255,255,255,0.4); text-align:center; margin-top:10px;">
-            👆 กดที่ชื่อเพื่อติดตาม
+          <!-- Confirm Bar -->
+          <div id="wpm-confirm-bar" style="display:none; background:linear-gradient(90deg, rgba(0,168,204,0.25), rgba(0,168,204,0.1));
+            border:1.5px solid var(--cyan); border-radius:12px; padding:10px 12px; margin-top:10px;
+            align-items:center; justify-content:space-between; gap:10px; flex-shrink:0;">
+            <div style="font-size:13px; color:rgba(255,255,255,0.9); flex:1;">
+              เลือก: <strong id="wpm-selected-name" style="color:var(--cyan);">—</strong>
+            </div>
+            <button id="wpm-confirm-btn" style="background:linear-gradient(135deg, #10b981, #059669);
+              color:#fff; border:none; padding:10px 22px; border-radius:999px; font-size:13px;
+              font-weight:800; cursor:pointer; box-shadow:0 4px 14px rgba(16,185,129,0.4); flex-shrink:0;
+              -webkit-tap-highlight-color:transparent;">
+              ✓ ยืนยัน
+            </button>
+          </div>
+
+          <div id="wpm-hint" style="font-size:11px; color:rgba(255,255,255,0.4); text-align:center; margin-top:10px; flex-shrink:0;">
+            👆 กดที่ชื่อเพื่อเลือก
           </div>
         </div>
       `;
 
       document.body.appendChild(overlay);
 
-      const close = () => overlay.remove();
-      overlay.querySelector('#wpm-close').onclick = close;
-      overlay.onclick = (e) => { if (e.target === overlay) close(); };
+      // ✅ Lock body scroll (กัน pull-to-refresh + iOS bounce)
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      const scrollY = window.scrollY;
+      document.body.style.top = `-${scrollY}px`;
+      overlay.dataset.scrollY = scrollY;
+
+      const close = () => {
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+        const savedY = parseInt(overlay.dataset.scrollY || '0', 10);
+        window.scrollTo(0, savedY);
+        overlay.remove();
+        _pickerSelectedId = null;
+      };
+
+      // Close button — ใช้ทั้ง touchend + click เพื่อ iOS reliability
+      const closeBtn = overlay.querySelector('#wpm-close');
+      const handleClose = (e) => { e.preventDefault(); e.stopPropagation(); close(); };
+      closeBtn.addEventListener('touchend', handleClose, { passive: false });
+      closeBtn.addEventListener('click', handleClose);
+
+      // Click outside → close
+      overlay.addEventListener('touchend', (e) => {
+        if (e.target === overlay) close();
+      }, { passive: true });
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+      });
+
+      // Render list
+      _renderPickerList(checkedIn);
 
       // Search filter
       const searchEl = overlay.querySelector('#wpm-search');
-      const listEl = overlay.querySelector('#wpm-list');
       searchEl.addEventListener('input', () => {
         const q = searchEl.value.toLowerCase();
-        listEl.querySelectorAll('.wpm-row').forEach(row => {
-          const name = row.textContent.toLowerCase();
+        overlay.querySelectorAll('.wpm-row').forEach(row => {
+          const name = row.querySelector('.wpm-name')?.textContent.toLowerCase() || '';
           row.style.display = name.includes(q) ? '' : 'none';
         });
       });
 
-      // Click row → ติดตาม + ปิด
-      listEl.addEventListener('click', (e) => {
+      // Confirm button
+      const confirmBtn = overlay.querySelector('#wpm-confirm-btn');
+      const handleConfirm = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!_pickerSelectedId) return;
+        const player = state.players.find(p => +p.id === +_pickerSelectedId);
+        if (!player) return;
+        watchedIds.add(_pickerSelectedId);
+        saveWatchedIds();
+        close();
+        renderWatchBar();
+        showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
+      };
+      confirmBtn.addEventListener('touchend', handleConfirm, { passive: false });
+      confirmBtn.addEventListener('click', handleConfirm);
+
+      // ไม่ auto-focus บน mobile (เพราะ keyboard เด้ง = list เลื่อน)
+      // user กด search bar เองถ้าต้องการ
+    }
+
+    function _renderPickerList(checkedIn) {
+      const listEl = document.getElementById('wpm-list');
+      if (!listEl) return;
+      if (checkedIn.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:1.5rem;font-size:13px;">ยังไม่มีผู้เล่นเช็คอิน</div>';
+        return;
+      }
+      listEl.innerHTML = checkedIn.map(p => `
+        <div class="wpm-row" data-pid="${p.id}"
+          style="background:rgba(255,255,255,0.04); border-radius:10px; padding:12px;
+          display:flex; align-items:center; gap:10px; cursor:pointer; border:1.5px solid transparent;
+          transition:all 0.15s; -webkit-tap-highlight-color:transparent; user-select:none;">
+          ${renderAvatar(p, 'sm')}
+          <span class="wpm-name" style="flex:1; font-size:14px; font-weight:700; color:#fff;">${esc(p.name)}</span>
+          <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>
+        </div>
+      `).join('');
+
+      // ✅ ใช้ทั้ง touchend (iOS) + click (desktop) — กดที่ row → select
+      const handleSelect = (e) => {
         const row = e.target.closest('.wpm-row');
         if (!row) return;
-        const pid = +row.dataset.watchPid;
+        const pid = +row.dataset.pid;
         if (!pid) return;
-        // hover effect ก่อนปิด
-        row.style.background = 'rgba(0,168,204,0.3)';
-        row.style.borderColor = 'var(--cyan)';
-        setTimeout(() => {
-          // เพิ่มเข้า watched list
-          watchedIds.add(pid);
-          saveWatchedIds();
-          close();
-          renderWatchBar();
-          // Toast notification
-          const player = state.players.find(p => +p.id === pid);
-          if (player) {
-            showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
-          }
-        }, 150);
+        e.preventDefault();
+        e.stopPropagation();
+        _selectPickerRow(pid);
+      };
+
+      // Remove old listeners (renderlist อาจถูกเรียกซ้ำ)
+      const newList = listEl.cloneNode(true);
+      listEl.parentNode.replaceChild(newList, listEl);
+      newList.addEventListener('touchend', handleSelect, { passive: false });
+      newList.addEventListener('click', handleSelect);
+
+      // ถ้ามี selection อยู่แล้ว → highlight
+      if (_pickerSelectedId) {
+        const row = newList.querySelector(`.wpm-row[data-pid="${_pickerSelectedId}"]`);
+        if (row) _highlightPickerRow(row);
+      }
+    }
+
+    function _selectPickerRow(pid) {
+      _pickerSelectedId = pid;
+      const overlay = document.getElementById('watch-picker-modal');
+      if (!overlay) return;
+
+      // Reset ทุก row
+      overlay.querySelectorAll('.wpm-row').forEach(r => {
+        r.style.background = 'rgba(255,255,255,0.04)';
+        r.style.borderColor = 'transparent';
+        const name = r.querySelector('.wpm-name');
+        if (name) {
+          name.style.color = '#fff';
+          name.style.fontWeight = '700';
+        }
+        const oldCheck = r.querySelector('.wpm-check');
+        if (oldCheck) oldCheck.remove();
       });
 
-      // Auto focus search
-      setTimeout(() => searchEl.focus(), 100);
+      // Highlight row ที่เลือก
+      const row = overlay.querySelector(`.wpm-row[data-pid="${pid}"]`);
+      if (row) _highlightPickerRow(row);
+
+      // แสดง confirm bar
+      const player = state.players.find(p => +p.id === +pid);
+      if (player) {
+        const bar = document.getElementById('wpm-confirm-bar');
+        const nameEl = document.getElementById('wpm-selected-name');
+        const hint = document.getElementById('wpm-hint');
+        if (bar) bar.style.display = 'flex';
+        if (nameEl) nameEl.textContent = player.name;
+        if (hint) hint.style.display = 'none';
+      }
+    }
+
+    function _highlightPickerRow(row) {
+      row.style.background = 'rgba(0,168,204,0.25)';
+      row.style.borderColor = 'var(--cyan)';
+      const name = row.querySelector('.wpm-name');
+      if (name) {
+        name.style.color = 'var(--cyan)';
+        name.style.fontWeight = '800';
+      }
+      if (!row.querySelector('.wpm-check')) {
+        const check = document.createElement('span');
+        check.className = 'wpm-check';
+        check.textContent = '✓';
+        check.style.cssText = `
+          background:var(--cyan); color:#fff; width:24px; height:24px;
+          border-radius:50%; display:flex; align-items:center; justify-content:center;
+          font-size:13px; font-weight:800; flex-shrink:0;
+          box-shadow:0 2px 8px rgba(0,168,204,0.5);
+          animation: check-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        `;
+        row.appendChild(check);
+      }
+    }
+
+    function updateWatchPickerModal() {
+      const overlay = document.getElementById('watch-picker-modal');
+      if (!overlay) return;
+      const checkedIn = (state.players || []).filter(p => p.isCheckedIn);
+      _renderPickerList(checkedIn);
     }
 
     // Toast helper
