@@ -2509,6 +2509,15 @@
       const chipsEl = document.getElementById('watch-chips');
       const checkedIn = players.filter(p => p.isCheckedIn);
 
+      // ✅ Re-render My Status Card เมื่อ watch list เปลี่ยน
+      try {
+        const matches = state.matches || [];
+        const queues = state.matchQueues || [];
+        if (typeof renderMyStatusCard === 'function') {
+          renderMyStatusCard(matches, queues, players);
+        }
+      } catch(_) {}
+
       // Show: watched chips first, then a small "+ เพิ่ม" button to open picker
       const watchedPlayers = checkedIn.filter(p => watchedIds.has(p.id));
 
