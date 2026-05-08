@@ -2491,7 +2491,9 @@
     // ── Watch My Queue ─────────────────────────────────────────
     // โหลด watchedIds จาก localStorage — persist ข้ามการเปิดแอป
     const _savedWatched = localStorage.getItem('bb-watched-ids');
-    const watchedIds = new Set(_savedWatched ? JSON.parse(_savedWatched) : []);
+    // ✅ Normalize ทุก id เป็น number (กันปัญหา string vs number)
+    const _parsedWatched = _savedWatched ? JSON.parse(_savedWatched) : [];
+    const watchedIds = new Set(_parsedWatched.map(id => +id).filter(id => !isNaN(id)));
 
     function saveWatchedIds() {
       try { localStorage.setItem('bb-watched-ids', JSON.stringify([...watchedIds])); } catch(e) {}
@@ -2685,18 +2687,19 @@
         e.stopPropagation();
         if (!_pickerSelectedId) return;
 
-        // ✅ กันเลือกซ้ำ — เช็คว่าติดตามอยู่แล้วหรือยัง
-        if (watchedIds.has(_pickerSelectedId)) {
+        // ✅ กันเลือกซ้ำ — เช็คว่าติดตามอยู่แล้วหรือยัง (รองรับทั้ง number/string)
+        const pidNum = +_pickerSelectedId;
+        if (watchedIds.has(pidNum) || watchedIds.has(_pickerSelectedId) || watchedIds.has(String(_pickerSelectedId))) {
           showToast('⚠️ คุณติดตามคนนี้อยู่แล้ว', '#f59e0b');
           return;
         }
 
-        const player = state.players.find(p => +p.id === +_pickerSelectedId);
+        const player = state.players.find(p => +p.id === pidNum);
         if (!player) return;
 
         // ✅ เลือกได้แค่ 1 คน — ลบของเก่าออกก่อน (ถ้ามี)
         watchedIds.clear();
-        watchedIds.add(_pickerSelectedId);
+        watchedIds.add(pidNum);
         saveWatchedIds();
         close();
         renderWatchBar();
@@ -2717,9 +2720,10 @@
         return;
       }
       listEl.innerHTML = checkedIn.map(p => {
-        const isWatched = watchedIds.has(p.id);
+        const pidNum = +p.id;
+        const isWatched = watchedIds.has(pidNum) || watchedIds.has(p.id) || watchedIds.has(String(p.id));
         return `
-        <div class="wpm-row ${isWatched ? 'wpm-row-disabled' : ''}" data-pid="${p.id}"
+        <div class="wpm-row ${isWatched ? 'wpm-row-disabled' : ''}" data-pid="${pidNum}"
           style="background:${isWatched ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.04)'}; border-radius:10px; padding:12px;
           display:flex; align-items:center; gap:10px; cursor:${isWatched ? 'not-allowed' : 'pointer'};
           border:1.5px solid ${isWatched ? 'rgba(245,158,11,0.3)' : 'transparent'};
