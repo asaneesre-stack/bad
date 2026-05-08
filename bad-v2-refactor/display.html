@@ -1233,19 +1233,36 @@
     // ── Firebase Presence ────────────────────────────────────────
     // ถ้า connection ขาด (kill app) → Firebase ลบ presence อัตโนมัติ
     let _presenceRef = null;
+    let _presenceHeartbeat = null;
 
     function setupPresence(pid) {
       const did = localStorage.getItem('bb-device-id');
       if (!did) return;
       if (_presenceRef) { _presenceRef.remove().catch(()=>{}); }
+      // ✅ ล้าง heartbeat เก่า (ถ้ามี)
+      if (_presenceHeartbeat) {
+        clearInterval(_presenceHeartbeat);
+        _presenceHeartbeat = null;
+      }
       const ref = db.ref(`presence/${pid}/${did}`);
       _presenceRef = ref;
       ref.onDisconnect().remove();
       ref.set({ online: true, ts: Date.now() });
+
+      // ✅ Heartbeat ทุก 30 วินาที — update ts (กัน presence ค้าง)
+      _presenceHeartbeat = setInterval(() => {
+        if (_presenceRef) {
+          _presenceRef.update({ online: true, ts: Date.now() }).catch(()=>{});
+        }
+      }, 30000);
     }
 
     function clearPresence() {
       if (_presenceRef) { _presenceRef.remove().catch(()=>{}); _presenceRef = null; }
+      if (_presenceHeartbeat) {
+        clearInterval(_presenceHeartbeat);
+        _presenceHeartbeat = null;
+      }
     }
 
     // ============================================================
@@ -2682,13 +2699,14 @@
 
       // Confirm button
       const confirmBtn = overlay.querySelector('#wpm-confirm-btn');
-      const handleConfirm = async (e) => {
+      const handleConfirm = (e) => {
         e.preventDefault();
         e.stopPropagation();
         if (!_pickerSelectedId) return;
 
-        // ✅ Layer 1: กันเลือกซ้ำใน device เดียวกัน
         const pidNum = +_pickerSelectedId;
+
+        // กันเลือกคนที่ตัวเองติดตามอยู่
         if (watchedIds.has(pidNum) || watchedIds.has(_pickerSelectedId) || watchedIds.has(String(_pickerSelectedId))) {
           showToast('⚠️ คุณติดตามคนนี้อยู่แล้ว', '#f59e0b');
           return;
@@ -2697,75 +2715,17 @@
         const player = state.players.find(p => +p.id === pidNum);
         if (!player) return;
 
-        // ✅ Layer 2: เช็ค presence (online) จาก device อื่น — เร็วกว่า + แม่นกว่า pushTokens
-        const confirmBtn = e.currentTarget;
-        const oldText = confirmBtn.textContent;
-        confirmBtn.textContent = '⏳ ตรวจสอบ...';
-        confirmBtn.disabled = true;
-
-        try {
-          const did = localStorage.getItem('bb-device-id');
-          // เช็ค presence (active devices ที่กำลังติดตามคนนี้)
-          const snap = await db.ref(`presence/${pidNum}`).once('value');
-          const present = snap.val() || {};
-          // device อื่นที่ online (Firebase onDisconnect ลบ presence ให้แล้ว)
-          const liveDevices = Object.keys(present).filter(devId => {
-            if (devId === did) return false; // ตัวเอง — ข้าม
-            const data = present[devId];
-            return data && data.online === true;
-          });
-
-          if (liveDevices.length > 0) {
-            confirmBtn.textContent = oldText;
-            confirmBtn.disabled = false;
-            showToast(`⚠️ ${player.name} ถูกติดตามจากอุปกรณ์อื่นอยู่แล้ว`, '#ef4444');
-            return;
-          }
-        } catch (err) {
-          console.warn('Presence check failed (proceed anyway):', err);
-        }
-
-        confirmBtn.textContent = oldText;
-        confirmBtn.disabled = false;
-
-        // ✅ เลือกได้แค่ 1 คน — ลบของเก่าออก + ลบ presence/token ของคนเก่า
-        const oldPids = Array.from(watchedIds);
-        oldPids.forEach(oldPid => {
-          alertShown.delete(`${oldPid}-next`);
-          alertShown.delete(`${oldPid}-court`);
-          const _did = localStorage.getItem('bb-device-id');
-          if (_did) {
-            db.ref(`pushTokens/${oldPid}/${_did}`).remove().catch(()=>{});
-            db.ref(`presence/${oldPid}/${_did}`).remove().catch(()=>{});
-          }
-          db.ref('alertState/' + oldPid).remove().catch(()=>{});
-        });
-        clearPresence();
-        clearDirectMessageListener();
-
-        // ✅ เพิ่มคนใหม่
-        watchedIds.clear();
-        watchedIds.add(pidNum);
-        saveWatchedIds();
-
-        // ✅ Register ทุกอย่างของคนใหม่
-        setupPresence(pidNum);
-        setupDirectMessageListener(pidNum);
-        if (_pushGranted) {
-          registerFCMToken(pidNum);
-        } else {
-          requestPushPermission().then(granted => {
-            if (granted) registerFCMToken(pidNum);
-          });
-        }
+        // ✅ ใช้ toggleWatch (logic ที่ stable แล้ว) — เช็ค device อื่นใน registerFCMToken
+        // toggleWatch จะ: clear old, setupPresence, setupDirectMessageListener, registerFCMToken (ที่ alert ถ้ามี device อื่น)
+        toggleWatch(pidNum);
 
         close();
         renderWatchBar();
         try { highlightMyQueues(); } catch(_) {}
-        try { render(); } catch(_) {}
         try { updatePayBtn(); } catch(_) {}
         try { syncStateToSW(); } catch(_) {}
 
+        // Toast แจ้งว่าเริ่มติดตาม (alert จาก registerFCMToken จะเด้งทับถ้าเจอ device อื่น)
         showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
       };
       confirmBtn.addEventListener('touchend', handleConfirm, { passive: false });
@@ -2782,65 +2742,28 @@
         listEl.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:1.5rem;font-size:13px;">ยังไม่มีผู้เล่นเช็คอิน</div>';
         return;
       }
-
-      // Render initial list
-      _renderListInner(checkedIn, new Set());
-
-      // Async fetch ของ active presence — แล้ว update list
-      (async () => {
-        try {
-          const did = localStorage.getItem('bb-device-id');
-          const watchedByOthers = new Set();
-
-          // ดึง presence ทุกคน parallel
-          const promises = checkedIn.map(p =>
-            db.ref(`presence/${+p.id}`).once('value')
-              .then(snap => ({ pid: +p.id, val: snap.val() || {} }))
-              .catch(() => ({ pid: +p.id, val: {} }))
-          );
-          const results = await Promise.all(promises);
-          results.forEach(({ pid, val }) => {
-            const live = Object.keys(val).filter(devId => {
-              if (devId === did) return false;
-              const d = val[devId];
-              return d && d.online === true;
-            });
-            if (live.length > 0) watchedByOthers.add(pid);
-          });
-
-          // re-render ด้วย info ใหม่ (ถ้า modal ยังเปิด)
-          if (document.getElementById('watch-picker-modal')) {
-            _renderListInner(checkedIn, watchedByOthers);
-          }
-        } catch(e) {
-          console.warn('Presence prefetch failed:', e);
-        }
-      })();
+      _renderListInner(checkedIn);
     }
 
-    function _renderListInner(checkedIn, watchedByOthers) {
+    function _renderListInner(checkedIn) {
       const listEl = document.getElementById('wpm-list');
       if (!listEl) return;
 
       listEl.innerHTML = checkedIn.map(p => {
         const pidNum = +p.id;
         const isMine = watchedIds.has(pidNum) || watchedIds.has(p.id) || watchedIds.has(String(p.id));
-        const byOther = watchedByOthers.has(pidNum) && !isMine;
-        const isDisabled = isMine || byOther;
-        const bg = isMine ? 'rgba(245,158,11,0.1)' : (byOther ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.04)');
-        const border = isMine ? 'rgba(245,158,11,0.3)' : (byOther ? 'rgba(239,68,68,0.3)' : 'transparent');
+        const bg = isMine ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.04)';
+        const border = isMine ? 'rgba(245,158,11,0.3)' : 'transparent';
         const badge = isMine
           ? '<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:800;">✓ ติดตามอยู่</span>'
-          : (byOther
-              ? '<span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:800;">🔒 อุปกรณ์อื่น</span>'
-              : `<span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>`);
+          : `<span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>`;
         return `
-        <div class="wpm-row ${isDisabled ? 'wpm-row-disabled' : ''}" data-pid="${pidNum}"
+        <div class="wpm-row ${isMine ? 'wpm-row-disabled' : ''}" data-pid="${pidNum}"
           style="background:${bg}; border-radius:10px; padding:12px;
-          display:flex; align-items:center; gap:10px; cursor:${isDisabled ? 'not-allowed' : 'pointer'};
+          display:flex; align-items:center; gap:10px; cursor:${isMine ? 'not-allowed' : 'pointer'};
           border:1.5px solid ${border};
           transition:all 0.15s; -webkit-tap-highlight-color:transparent; user-select:none;
-          ${isDisabled ? 'opacity:0.6;' : ''}">
+          ${isMine ? 'opacity:0.6;' : ''}">
           ${renderAvatar(p, 'sm')}
           <span class="wpm-name" style="flex:1; font-size:14px; font-weight:700; color:#fff;">${esc(p.name)}</span>
           ${badge}
@@ -2848,7 +2771,6 @@
       `;
       }).join('');
 
-      // ✅ ใช้ทั้ง touchend (iOS) + click (desktop) — กดที่ row → select
       const handleSelect = (e) => {
         const row = e.target.closest('.wpm-row');
         if (!row) return;
@@ -2864,13 +2786,11 @@
         _selectPickerRow(pid);
       };
 
-      // Remove old listeners (renderlist อาจถูกเรียกซ้ำ)
       const newList = listEl.cloneNode(true);
       listEl.parentNode.replaceChild(newList, listEl);
       newList.addEventListener('touchend', handleSelect, { passive: false });
       newList.addEventListener('click', handleSelect);
 
-      // ถ้ามี selection อยู่แล้ว → highlight
       if (_pickerSelectedId) {
         const row = newList.querySelector(`.wpm-row[data-pid="${_pickerSelectedId}"]`);
         if (row) _highlightPickerRow(row);
