@@ -2682,12 +2682,12 @@
 
       // Confirm button
       const confirmBtn = overlay.querySelector('#wpm-confirm-btn');
-      const handleConfirm = (e) => {
+      const handleConfirm = async (e) => {
         e.preventDefault();
         e.stopPropagation();
         if (!_pickerSelectedId) return;
 
-        // ✅ กันเลือกซ้ำ — เช็คว่าติดตามอยู่แล้วหรือยัง (รองรับทั้ง number/string)
+        // ✅ Layer 1: กันเลือกซ้ำใน device เดียวกัน
         const pidNum = +_pickerSelectedId;
         if (watchedIds.has(pidNum) || watchedIds.has(_pickerSelectedId) || watchedIds.has(String(_pickerSelectedId))) {
           showToast('⚠️ คุณติดตามคนนี้อยู่แล้ว', '#f59e0b');
@@ -2696,6 +2696,45 @@
 
         const player = state.players.find(p => +p.id === pidNum);
         if (!player) return;
+
+        // ✅ Layer 2: เช็ค device อื่นใน Firebase (ก่อนยืนยัน — เร็วกว่า FCM register)
+        const confirmBtn = e.currentTarget;
+        const oldText = confirmBtn.textContent;
+        confirmBtn.textContent = '⏳ ตรวจสอบ...';
+        confirmBtn.disabled = true;
+
+        try {
+          const did = localStorage.getItem('bb-device-id');
+          const snap = await db.ref(`pushTokens/${pidNum}`).once('value');
+          const existing = snap.val() || {};
+          const otherDevices = Object.keys(existing).filter(k => k !== did);
+
+          // ลบ token > 24 ชม. ที่ไม่ active
+          const NOW = Date.now();
+          const STALE = 24 * 60 * 60 * 1000;
+          const cleanups = [];
+          otherDevices.forEach(devId => {
+            const tk = existing[devId];
+            if (tk && tk.lastActive && (NOW - tk.lastActive) > STALE) {
+              cleanups.push(db.ref(`pushTokens/${pidNum}/${devId}`).remove());
+              delete existing[devId];
+            }
+          });
+          if (cleanups.length > 0) await Promise.all(cleanups);
+
+          const liveDevices = Object.keys(existing).filter(k => k !== did);
+          if (liveDevices.length > 0) {
+            confirmBtn.textContent = oldText;
+            confirmBtn.disabled = false;
+            showToast(`⚠️ ${player.name} ถูกติดตามจากอุปกรณ์อื่นอยู่แล้ว`, '#ef4444');
+            return;
+          }
+        } catch (err) {
+          console.warn('Device check failed (proceed anyway):', err);
+        }
+
+        confirmBtn.textContent = oldText;
+        confirmBtn.disabled = false;
 
         // ✅ เลือกได้แค่ 1 คน — ลบของเก่าออกก่อน (ถ้ามี)
         watchedIds.clear();
