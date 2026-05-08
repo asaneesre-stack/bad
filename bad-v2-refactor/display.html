@@ -2684,8 +2684,18 @@
         e.preventDefault();
         e.stopPropagation();
         if (!_pickerSelectedId) return;
+
+        // ✅ กันเลือกซ้ำ — เช็คว่าติดตามอยู่แล้วหรือยัง
+        if (watchedIds.has(_pickerSelectedId)) {
+          showToast('⚠️ คุณติดตามคนนี้อยู่แล้ว', '#f59e0b');
+          return;
+        }
+
         const player = state.players.find(p => +p.id === +_pickerSelectedId);
         if (!player) return;
+
+        // ✅ เลือกได้แค่ 1 คน — ลบของเก่าออกก่อน (ถ้ามี)
+        watchedIds.clear();
         watchedIds.add(_pickerSelectedId);
         saveWatchedIds();
         close();
@@ -2706,21 +2716,35 @@
         listEl.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:1.5rem;font-size:13px;">ยังไม่มีผู้เล่นเช็คอิน</div>';
         return;
       }
-      listEl.innerHTML = checkedIn.map(p => `
-        <div class="wpm-row" data-pid="${p.id}"
-          style="background:rgba(255,255,255,0.04); border-radius:10px; padding:12px;
-          display:flex; align-items:center; gap:10px; cursor:pointer; border:1.5px solid transparent;
-          transition:all 0.15s; -webkit-tap-highlight-color:transparent; user-select:none;">
+      listEl.innerHTML = checkedIn.map(p => {
+        const isWatched = watchedIds.has(p.id);
+        return `
+        <div class="wpm-row ${isWatched ? 'wpm-row-disabled' : ''}" data-pid="${p.id}"
+          style="background:${isWatched ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.04)'}; border-radius:10px; padding:12px;
+          display:flex; align-items:center; gap:10px; cursor:${isWatched ? 'not-allowed' : 'pointer'};
+          border:1.5px solid ${isWatched ? 'rgba(245,158,11,0.3)' : 'transparent'};
+          transition:all 0.15s; -webkit-tap-highlight-color:transparent; user-select:none;
+          ${isWatched ? 'opacity:0.6;' : ''}">
           ${renderAvatar(p, 'sm')}
           <span class="wpm-name" style="flex:1; font-size:14px; font-weight:700; color:#fff;">${esc(p.name)}</span>
-          <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>
+          ${isWatched
+            ? '<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:800;">✓ ติดตามอยู่</span>'
+            : `<span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>`
+          }
         </div>
-      `).join('');
+      `;
+      }).join('');
 
       // ✅ ใช้ทั้ง touchend (iOS) + click (desktop) — กดที่ row → select
       const handleSelect = (e) => {
         const row = e.target.closest('.wpm-row');
         if (!row) return;
+        // ✅ row ที่ติดตามอยู่แล้ว — กดไม่ได้
+        if (row.classList.contains('wpm-row-disabled')) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
         const pid = +row.dataset.pid;
         if (!pid) return;
         e.preventDefault();
