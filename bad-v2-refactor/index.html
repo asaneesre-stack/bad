@@ -412,7 +412,35 @@
                         style="padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;cursor:pointer;min-height:unset;
                         border:2px solid #ddd;background:#fff;color:#888;">P</button>
                 </div>
-                <div id="player-count" style="font-size:0.82rem;color:#888;margin-bottom:0.5rem;"></div>
+                <div id="player-count" style="font-size:0.82rem;color:#888;margin-bottom:0.5rem;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+                    <span id="player-count-text"></span>
+                    <button id="player-select-mode-btn" onclick="App.togglePlayerSelectMode()" type="button"
+                        style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:5px 12px;border-radius:8px;font-size:0.8rem;font-weight:700;cursor:pointer;min-height:unset;">
+                        ☑️ เลือกหลายคน
+                    </button>
+                </div>
+
+                <!-- Bulk action bar (ซ่อนเริ่มต้น) -->
+                <div id="player-bulk-bar" style="display:none;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;padding:10px 14px;border-radius:12px;margin-bottom:0.6rem;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(14,165,233,0.3);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span id="player-bulk-count" style="font-weight:800;font-size:0.95rem;">เลือกแล้ว 0</span>
+                        <button onclick="App._selectAllVisible()" type="button"
+                            style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:0.75rem;font-weight:700;cursor:pointer;min-height:unset;">เลือกทั้งหมด</button>
+                        <button onclick="App._clearSelection()" type="button"
+                            style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:0.75rem;font-weight:700;cursor:pointer;min-height:unset;">ล้าง</button>
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <button onclick="App._bulkDeletePlayers()" type="button"
+                            style="background:#ef4444;color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:800;cursor:pointer;min-height:unset;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
+                            🗑 ลบที่เลือก
+                        </button>
+                        <button onclick="App.togglePlayerSelectMode()" type="button"
+                            style="background:rgba(255,255,255,0.15);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;min-height:unset;">
+                            ปิด
+                        </button>
+                    </div>
+                </div>
+
                 <div id="player-list-container" class="player-list-cards"></div>
                 <!-- ซ่อนตารางเก่าไว้ — กันโค้ดที่อ้างอิง -->
                 <table style="display:none;">
@@ -896,6 +924,7 @@
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:0.75rem;">
                     <button class="danger" onclick="App.clearAllPushTokens()">🔕 เคลียร์ token ทั้งหมด</button>
                     <button onclick="App.clearStaleTokens()" style="background:#e67e22;color:#fff;border:none;padding:0.6rem 1rem;border-radius:8px;font-weight:700;cursor:pointer;">🟠 ลบ token เก่ากว่า 2 ชม</button>
+                    <button onclick="App.clearAllPresence()" style="background:#9b59b6;color:#fff;border:none;padding:0.6rem 1rem;border-radius:8px;font-weight:700;cursor:pointer;">📡 เคลียร์ presence ค้าง</button>
                     <button class="secondary" onclick="App.clearAlertState()">🔄 รีเซ็ต alert state</button>
                 </div>
                 <div id="clear-token-status" style="margin-top:0.5rem;font-size:0.82rem;color:#888;"></div>
@@ -2405,9 +2434,11 @@
             const skillClass = getSkillClass(player.skill);
             const games = PlayerUtils.getGameCount(player.id);
             const photoURL = player.photoURL || '';
+            const inSelectMode = !!uiState.playerSelectMode;
+            const isSelected = inSelectMode && this._selectedPlayerIds && this._selectedPlayerIds.has(player.id);
 
             const card = document.createElement('div');
-            card.className = 'player-card-row';
+            card.className = 'player-card-row' + (isSelected ? ' player-card-selected' : '');
             card.dataset.playerId = player.id;
 
             // Avatar inner — รูปจริง หรือ Person SVG
@@ -2419,8 +2450,15 @@
                    </svg>`;
 
             // ── Compact view (default) — Card grid ─────────────
+            const onclickAction = inSelectMode
+                ? `App._togglePlayerSelection(${player.id})`
+                : `App._togglePlayerCardEdit(${player.id})`;
+            const checkbox = inSelectMode
+                ? `<div class="player-select-check" style="position:absolute;top:5px;left:5px;width:22px;height:22px;border-radius:50%;background:${isSelected?'#0ea5e9':'rgba(255,255,255,0.9)'};border:2px solid ${isSelected?'#0ea5e9':'#cbd5e1'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:800;z-index:5;box-shadow:0 2px 6px rgba(0,0,0,0.15);">${isSelected?'✓':''}</div>`
+                : '';
             const compactView = `
-                <div class="player-card-compact" onclick="App._togglePlayerCardEdit(${player.id})">
+                <div class="player-card-compact" onclick="${onclickAction}" style="position:relative;">
+                    ${checkbox}
                     <div class="player-avatar avatar-${skillClass}">
                         ${avatarInner}
                         <span class="ava-skill-tag skill-${skillClass}">${escapeHtml(player.skill)}</span>
@@ -2682,7 +2720,7 @@
             });
 
             // แสดงจำนวน
-            const countEl = document.getElementById('player-count');
+            const countEl = document.getElementById('player-count-text') || document.getElementById('player-count');
             if (countEl) countEl.textContent = `แสดง ${filteredPlayers.length} จาก ${appState.players.length} คน`;
 
             // ✅ Render เป็น Card list (mobile-friendly)
@@ -2793,6 +2831,96 @@
             saveState();
             this.renderPlayerList(uiState.currentFilter);
             showSuccess(`อัปเดตระดับมือ ${escapeHtml(player.name)} เป็น ${newSkill}`);
+        },
+
+        // ✅ Multi-select system
+        _selectedPlayerIds: new Set(),
+
+        togglePlayerSelectMode: function() {
+            uiState.playerSelectMode = !uiState.playerSelectMode;
+            if (!uiState.playerSelectMode) {
+                this._selectedPlayerIds.clear();
+            }
+            // Toggle bar visibility
+            const bar = document.getElementById('player-bulk-bar');
+            const btn = document.getElementById('player-select-mode-btn');
+            if (bar) bar.style.display = uiState.playerSelectMode ? 'flex' : 'none';
+            if (btn) {
+                btn.textContent = uiState.playerSelectMode ? '✕ ยกเลิก' : '☑️ เลือกหลายคน';
+                btn.style.background = uiState.playerSelectMode ? '#fee2e2' : '#f1f5f9';
+                btn.style.color = uiState.playerSelectMode ? '#dc2626' : '#475569';
+            }
+            this._updateBulkCount();
+            this.renderPlayerList(uiState.currentFilter || '');
+        },
+
+        _togglePlayerSelection: function(playerId) {
+            if (this._selectedPlayerIds.has(playerId)) {
+                this._selectedPlayerIds.delete(playerId);
+            } else {
+                this._selectedPlayerIds.add(playerId);
+            }
+            this._updateBulkCount();
+            this.renderPlayerList(uiState.currentFilter || '');
+        },
+
+        _selectAllVisible: function() {
+            const filtered = (appState.players || []).filter(p => {
+                const q = (uiState.currentFilter || '').toLowerCase();
+                if (!q) return true;
+                return (p.name || '').toLowerCase().includes(q) || p.id.toString().includes(q);
+            });
+            filtered.forEach(p => this._selectedPlayerIds.add(p.id));
+            this._updateBulkCount();
+            this.renderPlayerList(uiState.currentFilter || '');
+        },
+
+        _clearSelection: function() {
+            this._selectedPlayerIds.clear();
+            this._updateBulkCount();
+            this.renderPlayerList(uiState.currentFilter || '');
+        },
+
+        _updateBulkCount: function() {
+            const el = document.getElementById('player-bulk-count');
+            if (el) el.textContent = `เลือกแล้ว ${this._selectedPlayerIds.size}`;
+        },
+
+        _bulkDeletePlayers: function() {
+            const ids = Array.from(this._selectedPlayerIds);
+            if (ids.length === 0) {
+                showError('กรุณาเลือกผู้เล่นก่อน');
+                return;
+            }
+            const names = ids
+                .map(id => PlayerUtils.getById(id)?.name)
+                .filter(Boolean);
+            const preview = names.slice(0, 5).join(', ') + (names.length > 5 ? `, ... (${names.length} คน)` : '');
+
+            if (!confirm(`ลบผู้เล่น ${ids.length} คน?\n${preview}\n\n⚠️ ไม่สามารถยกเลิกได้`)) return;
+
+            // Backup ก่อนลบ
+            try { _autoBackup('before_bulk_delete'); } catch(_) {}
+
+            // ลบทีละคน
+            let deleted = 0;
+            ids.forEach(id => {
+                const idx = appState.players.findIndex(p => +p.id === +id);
+                if (idx !== -1) {
+                    // ลบรูปจาก Storage (ถ้ามี)
+                    const p = appState.players[idx];
+                    if (p.photoPath) {
+                        try { firebase.storage().ref(p.photoPath).delete().catch(()=>{}); } catch(_) {}
+                    }
+                    appState.players.splice(idx, 1);
+                    deleted++;
+                }
+            });
+
+            this._selectedPlayerIds.clear();
+            saveState();
+            this.togglePlayerSelectMode();  // ปิด select mode
+            showSuccess(`✅ ลบ ${deleted} คนแล้ว`);
         },
 
         deletePlayer: function(id) {
@@ -4023,6 +4151,24 @@
                     statusEl.style.color = '#27ae60';
                     setTimeout(() => { statusEl.textContent = ''; }, 4000);
                     showSuccess('เคลียร์ push token ทั้งหมดแล้ว');
+                })
+                .catch(() => {
+                    statusEl.textContent = '❌ เคลียร์ไม่สำเร็จ';
+                    statusEl.style.color = '#e74c3c';
+                });
+        },
+
+        // ✅ เคลียร์ presence ค้าง (กรณี user ปิดแอปไม่สมบูรณ์)
+        clearAllPresence: function() {
+            if (!confirm('เคลียร์ presence ทั้งหมด? user ที่ online อยู่จะต้องเปิดแอปใหม่เพื่อกลับมา online')) return;
+            const statusEl = document.getElementById('clear-token-status');
+            statusEl.textContent = '⏳ กำลังเคลียร์ presence...';
+            firebase.database().ref('presence').remove()
+                .then(() => {
+                    statusEl.textContent = '✅ เคลียร์ presence เรียบร้อย — รายชื่อ "อุปกรณ์อื่น" จะหายไป';
+                    statusEl.style.color = '#27ae60';
+                    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+                    showSuccess('เคลียร์ presence ทั้งหมดแล้ว');
                 })
                 .catch(() => {
                     statusEl.textContent = '❌ เคลียร์ไม่สำเร็จ';
