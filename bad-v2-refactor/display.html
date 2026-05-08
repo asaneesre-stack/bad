@@ -3126,6 +3126,20 @@
         saveWatchedIds();
         setupPresence(pid);
         setupDirectMessageListener(pid);
+
+        // ✅ Quick write — ให้ admin badge เห็นทันที (ไม่ต้องรอ FCM token)
+        // ใส่ entry แบบ pending ใน pushTokens — admin จะเห็นว่ามี device แล้ว
+        // FCM token จริงจะถูก update ทับเมื่อ registerFCMToken เสร็จ
+        const _didQuick = localStorage.getItem('bb-device-id');
+        if (_didQuick) {
+          db.ref(`pushTokens/${pid}/${_didQuick}`).set({
+            token: 'pending',  // จะถูก update ทับเมื่อ FCM ได้ token จริง
+            ts: Date.now(),
+            device: navigator.userAgent.substring(0, 100),
+            pending: true
+          }).catch(()=>{});
+        }
+
         if (_pushGranted) {
           registerFCMToken(pid);
         } else {
