@@ -2742,28 +2742,70 @@
         listEl.innerHTML = '<div style="text-align:center;color:rgba(255,255,255,0.4);padding:1.5rem;font-size:13px;">ยังไม่มีผู้เล่นเช็คอิน</div>';
         return;
       }
-      _renderListInner(checkedIn);
+
+      // Render initial — แค่เช็คตัวเองก่อน (เร็ว)
+      _renderListInner(checkedIn, new Set());
+
+      // ✅ Async pre-check — ดึง pushTokens ของทุกคน → ดูว่ามี device อื่นไหม
+      (async () => {
+        try {
+          const did = localStorage.getItem('bb-device-id');
+          const NOW = Date.now();
+          const TTL = 24 * 60 * 60 * 1000; // 24 ชม
+          const watchedByOthers = new Set();
+
+          const promises = checkedIn.map(p =>
+            db.ref(`pushTokens/${+p.id}`).once('value')
+              .then(snap => ({ pid: +p.id, val: snap.val() || {} }))
+              .catch(() => ({ pid: +p.id, val: {} }))
+          );
+          const results = await Promise.all(promises);
+          results.forEach(({ pid, val }) => {
+            // device อื่น (ไม่ใช่ตัวเอง) ที่ไม่เก่าเกิน 24 ชม
+            const liveOthers = Object.keys(val).filter(devId => {
+              if (devId === did) return false;
+              const tk = val[devId];
+              if (!tk) return false;
+              if (tk.ts && (NOW - tk.ts) > TTL) return false; // stale > 24h
+              return true;
+            });
+            if (liveOthers.length > 0) watchedByOthers.add(pid);
+          });
+
+          // re-render ถ้า modal ยังเปิด
+          if (document.getElementById('watch-picker-modal')) {
+            _renderListInner(checkedIn, watchedByOthers);
+          }
+        } catch(e) {
+          console.warn('PushTokens pre-check failed:', e);
+        }
+      })();
     }
 
-    function _renderListInner(checkedIn) {
+    function _renderListInner(checkedIn, watchedByOthers) {
       const listEl = document.getElementById('wpm-list');
       if (!listEl) return;
+      watchedByOthers = watchedByOthers || new Set();
 
       listEl.innerHTML = checkedIn.map(p => {
         const pidNum = +p.id;
         const isMine = watchedIds.has(pidNum) || watchedIds.has(p.id) || watchedIds.has(String(p.id));
-        const bg = isMine ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.04)';
-        const border = isMine ? 'rgba(245,158,11,0.3)' : 'transparent';
+        const byOther = watchedByOthers.has(pidNum) && !isMine;
+        const isDisabled = isMine || byOther;
+        const bg = isMine ? 'rgba(245,158,11,0.1)' : (byOther ? 'rgba(239,68,68,0.1)' : 'rgba(255,255,255,0.04)');
+        const border = isMine ? 'rgba(245,158,11,0.3)' : (byOther ? 'rgba(239,68,68,0.3)' : 'transparent');
         const badge = isMine
           ? '<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:800;">✓ ติดตามอยู่</span>'
-          : `<span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>`;
+          : (byOther
+              ? '<span style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:800;">🔒 อุปกรณ์อื่น</span>'
+              : `<span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>`);
         return `
-        <div class="wpm-row ${isMine ? 'wpm-row-disabled' : ''}" data-pid="${pidNum}"
+        <div class="wpm-row ${isDisabled ? 'wpm-row-disabled' : ''}" data-pid="${pidNum}"
           style="background:${bg}; border-radius:10px; padding:12px;
-          display:flex; align-items:center; gap:10px; cursor:${isMine ? 'not-allowed' : 'pointer'};
+          display:flex; align-items:center; gap:10px; cursor:${isDisabled ? 'not-allowed' : 'pointer'};
           border:1.5px solid ${border};
           transition:all 0.15s; -webkit-tap-highlight-color:transparent; user-select:none;
-          ${isMine ? 'opacity:0.6;' : ''}">
+          ${isDisabled ? 'opacity:0.6;' : ''}">
           ${renderAvatar(p, 'sm')}
           <span class="wpm-name" style="flex:1; font-size:14px; font-weight:700; color:#fff;">${esc(p.name)}</span>
           ${badge}
