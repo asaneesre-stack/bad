@@ -1662,6 +1662,12 @@
       if (_pushGranted && watchedIds.size > 0) {
         watchedIds.forEach(pid => { setupPresence(pid); setupDirectMessageListener(pid); registerFCMToken(pid); });
       }
+
+      // ✅ Welcome Modal — เด้งถ้ายังไม่ได้ติดตามใคร + ไม่ได้ skip ใน session นี้
+      if (!_welcomeShown && watchedIds.size === 0 && !_skippedThisSession) {
+        _welcomeShown = true;
+        setTimeout(() => openWelcomeModal(), 600);
+      }
     }, () => syncStatus('❌ เชื่อมต่อไม่ได้', '#e74c3c'));
 
     // ── Clock ─────────────────────────────────────────────────────
@@ -2517,6 +2523,238 @@
     }
     let prevQueueFirst = null;    // track who was first in queue last render
     let alertShown = new Set();   // avoid repeated alerts for same position
+
+    // ✅ Welcome Modal — เด้งครั้งแรกถ้ายังไม่ได้ติดตาม
+    let _welcomeShown = false;
+    let _skippedThisSession = false;
+
+    function openWelcomeModal() {
+      // ลบ modal เก่า (ถ้ามี)
+      const old = document.getElementById('welcome-modal');
+      if (old) old.remove();
+
+      const players = state.players || [];
+      const checkedIn = players.filter(p => p.isCheckedIn);
+
+      // ถ้าไม่มีคนเช็คอินเลย → ไม่ต้องเด้ง
+      if (checkedIn.length === 0) return;
+
+      const overlay = document.createElement('div');
+      overlay.id = 'welcome-modal';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,0.85);
+        z-index:10000; display:flex; align-items:center; justify-content:center;
+        padding:16px; backdrop-filter:blur(10px);
+        animation: fade-in 0.3s ease-out;
+      `;
+
+      overlay.innerHTML = `
+        <div class="welcome-modal-inner" style="background:rgba(20,30,50,0.98); border-radius:20px;
+          border:1px solid rgba(0,168,204,0.4); padding:18px; max-width:400px; width:100%;
+          box-shadow:0 20px 60px rgba(0,0,0,0.6); max-height:90vh; display:flex; flex-direction:column;
+          animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);">
+
+          <!-- Header -->
+          <div style="text-align:center; margin-bottom:14px; flex-shrink:0;">
+            <div style="font-size:36px;">👋</div>
+            <div style="font-size:17px; font-weight:800; color:#fff; margin-top:4px;">
+              ยินดีต้อนรับ!
+            </div>
+            <div style="font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">
+              เลือกชื่อของคุณเพื่อติดตามคิว
+            </div>
+          </div>
+
+          <!-- Search -->
+          <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+            border-radius:10px; padding:9px 12px; display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-shrink:0;">
+            <span style="opacity:0.5;">🔍</span>
+            <input id="welcome-search" type="text" placeholder="ค้นหาชื่อ..."
+              style="flex:1; background:transparent; border:none; outline:none; color:#fff; font-size:14px;">
+          </div>
+
+          <!-- List -->
+          <div id="welcome-list" style="display:flex; flex-direction:column; gap:5px;
+            overflow-y:auto; flex:1; padding:2px; max-height:50vh; -webkit-overflow-scrolling:touch;">
+          </div>
+
+          <!-- Confirm Bar -->
+          <div id="welcome-confirm-bar" style="display:none; background:linear-gradient(90deg, rgba(0,168,204,0.25), rgba(0,168,204,0.1));
+            border:1.5px solid var(--cyan); border-radius:12px; padding:10px 12px; margin-top:10px;
+            align-items:center; justify-content:space-between; gap:10px; flex-shrink:0;">
+            <div style="font-size:13px; color:rgba(255,255,255,0.9); flex:1;">
+              เลือก: <strong id="welcome-selected-name" style="color:var(--cyan);">—</strong>
+            </div>
+            <button id="welcome-confirm-btn" style="background:linear-gradient(135deg, #10b981, #059669);
+              color:#fff; border:none; padding:10px 22px; border-radius:999px; font-size:13px;
+              font-weight:800; cursor:pointer; box-shadow:0 4px 14px rgba(16,185,129,0.4); flex-shrink:0;
+              -webkit-tap-highlight-color:transparent;">
+              ✓ ยืนยัน
+            </button>
+          </div>
+
+          <!-- Skip button -->
+          <button id="welcome-skip-btn" style="background:transparent; border:none;
+            color:rgba(255,255,255,0.4); font-size:12px; padding:10px; margin-top:6px; cursor:pointer;
+            text-align:center; flex-shrink:0;">
+            ข้าม - ดูคิวเฉยๆ
+          </button>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      // Lock body scroll
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      const scrollY = window.scrollY;
+      document.body.style.top = `-${scrollY}px`;
+      overlay.dataset.scrollY = scrollY;
+
+      const close = () => {
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+        const savedY = parseInt(overlay.dataset.scrollY || '0', 10);
+        window.scrollTo(0, savedY);
+        overlay.remove();
+      };
+
+      // Skip button
+      const skipBtn = overlay.querySelector('#welcome-skip-btn');
+      const handleSkip = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        _skippedThisSession = true;
+        close();
+        showToast('👁 ดูคิวอย่างเดียว — ปิดแอปแล้วเปิดใหม่จะเด้งให้เลือกอีก', '#0ea5e9');
+      };
+      skipBtn.addEventListener('touchend', handleSkip, { passive: false });
+      skipBtn.addEventListener('click', handleSkip);
+
+      // Render list
+      _renderWelcomeList(checkedIn);
+
+      // Search filter
+      const searchEl = overlay.querySelector('#welcome-search');
+      searchEl.addEventListener('input', () => {
+        const q = searchEl.value.toLowerCase();
+        overlay.querySelectorAll('.welcome-row').forEach(row => {
+          const name = row.querySelector('.welcome-name')?.textContent.toLowerCase() || '';
+          const real = row.querySelector('.welcome-real')?.textContent.toLowerCase() || '';
+          const id = row.dataset.pid;
+          row.style.display = (name.includes(q) || real.includes(q) || (id && id.includes(q))) ? '' : 'none';
+        });
+      });
+
+      // Confirm button
+      const confirmBtn = overlay.querySelector('#welcome-confirm-btn');
+      const handleConfirm = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!_welcomeSelectedId) return;
+        const player = state.players.find(p => +p.id === +_welcomeSelectedId);
+        if (!player) return;
+        // ใช้ toggleWatch (logic ที่ stable)
+        toggleWatch(_welcomeSelectedId);
+        close();
+        try { renderWatchBar(); } catch(_) {}
+        try { highlightMyQueues(); } catch(_) {}
+        try { updatePayBtn(); } catch(_) {}
+        showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
+      };
+      confirmBtn.addEventListener('touchend', handleConfirm, { passive: false });
+      confirmBtn.addEventListener('click', handleConfirm);
+    }
+
+    let _welcomeSelectedId = null;
+
+    function _renderWelcomeList(checkedIn) {
+      const listEl = document.getElementById('welcome-list');
+      if (!listEl) return;
+
+      listEl.innerHTML = checkedIn.map(p => {
+        const pidNum = +p.id;
+        const skill = esc(p.skill || 'N');
+        const realName = p.realName ? esc(p.realName) : '';
+        return `
+        <div class="welcome-row" data-pid="${pidNum}"
+          style="background:rgba(255,255,255,0.04); border-radius:10px; padding:10px 12px;
+          display:flex; align-items:center; gap:10px; cursor:pointer; border:1.5px solid transparent;
+          transition:all 0.15s; -webkit-tap-highlight-color:transparent; user-select:none;">
+          ${renderAvatar(p, 'sm')}
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:baseline; gap:6px;">
+              <span style="background:rgba(0,168,204,0.2); color:#00a8cc; padding:0 5px; border-radius:4px; font-size:9px; font-weight:800;">#${pidNum}</span>
+              <span class="welcome-name" style="font-size:13px; font-weight:800; color:#fff;">${esc(p.name)}</span>
+            </div>
+            ${realName
+              ? `<div class="welcome-real" style="font-size:10px; color:rgba(255,255,255,0.5); margin-top:2px;">👤 ${realName}</div>`
+              : ''}
+          </div>
+          <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${skill}</span>
+        </div>
+      `;
+      }).join('');
+
+      const handleSelect = (e) => {
+        const row = e.target.closest('.welcome-row');
+        if (!row) return;
+        const pid = +row.dataset.pid;
+        if (!pid) return;
+        e.preventDefault();
+        e.stopPropagation();
+        _selectWelcomeRow(pid);
+      };
+
+      const newList = listEl.cloneNode(true);
+      listEl.parentNode.replaceChild(newList, listEl);
+      newList.addEventListener('touchend', handleSelect, { passive: false });
+      newList.addEventListener('click', handleSelect);
+    }
+
+    function _selectWelcomeRow(pid) {
+      _welcomeSelectedId = pid;
+      const overlay = document.getElementById('welcome-modal');
+      if (!overlay) return;
+
+      // Reset rows
+      overlay.querySelectorAll('.welcome-row').forEach(r => {
+        r.style.background = 'rgba(255,255,255,0.04)';
+        r.style.borderColor = 'transparent';
+        const oldCheck = r.querySelector('.welcome-check');
+        if (oldCheck) oldCheck.remove();
+      });
+
+      // Highlight selected
+      const row = overlay.querySelector(`.welcome-row[data-pid="${pid}"]`);
+      if (row) {
+        row.style.background = 'rgba(0,168,204,0.25)';
+        row.style.borderColor = 'var(--cyan)';
+        const check = document.createElement('span');
+        check.className = 'welcome-check';
+        check.textContent = '✓';
+        check.style.cssText = `
+          background:var(--cyan); color:#fff; width:24px; height:24px;
+          border-radius:50%; display:flex; align-items:center; justify-content:center;
+          font-size:13px; font-weight:800; flex-shrink:0;
+          box-shadow:0 2px 8px rgba(0,168,204,0.5);
+          animation: check-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        `;
+        row.appendChild(check);
+      }
+
+      // Show confirm bar
+      const player = state.players.find(p => +p.id === +pid);
+      if (player) {
+        const bar = document.getElementById('welcome-confirm-bar');
+        const nameEl = document.getElementById('welcome-selected-name');
+        if (bar) bar.style.display = 'flex';
+        if (nameEl) nameEl.textContent = player.name;
+      }
+    }
 
     function renderWatchBar() {
       // ✅ ถ้า modal picker เปิดอยู่ → ห้าม re-render (จะทำให้ modal ปิด)
