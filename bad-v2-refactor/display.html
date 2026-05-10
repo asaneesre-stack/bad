@@ -519,20 +519,26 @@
 
       <!-- Waiting -->
       <div class="waiting-section">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;">
-          <div class="waiting-title" style="margin-bottom:0;">รอจัดคู่</div>
-          <button id="btn-show-all" onclick="toggleShowAll()"
+        <div onclick="toggleWaitingSection()" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.4rem;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;">
+          <div class="waiting-title" style="margin-bottom:0;display:flex;align-items:center;gap:6px;">
+            <span id="waiting-toggle-icon" style="font-size:0.85rem;transition:transform 0.2s;">▼</span>
+            รอจัดคู่
+            <span id="waiting-count-badge" style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-size:0.7rem;padding:2px 7px;border-radius:999px;font-weight:700;"></span>
+          </div>
+          <button id="btn-show-all" onclick="event.stopPropagation();toggleShowAll();"
             style="font-size:0.65rem;padding:2px 8px;border-radius:10px;border:1px solid rgba(255,255,255,0.2);
             background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.6);cursor:pointer;min-height:unset;">
             👥 ดูทั้งหมด
           </button>
         </div>
-        <div class="waiting-chips-grid" id="waiting-chips"></div>
-        <div id="waiting-empty" style="display:none;font-size:0.82rem;color:var(--muted);font-style:italic;">ไม่มีผู้เล่นรอ</div>
-        <!-- all players list (hidden by default) -->
-        <div id="all-players-panel" style="display:none;margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid rgba(255,255,255,0.1);">
-          <div style="font-size:0.65rem;color:var(--muted);font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">รายชื่อทั้งหมด</div>
-          <div class="waiting-chips-grid" id="all-players-chips"></div>
+        <div id="waiting-content">
+          <div class="waiting-chips-grid" id="waiting-chips"></div>
+          <div id="waiting-empty" style="display:none;font-size:0.82rem;color:var(--muted);font-style:italic;">ไม่มีผู้เล่นรอ</div>
+          <!-- all players list (hidden by default) -->
+          <div id="all-players-panel" style="display:none;margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid rgba(255,255,255,0.1);">
+            <div style="font-size:0.65rem;color:var(--muted);font-weight:700;margin-bottom:0.4rem;text-transform:uppercase;letter-spacing:0.05em;">รายชื่อทั้งหมด</div>
+            <div class="waiting-chips-grid" id="all-players-chips"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -2444,6 +2450,26 @@
 
     // ── Waiting ───────────────────────────────────────────────────
     let _showAll = false;
+    // ✅ Waiting section collapse state — จำใน localStorage
+    let _waitingCollapsed = localStorage.getItem('bb-waiting-collapsed') === '1';
+
+    window.toggleWaitingSection = function() {
+      _waitingCollapsed = !_waitingCollapsed;
+      try { localStorage.setItem('bb-waiting-collapsed', _waitingCollapsed ? '1' : '0'); } catch(e) {}
+      _applyWaitingCollapse();
+    };
+
+    function _applyWaitingCollapse() {
+      const content = document.getElementById('waiting-content');
+      const icon = document.getElementById('waiting-toggle-icon');
+      const showAllBtn = document.getElementById('btn-show-all');
+      if (content) content.style.display = _waitingCollapsed ? 'none' : '';
+      if (icon) icon.style.transform = _waitingCollapsed ? 'rotate(-90deg)' : 'rotate(0)';
+      if (showAllBtn) showAllBtn.style.display = _waitingCollapsed ? 'none' : '';
+    }
+
+    // Apply state ตอนแรก
+    document.addEventListener('DOMContentLoaded', _applyWaitingCollapse);
 
     window.toggleShowAll = function() {
       _showAll = !_showAll;
@@ -2481,6 +2507,10 @@
 
       const chipsEl = document.getElementById('waiting-chips');
       const emptyEl = document.getElementById('waiting-empty');
+
+      // ✅ Update count badge
+      const countBadge = document.getElementById('waiting-count-badge');
+      if (countBadge) countBadge.textContent = waiting.length > 0 ? waiting.length + ' คน' : '';
 
       if (waiting.length === 0) {
         chipsEl.innerHTML = '';
