@@ -2450,8 +2450,8 @@
 
     // ── Waiting ───────────────────────────────────────────────────
     let _showAll = false;
-    // ✅ Waiting section collapse state — จำใน localStorage
-    let _waitingCollapsed = localStorage.getItem('bb-waiting-collapsed') === '1';
+    // ✅ Waiting section collapse state — default ปิดเมื่อยังไม่เคยตั้งค่า
+    let _waitingCollapsed = localStorage.getItem('bb-waiting-collapsed') !== '0';
 
     window.toggleWaitingSection = function() {
       _waitingCollapsed = !_waitingCollapsed;
