@@ -502,6 +502,15 @@
         </div>
       </div>
 
+      <!-- ✨ Wait Time Estimate (โผล่เฉพาะตอนรอคิว) -->
+      <div id="my-wait-estimate" style="display:none; margin-top:8px; background:linear-gradient(90deg, rgba(255,193,7,0.2), rgba(255,193,7,0.05)); border:1.5px solid rgba(255,193,7,0.4); border-radius:10px; padding:10px 12px; align-items:center; gap:10px;">
+        <div style="font-size:20px; flex-shrink:0;">⏳</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:10px; color:rgba(255,255,255,0.7);">คาดว่าได้เล่นในอีก:</div>
+          <div id="my-wait-estimate-time" style="font-size:16px; font-weight:800; color:#ffc107;">—</div>
+        </div>
+      </div>
+
       <!-- Ready / Resting Toggle — สถานะของผู้เล่น -->
       <button id="my-status-availability-btn" onclick="toggleMyAvailability()" style="width:100%; margin-top:10px; background:linear-gradient(135deg,#27ae60,#229954); border:none; border-radius:12px; padding:11px; color:#fff; font-size:14px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(39,174,96,0.3); display:flex; align-items:center; justify-content:center; gap:8px;">
         <span id="my-status-availability-icon">✅</span>
@@ -1055,26 +1064,64 @@
     function showUpdateToast() {
       // ป้องกันแสดงซ้ำ
       if (document.getElementById('sw-update-toast')) return;
-      const toast = document.createElement('div');
-      toast.id = 'sw-update-toast';
-      toast.style.cssText = `
-        position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-        background:linear-gradient(135deg,#3498db,#2980b9); color:#fff;
-        padding:14px 18px; border-radius:14px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
-        z-index:99999; font-family:'Sarabun',sans-serif; font-size:0.9rem;
-        display:flex; align-items:center; gap:10px; max-width:90%;
+      // เช็คว่าเพิ่งถูกปิดไปไหม (snooze 1 ชม)
+      const snoozedUntil = parseInt(localStorage.getItem('bb-update-snooze') || '0', 10);
+      if (Date.now() < snoozedUntil) {
+        // Auto-show อีกครั้งเมื่อหมด snooze
+        setTimeout(showUpdateToast, snoozedUntil - Date.now());
+        return;
+      }
+
+      const banner = document.createElement('div');
+      banner.id = 'sw-update-toast';
+      banner.style.cssText = `
+        position:fixed; top:0; left:0; right:0;
+        background:linear-gradient(135deg,#8b5cf6,#6d28d9); color:#fff;
+        padding:10px 14px; box-shadow:0 8px 24px rgba(139,92,246,0.4);
+        z-index:99999; font-family:'Sarabun',sans-serif;
+        display:flex; align-items:center; gap:10px;
+        animation: bb-update-slide-down 0.4s ease-out;
       `;
-      toast.innerHTML = `
-        <div style="font-size:1.4rem;">🔄</div>
-        <div style="flex:1;">
-          <div style="font-weight:700;">มีเวอร์ชั่นใหม่!</div>
-          <div style="font-size:0.78rem; opacity:0.9;">กดเพื่อโหลดใหม่</div>
+      banner.innerHTML = `
+        <div style="font-size:1.4rem; animation: bb-update-bounce 1s ease-in-out infinite;">🚀</div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:800; font-size:0.92rem;">มี version ใหม่!</div>
+          <div style="font-size:0.72rem; opacity:0.9;">กดอัพเดทเพื่อใช้ฟีเจอร์ล่าสุด</div>
         </div>
-        <button onclick="window.location.reload()" style="background:#fff;color:#2980b9;border:none;padding:6px 14px;border-radius:8px;font-weight:700;font-size:0.85rem;cursor:pointer;">โหลด</button>
-        <button onclick="document.getElementById('sw-update-toast').remove()" style="background:transparent;color:#fff;border:none;padding:6px 8px;font-size:1.2rem;cursor:pointer;">×</button>
+        <button onclick="window.location.reload()" style="background:#fff;color:#6d28d9;border:none;padding:7px 14px;border-radius:8px;font-weight:800;font-size:0.85rem;cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent;">
+          อัพเดท
+        </button>
+        <button onclick="bbSnoozeUpdate()" style="background:transparent;color:#fff;border:none;padding:6px 8px;font-size:1.2rem;cursor:pointer;-webkit-tap-highlight-color:transparent;" title="ซ่อน 1 ชม">×</button>
       `;
-      document.body.appendChild(toast);
+      document.body.appendChild(banner);
+
+      // Inject animations
+      if (!document.getElementById('bb-update-anim')) {
+        const style = document.createElement('style');
+        style.id = 'bb-update-anim';
+        style.textContent = `
+          @keyframes bb-update-slide-down {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+          }
+          @keyframes bb-update-bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
     }
+
+    // ✅ ปิด banner 1 ชม (snooze)
+    window.bbSnoozeUpdate = function() {
+      const SNOOZE_MS = 60 * 60 * 1000; // 1 ชม
+      localStorage.setItem('bb-update-snooze', String(Date.now() + SNOOZE_MS));
+      const t = document.getElementById('sw-update-toast');
+      if (t) t.remove();
+      // แสดงอีกครั้งหลังหมดเวลา
+      setTimeout(showUpdateToast, SNOOZE_MS);
+    };
     initPWA();
     checkOnboarding();
     bmTryRestore();
@@ -2268,6 +2315,33 @@
         label.style.color = 'rgba(255,255,255,0.55)';
         title.textContent = 'รอจัดคู่';
         detail.textContent = 'admin จะเรียกเมื่อถึงคิว';
+      }
+
+      // ✨ Wait Time Estimate — แสดงเฉพาะตอนรอคิว
+      const waitBox = document.getElementById('my-wait-estimate');
+      const waitTimeEl = document.getElementById('my-wait-estimate-time');
+      if (waitBox && waitTimeEl) {
+        if (queueIdx >= 0 && !inMatch) {
+          // คำนวณ wait time
+          try {
+            const mins = estimateWaitMin(queueIdx);
+            if (mins && mins > 0) {
+              if (queueIdx === 0) {
+                waitTimeEl.innerHTML = 'เร็วๆ นี้! <span style="font-size:11px; opacity:0.7;">(คิวต่อไป)</span>';
+              } else {
+                waitTimeEl.innerHTML = `~${mins} <span style="font-size:11px; opacity:0.7;">นาที</span>`;
+              }
+              waitBox.style.display = 'flex';
+            } else {
+              waitBox.style.display = 'none';
+            }
+          } catch(_) {
+            waitBox.style.display = 'none';
+          }
+        } else {
+          // ลงสนามแล้ว หรือไม่มีคิว → ซ่อน
+          waitBox.style.display = 'none';
+        }
       }
 
       // Update availability button (พร้อมเล่น/พัก)
