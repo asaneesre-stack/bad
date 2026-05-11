@@ -40,6 +40,82 @@
 <body>
 
   <!-- ═══════════════════════════════════════════════════════════
+       ⚡ Skeleton Loader — แสดงระหว่างรอ data โหลด
+       ═══════════════════════════════════════════════════════════ -->
+  <div id="skeleton-loader" style="position:fixed;inset:0;background:linear-gradient(180deg,#0a1628,#1a2b47);z-index:9999;overflow:hidden;padding:14px;">
+    <!-- Header skeleton -->
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+      <div class="sk-shimmer" style="width:48px;height:48px;border-radius:10px;"></div>
+      <div style="flex:1;display:flex;gap:6px;">
+        <div class="sk-shimmer" style="flex:1;height:38px;"></div>
+        <div class="sk-shimmer" style="flex:1;height:38px;"></div>
+        <div class="sk-shimmer" style="flex:1;height:38px;"></div>
+        <div class="sk-shimmer" style="flex:1;height:38px;"></div>
+      </div>
+    </div>
+    <!-- Watch bar skeleton -->
+    <div class="sk-shimmer" style="height:42px;margin-bottom:10px;"></div>
+    <!-- Status card skeleton -->
+    <div class="sk-shimmer" style="height:130px;margin-bottom:14px;"></div>
+    <!-- Section title -->
+    <div class="sk-shimmer" style="height:18px;width:140px;margin-bottom:8px;"></div>
+    <!-- Court rows -->
+    <div class="sk-shimmer" style="height:65px;margin-bottom:8px;"></div>
+    <div class="sk-shimmer" style="height:65px;margin-bottom:14px;"></div>
+    <!-- Queue section -->
+    <div class="sk-shimmer" style="height:18px;width:110px;margin-bottom:8px;"></div>
+    <div class="sk-shimmer" style="height:48px;margin-bottom:6px;"></div>
+    <div class="sk-shimmer" style="height:48px;margin-bottom:6px;"></div>
+    <div class="sk-shimmer" style="height:48px;margin-bottom:14px;"></div>
+
+    <!-- Loading text -->
+    <div style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+      background:rgba(0,168,204,0.15);border:1px solid rgba(0,168,204,0.3);
+      color:#00a8cc;padding:8px 18px;border-radius:999px;font-size:12px;font-weight:700;
+      display:flex;align-items:center;gap:8px;backdrop-filter:blur(8px);">
+      <div style="width:14px;height:14px;border:2px solid #00a8cc;border-top-color:transparent;border-radius:50%;animation:sk-spin 0.8s linear infinite;"></div>
+      กำลังเชื่อมต่อ...
+    </div>
+  </div>
+
+  <style>
+    .sk-shimmer {
+      background: linear-gradient(90deg,
+        rgba(255,255,255,0.04) 0%,
+        rgba(255,255,255,0.12) 50%,
+        rgba(255,255,255,0.04) 100%);
+      background-size: 200% 100%;
+      animation: sk-shimmer 1.4s infinite;
+      border-radius: 10px;
+    }
+    @keyframes sk-shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+    @keyframes sk-spin {
+      to { transform: rotate(360deg); }
+    }
+    #skeleton-loader.fading {
+      opacity: 0;
+      transition: opacity 0.3s ease-out;
+      pointer-events: none;
+    }
+  </style>
+
+  <script>
+    // Track page load time for skeleton minimum display
+    window._pageLoadTs = Date.now();
+    // Safety: ซ่อน skeleton หลัง 8 วินาที (กรณี Firebase ไม่ตอบ)
+    setTimeout(() => {
+      const sk = document.getElementById('skeleton-loader');
+      if (sk && !sk.classList.contains('fading')) {
+        sk.classList.add('fading');
+        setTimeout(() => sk.remove(), 300);
+      }
+    }, 8000);
+  </script>
+
+  <!-- ═══════════════════════════════════════════════════════════
        Onboarding Modal — แสดงครั้งแรกที่ user เปิดแอป
        ═══════════════════════════════════════════════════════════ -->
   <div id="onboarding-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99998;align-items:center;justify-content:center;padding:1rem;">
@@ -1654,6 +1730,16 @@
       state = fixArrays(clean);
       if (!state.payments) state.payments = {};
       render();
+      // ✅ ซ่อน skeleton หลัง data โหลดเสร็จ + รอ minimum 300ms กัน flicker
+      const sk = document.getElementById('skeleton-loader');
+      if (sk && !sk.classList.contains('fading')) {
+        const elapsed = Date.now() - (window._pageLoadTs || 0);
+        const minDelay = Math.max(0, 300 - elapsed);
+        setTimeout(() => {
+          sk.classList.add('fading');
+          setTimeout(() => sk.remove(), 300);
+        }, minDelay);
+      }
       syncStatus('🔄 ข้อมูลล่าสุด', '#27ae60');
       setTimeout(() => syncStatus('☁️ เชื่อมต่อแล้ว', '#00a8cc'), 2000);
       // re-render payment modal ถ้าเปิดอยู่ (ยอดอาจเปลี่ยนเพราะ admin แก้ค่าเสริม/โหมด/เกมจบเพิ่ม)
@@ -2332,12 +2418,32 @@
         }
         const finalTop = parseInt(indicator.style.top || '-50', 10);
         if (finalTop > 0 && (e.changedTouches[0].clientY - startY) > 100) {
-          indicator.textContent = '🔄 กำลังรีเฟรช...';
+          indicator.textContent = '🔄 ซิงค์ข้อมูล...';
           indicator.style.top = '20px';
-          // Trigger reload data
-          setTimeout(() => {
-            window.location.reload();
-          }, 400);
+          indicator.style.background = 'linear-gradient(135deg,#00a8cc,#0284c7)';
+          // ✅ Smart refresh — fetch state ใหม่ ไม่ reload หน้า
+          db.ref('badmintonState').once('value')
+            .then(snap => {
+              const raw = snap.val();
+              if (raw) {
+                const { _savedBy, ...clean } = raw;
+                state = fixArrays(clean);
+                if (!state.payments) state.payments = {};
+                render();
+                indicator.textContent = '✅ อัพเดทแล้ว';
+                indicator.style.background = 'linear-gradient(135deg,#10b981,#059669)';
+                setTimeout(() => { indicator.style.top = '-50px'; }, 1000);
+              } else {
+                indicator.textContent = '⚠️ ไม่มีข้อมูล';
+                setTimeout(() => { indicator.style.top = '-50px'; }, 1500);
+              }
+            })
+            .catch(err => {
+              console.error('Smart refresh failed:', err);
+              indicator.textContent = '❌ รีเฟรชล้มเหลว';
+              indicator.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
+              setTimeout(() => { indicator.style.top = '-50px'; }, 1500);
+            });
         } else {
           indicator.style.top = '-50px';
         }
