@@ -2290,7 +2290,8 @@
 
       document.addEventListener('touchstart', (e) => {
         // ✅ ถ้ามี modal เปิดอยู่ → skip pull-to-refresh
-        if (document.getElementById('watch-picker-modal')) return;
+        if (document.getElementById('watch-picker-modal') ||
+            document.getElementById('welcome-modal')) return;
         if (window.scrollY === 0) {
           startY = e.touches[0].clientY;
           pulling = true;
@@ -2300,7 +2301,8 @@
       document.addEventListener('touchmove', (e) => {
         if (!pulling) return;
         // ✅ ถ้า modal เปิดระหว่าง drag → ยกเลิก
-        if (document.getElementById('watch-picker-modal')) {
+        if (document.getElementById('watch-picker-modal') ||
+            document.getElementById('welcome-modal')) {
           pulling = false;
           indicator.style.top = '-50px';
           return;
@@ -2323,7 +2325,8 @@
         if (!pulling) return;
         pulling = false;
         // ✅ ถ้า modal เปิด → ไม่ refresh
-        if (document.getElementById('watch-picker-modal')) {
+        if (document.getElementById('watch-picker-modal') ||
+            document.getElementById('welcome-modal')) {
           indicator.style.top = '-50px';
           return;
         }
