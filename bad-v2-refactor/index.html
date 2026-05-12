@@ -2455,6 +2455,20 @@
                 isPlaying: false
             };
 
+            // ✅ Auto-restore จาก profile (ถ้ามีชื่อตรง)
+            const matchProfile = (appState.playerProfiles || []).find(p =>
+                p.name === newPlayer.name
+            );
+            if (matchProfile) {
+                if (matchProfile.loginCode && !newPlayer.loginCode) {
+                    newPlayer.loginCode = matchProfile.loginCode;
+                }
+                if (matchProfile.photoURL && !newPlayer.photoURL) {
+                    newPlayer.photoURL = matchProfile.photoURL;
+                    newPlayer.photoPath = matchProfile.photoPath;
+                }
+            }
+
             appState.players.push(newPlayer);
             appState.history[newPlayer.id] = { games: [] };
             auditLog('add_player', { id: newPlayer.id, name: newPlayer.name, skill: newPlayer.skill });
@@ -3653,12 +3667,17 @@
             }
             const result = this.addPlayer(profile.name, profile.skill, profile.realName);
             if (result.success) {
-                // ✅ Copy รูปจาก profile (ถาวร) → player (รายวัน)
-                if (profile.photoURL) {
+                // ✅ Copy รูป + loginCode จาก profile (ถาวร) → player (รายวัน)
+                if (profile.photoURL || profile.loginCode) {
                     const newPlayer = appState.players[appState.players.length - 1];
                     if (newPlayer) {
-                        newPlayer.photoURL = profile.photoURL;
-                        newPlayer.photoPath = profile.photoPath;
+                        if (profile.photoURL) {
+                            newPlayer.photoURL = profile.photoURL;
+                            newPlayer.photoPath = profile.photoPath;
+                        }
+                        if (profile.loginCode) {
+                            newPlayer.loginCode = profile.loginCode;
+                        }
                     }
                 }
                 saveState();
@@ -4210,9 +4229,21 @@
 
         // ✅ เคลียร์ presence ค้าง (กรณี user ปิดแอปไม่สมบูรณ์)
         // ✅ Generate รหัสล็อกอินที่ยังไม่มี (ของเดิมไม่กระทบ)
+        // ✅ Helper: Sync loginCode ของ player → profile ที่ name ตรง
+        _syncCodeToProfile: function(playerName, code) {
+            const profile = (appState.playerProfiles || []).find(p => p.name === playerName);
+            if (profile) {
+                profile.loginCode = code;
+            }
+        },
+
         generateAllCodes: function() {
+            // เก็บ code ที่ใช้แล้ว (ทั้ง players + profiles)
             const used = new Set();
             (appState.players || []).forEach(p => {
+                if (p.loginCode) used.add(p.loginCode);
+            });
+            (appState.playerProfiles || []).forEach(p => {
                 if (p.loginCode) used.add(p.loginCode);
             });
             const genUnique = () => {
@@ -4233,6 +4264,7 @@
                     const code = genUnique();
                     if (code) {
                         p.loginCode = code;
+                        this._syncCodeToProfile(p.name, code);
                         added++;
                     }
                 }
@@ -4264,7 +4296,9 @@
                 return null;
             };
             (appState.players || []).forEach(p => {
-                p.loginCode = genUnique();
+                const code = genUnique();
+                p.loginCode = code;
+                this._syncCodeToProfile(p.name, code);
             });
             saveState();
             this.renderCodesList();
@@ -4300,18 +4334,50 @@
         resetPlayerCode: function(playerId) {
             const p = (appState.players || []).find(p => +p.id === +playerId);
             if (!p) return;
-            if (!confirm(`Reset รหัสของ ${p.name}? รหัสเก่าจะใช้ไม่ได้`)) return;
-            const used = new Set();
-            (appState.players || []).forEach(pl => {
-                if (pl.loginCode && pl.id !== p.id) used.add(pl.loginCode);
-            });
-            let tries = 0, newCode;
-            while (tries < 100) {
-                newCode = String(Math.floor(1000 + Math.random() * 9000));
-                if (!used.has(newCode)) break;
-                tries++;
+
+            // ✅ ถาม: random หรือ กำหนดเอง
+            const customCode = prompt(
+                `Reset รหัสของ ${p.name}\n\n` +
+                `ใส่รหัสใหม่ (4-10 ตัวเลข) หรือเว้นว่างเพื่อสุ่ม:`,
+                ''
+            );
+            if (customCode === null) return; // cancel
+
+            let newCode;
+            if (customCode.trim() === '') {
+                // Random
+                const used = new Set();
+                (appState.players || []).forEach(pl => {
+                    if (pl.loginCode && pl.id !== p.id) used.add(pl.loginCode);
+                });
+                (appState.playerProfiles || []).forEach(pl => {
+                    if (pl.loginCode && pl.name !== p.name) used.add(pl.loginCode);
+                });
+                let tries = 0;
+                while (tries < 100) {
+                    newCode = String(Math.floor(1000 + Math.random() * 9000));
+                    if (!used.has(newCode)) break;
+                    tries++;
+                }
+            } else {
+                // ✅ Custom — validate
+                const trimmed = customCode.trim();
+                if (!/^\d{4,10}$/.test(trimmed)) {
+                    showError('รหัสต้องเป็นตัวเลข 4-10 หลัก');
+                    return;
+                }
+                // เช็คซ้ำ
+                const dup = (appState.players || []).find(pl => pl.loginCode === trimmed && pl.id !== p.id);
+                const dupProfile = (appState.playerProfiles || []).find(pl => pl.loginCode === trimmed && pl.name !== p.name);
+                if (dup || dupProfile) {
+                    showError(`รหัส ${trimmed} ใช้แล้วโดย ${(dup||dupProfile).name}`);
+                    return;
+                }
+                newCode = trimmed;
             }
+
             p.loginCode = newCode;
+            this._syncCodeToProfile(p.name, newCode);
             saveState();
             this.renderCodesList();
             showSuccess(`✅ รหัสใหม่ของ ${p.name}: ${newCode}`);

@@ -517,13 +517,16 @@
         <span id="my-status-availability-text">พร้อมเล่น</span>
       </button>
 
-      <!-- Action Row: ประวัติ / Big Mode -->
+      <!-- Action Row: ประวัติ / Big Mode / เปลี่ยนรหัส -->
       <div style="display:flex; gap:6px; margin-top:8px;">
         <button onclick="showMyHistory()" style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:rgba(255,255,255,0.85); border-radius:10px; padding:8px; font-size:12px; font-weight:600; cursor:pointer;">
           📋 ประวัติ
         </button>
         <button onclick="toggleBigMode()" style="flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.12); color:rgba(255,255,255,0.85); border-radius:10px; padding:8px; font-size:12px; font-weight:600; cursor:pointer;">
           🔍 ตัวใหญ่
+        </button>
+        <button onclick="showChangePassword()" style="flex:1; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.4); color:#a5b4fc; border-radius:10px; padding:8px; font-size:12px; font-weight:600; cursor:pointer;">
+          🔐 รหัส
         </button>
       </div>
     </div>
@@ -2050,6 +2053,190 @@
         pullDistance = 0;
       }, { passive: true });
     })();
+
+    // ── 🔐 Change Password Modal ────────────────────────────────
+    window.showChangePassword = function() {
+      const myId = watchedIds.size > 0 ? [...watchedIds][0] : null;
+      if (!myId) {
+        showToast('⚠️ กรุณา login ก่อน', '#f59e0b');
+        return;
+      }
+      const me = (state.players || []).find(p => +p.id === +myId);
+      if (!me) {
+        showToast('⚠️ ไม่พบข้อมูลคุณ', '#ef4444');
+        return;
+      }
+
+      const overlay = document.createElement('div');
+      overlay.id = 'change-pw-modal';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,0.8);
+        z-index:10000; display:flex; align-items:center; justify-content:center;
+        padding:16px; backdrop-filter:blur(8px);
+        animation: fade-in 0.3s ease-out;
+      `;
+
+      overlay.innerHTML = `
+        <div style="background:rgba(20,30,50,0.98); border-radius:18px;
+          border:1px solid rgba(99,102,241,0.4); padding:18px; max-width:360px; width:100%;
+          box-shadow:0 20px 60px rgba(0,0,0,0.6);
+          animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);">
+
+          <div style="text-align:center; margin-bottom:14px;">
+            <div style="font-size:32px;">🔐</div>
+            <div style="font-size:15px; font-weight:800; color:#fff; margin-top:4px;">
+              เปลี่ยนรหัสล็อกอิน
+            </div>
+            <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-top:4px;">
+              ${esc(me.name)} · รหัสปัจจุบัน: <b style="color:#fbbf24; font-family:Courier;">${me.loginCode || '—'}</b>
+            </div>
+          </div>
+
+          <!-- Current password verify -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">รหัสปัจจุบัน</div>
+            <input id="cpw-old" type="tel" inputmode="numeric" pattern="[0-9]*"
+              maxlength="10" placeholder="ใส่รหัสปัจจุบัน"
+              style="width:100%; background:rgba(0,0,0,0.4); border:1.5px solid rgba(255,255,255,0.15);
+              border-radius:8px; padding:10px 12px; color:#fff; font-size:16px;
+              font-family:'Courier New',monospace; letter-spacing:3px; text-align:center;">
+          </div>
+
+          <!-- New password -->
+          <div style="margin-bottom:10px;">
+            <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">รหัสใหม่ (4-10 ตัวเลข)</div>
+            <input id="cpw-new" type="tel" inputmode="numeric" pattern="[0-9]*"
+              maxlength="10" placeholder="ใส่รหัสใหม่"
+              style="width:100%; background:rgba(0,0,0,0.4); border:1.5px solid rgba(99,102,241,0.4);
+              border-radius:8px; padding:10px 12px; color:#fff; font-size:16px;
+              font-family:'Courier New',monospace; letter-spacing:3px; text-align:center;">
+          </div>
+
+          <!-- Confirm -->
+          <div style="margin-bottom:14px;">
+            <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">ยืนยันรหัสใหม่</div>
+            <input id="cpw-confirm" type="tel" inputmode="numeric" pattern="[0-9]*"
+              maxlength="10" placeholder="ใส่รหัสใหม่อีกครั้ง"
+              style="width:100%; background:rgba(0,0,0,0.4); border:1.5px solid rgba(99,102,241,0.4);
+              border-radius:8px; padding:10px 12px; color:#fff; font-size:16px;
+              font-family:'Courier New',monospace; letter-spacing:3px; text-align:center;">
+          </div>
+
+          <!-- Error/Success -->
+          <div id="cpw-msg" style="display:none; padding:8px 12px; border-radius:8px;
+            font-size:12px; text-align:center; margin-bottom:10px; font-weight:700;"></div>
+
+          <!-- Buttons -->
+          <div style="display:flex; gap:8px;">
+            <button id="cpw-cancel" style="flex:1; background:rgba(255,255,255,0.08);
+              color:#fff; border:none; padding:11px; border-radius:10px;
+              font-size:13px; font-weight:700; cursor:pointer;">
+              ยกเลิก
+            </button>
+            <button id="cpw-save" style="flex:1; background:linear-gradient(135deg, #10b981, #059669);
+              color:#fff; border:none; padding:11px; border-radius:10px;
+              font-size:13px; font-weight:800; cursor:pointer;
+              box-shadow:0 4px 14px rgba(16,185,129,0.3);">
+              💾 บันทึก
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      // Lock body
+      document.body.style.overflow = 'hidden';
+
+      const close = () => {
+        document.body.style.overflow = '';
+        overlay.remove();
+      };
+
+      const showMsg = (text, type) => {
+        const el = document.getElementById('cpw-msg');
+        if (!el) return;
+        el.textContent = text;
+        el.style.display = 'block';
+        if (type === 'error') {
+          el.style.background = 'rgba(239,68,68,0.15)';
+          el.style.border = '1px solid rgba(239,68,68,0.4)';
+          el.style.color = '#ef4444';
+        } else {
+          el.style.background = 'rgba(16,185,129,0.15)';
+          el.style.border = '1px solid rgba(16,185,129,0.4)';
+          el.style.color = '#10b981';
+        }
+      };
+
+      // Cancel
+      overlay.querySelector('#cpw-cancel').onclick = close;
+
+      // Save
+      overlay.querySelector('#cpw-save').onclick = async () => {
+        const oldPw = document.getElementById('cpw-old').value.trim();
+        const newPw = document.getElementById('cpw-new').value.trim();
+        const confirmPw = document.getElementById('cpw-confirm').value.trim();
+
+        // Validate
+        if (oldPw !== me.loginCode) {
+          showMsg('❌ รหัสปัจจุบันไม่ถูกต้อง', 'error');
+          return;
+        }
+        if (!/^\d{4,10}$/.test(newPw)) {
+          showMsg('❌ รหัสใหม่ต้องเป็นตัวเลข 4-10 หลัก', 'error');
+          return;
+        }
+        if (newPw !== confirmPw) {
+          showMsg('❌ รหัสใหม่ไม่ตรงกัน', 'error');
+          return;
+        }
+        if (newPw === oldPw) {
+          showMsg('⚠️ รหัสใหม่เหมือนรหัสเดิม', 'error');
+          return;
+        }
+        // เช็คซ้ำกับคนอื่น
+        const dup = (state.players || []).find(p => p.loginCode === newPw && +p.id !== +myId);
+        if (dup) {
+          showMsg('❌ รหัสนี้มีคนใช้แล้ว ลองอันอื่น', 'error');
+          return;
+        }
+
+        // Save to Firebase
+        const idx = state.players.findIndex(p => +p.id === +myId);
+        if (idx === -1) {
+          showMsg('❌ ไม่พบข้อมูล player', 'error');
+          return;
+        }
+
+        try {
+          // Update player
+          await db.ref(`badmintonState/players/${idx}/loginCode`).set(newPw);
+          // Update profile ที่ name ตรง (เพื่อให้ครั้งหน้าใช้ได้)
+          const profiles = state.playerProfiles || [];
+          const profileIdx = profiles.findIndex(p => p.name === me.name);
+          if (profileIdx !== -1) {
+            await db.ref(`badmintonState/playerProfiles/${profileIdx}/loginCode`).set(newPw);
+          }
+          // Save localStorage
+          localStorage.setItem('bb-user-code', newPw);
+          showMsg('✅ เปลี่ยนรหัสสำเร็จ!', 'success');
+          setTimeout(() => {
+            close();
+            showToast(`✅ รหัสใหม่: ${newPw}`, '#10b981');
+          }, 1000);
+        } catch(err) {
+          console.error('Change password failed:', err);
+          showMsg('❌ บันทึกล้มเหลว ลองอีกครั้ง', 'error');
+        }
+      };
+
+      // Focus first input
+      setTimeout(() => {
+        const f = document.getElementById('cpw-old');
+        if (f) f.focus();
+      }, 300);
+    };
 
     // ── 🔍 Big Mode (ตัวอักษรใหญ่) ──────────────────────────
     window.toggleBigMode = function() {
