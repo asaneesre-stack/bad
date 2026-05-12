@@ -1799,8 +1799,50 @@
         watchedIds.forEach(pid => { setupPresence(pid); setupDirectMessageListener(pid); registerFCMToken(pid); });
       }
 
-      // ✅ Welcome Modal — เด้งถ้ายังไม่ได้ติดตามใคร + ไม่ได้ skip ใน session นี้
+      // ✅ QR Self Check-in Mode — ถ้า URL มี ?checkin=1 แสดง check-in modal แทน Welcome
+      const urlParams = new URLSearchParams(window.location.search);
+      const isCheckInMode = urlParams.get('checkin') === '1';
+      if (isCheckInMode && !_selfCheckInShown) {
+        _selfCheckInShown = true;
+        setTimeout(() => openSelfCheckInModal(), 400);
+        return; // ไม่ต้อง trigger welcome modal
+      }
+
+      // ✅ Auto-login จาก saved code (ครั้งหน้าหลัง login)
       if (!_welcomeShown && watchedIds.size === 0 && !_skippedThisSession) {
+        const savedCode = localStorage.getItem('bb-user-code');
+        if (savedCode) {
+          // ลองหา player ที่มี code ตรง
+          const player = (state.players || []).find(p => p.loginCode === savedCode);
+          if (player) {
+            // Auto login!
+            _welcomeShown = true;
+            if (!player.isCheckedIn) {
+              const idx = state.players.findIndex(p => p.id === player.id);
+              if (idx !== -1) {
+                db.ref(`badmintonState/players/${idx}`).update({
+                  isCheckedIn: true,
+                  selfCheckedIn: true,
+                  checkInTime: Date.now()
+                }).catch(()=>{});
+              }
+            }
+            // เพิ่มเข้า watchedIds (ไม่เรียก toggleWatch เพื่อกัน FCM ขออนุญาตทันที)
+            watchedIds.clear();
+            watchedIds.add(player.id);
+            saveWatchedIds();
+            setupPresence(player.id);
+            setupDirectMessageListener(player.id);
+            setTimeout(() => {
+              showToast(`👋 ยินดีต้อนรับกลับ ${player.name}!`, '#10b981');
+            }, 500);
+            return; // ไม่ต้องเด้ง welcome modal
+          } else {
+            // code ไม่ตรง (admin reset) → ลบ saved
+            localStorage.removeItem('bb-user-code');
+          }
+        }
+        // ไม่มี saved code หรือไม่ตรง → เด้ง welcome modal
         _welcomeShown = true;
         setTimeout(() => openWelcomeModal(), 600);
       }
@@ -2738,16 +2780,305 @@
     let _welcomeShown = false;
     let _skippedThisSession = false;
 
+    // ✅ Self Check-in Modal (จาก QR code)
+    let _selfCheckInShown = false;
+    let _selfSelectedId = null;
+
+    function openSelfCheckInModal() {
+      const old = document.getElementById('self-checkin-modal');
+      if (old) old.remove();
+      _selfSelectedId = null;
+
+      const players = state.players || [];
+
+      const overlay = document.createElement('div');
+      overlay.id = 'self-checkin-modal';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,0.92);
+        z-index:10000; display:flex; align-items:center; justify-content:center;
+        padding:16px; backdrop-filter:blur(10px);
+      `;
+
+      overlay.innerHTML = `
+        <div style="background:rgba(20,30,50,0.98); border-radius:20px;
+          border:1px solid rgba(139,92,246,0.4); padding:20px; max-width:400px; width:100%;
+          box-shadow:0 20px 60px rgba(139,92,246,0.3); max-height:90vh; display:flex; flex-direction:column;
+          animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);">
+
+          <div style="text-align:center; margin-bottom:14px; flex-shrink:0;">
+            <div style="font-size:36px;">📲</div>
+            <div style="font-size:17px; font-weight:800; color:#fff; margin-top:4px;">
+              เช็คอินตัวเอง
+            </div>
+            <div style="font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">
+              เลือกชื่อของคุณเพื่อยืนยันว่ามาแล้ว
+            </div>
+          </div>
+
+          <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+            border-radius:10px; padding:9px 12px; display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-shrink:0;">
+            <span style="opacity:0.5;">🔍</span>
+            <input id="self-checkin-search" type="text" placeholder="ค้นชื่อเล่น / ชื่อจริง / #ID..."
+              style="flex:1; background:transparent; border:none; outline:none; color:#fff; font-size:14px;">
+          </div>
+
+          <div id="self-checkin-list" style="display:flex; flex-direction:column; gap:5px;
+            overflow-y:auto; flex:1; padding:2px; max-height:50vh; -webkit-overflow-scrolling:touch;">
+          </div>
+
+          <div id="self-confirm-bar" style="display:none; background:linear-gradient(90deg, rgba(139,92,246,0.3), rgba(139,92,246,0.1));
+            border:1.5px solid #8b5cf6; border-radius:12px; padding:10px 12px; margin-top:10px;
+            align-items:center; justify-content:space-between; gap:10px; flex-shrink:0;">
+            <div style="font-size:13px; color:rgba(255,255,255,0.9); flex:1;">
+              เลือก: <strong id="self-selected-name" style="color:#a78bfa;">—</strong>
+            </div>
+            <button id="self-confirm-btn" style="background:linear-gradient(135deg, #10b981, #059669);
+              color:#fff; border:none; padding:10px 22px; border-radius:999px; font-size:13px;
+              font-weight:800; cursor:pointer; box-shadow:0 4px 14px rgba(16,185,129,0.4); flex-shrink:0;
+              -webkit-tap-highlight-color:transparent;">
+              ✅ ฉันมาแล้ว
+            </button>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      // Lock body scroll
+      document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed';
+      document.body.style.width = '100%';
+      const scrollY = window.scrollY;
+      document.body.style.top = `-${scrollY}px`;
+
+      const close = () => {
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.top = '';
+        window.scrollTo(0, scrollY);
+        overlay.remove();
+      };
+
+      _renderSelfCheckInList(players);
+
+      const searchEl = overlay.querySelector('#self-checkin-search');
+      searchEl.addEventListener('input', () => {
+        const q = searchEl.value.toLowerCase();
+        overlay.querySelectorAll('.self-row').forEach(row => {
+          const name = row.querySelector('.self-name')?.textContent.toLowerCase() || '';
+          const real = row.querySelector('.self-real')?.textContent.toLowerCase() || '';
+          const id = row.dataset.pid;
+          row.style.display = (name.includes(q) || real.includes(q) || (id && id.includes(q))) ? '' : 'none';
+        });
+      });
+
+      const confirmBtn = overlay.querySelector('#self-confirm-btn');
+      const handleConfirm = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!_selfSelectedId) return;
+
+        const player = state.players.find(p => +p.id === +_selfSelectedId);
+        if (!player) return;
+
+        if (player.isCheckedIn) {
+          showToast('⚠️ คุณเช็คอินอยู่แล้ว', '#f59e0b');
+          return;
+        }
+
+        // Update Firebase ตรงๆ
+        confirmBtn.textContent = '⏳ กำลังเช็คอิน...';
+        confirmBtn.disabled = true;
+
+        const pid = +_selfSelectedId;
+        const idx = (state.players || []).findIndex(p => +p.id === pid);
+        if (idx === -1) {
+          confirmBtn.textContent = '✅ ฉันมาแล้ว';
+          confirmBtn.disabled = false;
+          showToast('❌ ไม่พบผู้เล่น', '#ef4444');
+          return;
+        }
+
+        const updatedPlayers = [...state.players];
+        updatedPlayers[idx] = {
+          ...updatedPlayers[idx],
+          isCheckedIn: true,
+          checkInTime: Date.now(),
+          selfCheckedIn: true,
+          availability: updatedPlayers[idx].availability || 'ready'
+        };
+
+        db.ref('badmintonState/players').set(updatedPlayers)
+          .then(() => {
+            // แสดงหน้า success
+            close();
+            showSelfCheckInSuccess(player);
+          })
+          .catch(err => {
+            confirmBtn.textContent = '✅ ฉันมาแล้ว';
+            confirmBtn.disabled = false;
+            showToast('❌ เช็คอินไม่สำเร็จ: ' + (err.message || err), '#ef4444');
+          });
+      };
+      confirmBtn.addEventListener('touchend', handleConfirm, { passive: false });
+      confirmBtn.addEventListener('click', handleConfirm);
+    }
+
+    function _renderSelfCheckInList(players) {
+      const listEl = document.getElementById('self-checkin-list');
+      if (!listEl) return;
+      if (!players || players.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center;padding:30px;color:rgba(255,255,255,0.4);font-size:12px;">ยังไม่มีรายชื่อ</div>';
+        return;
+      }
+
+      listEl.innerHTML = players.map(p => {
+        const pidNum = +p.id;
+        const isChecked = !!p.isCheckedIn;
+        const realName = p.realName ? esc(p.realName) : '';
+        const opacity = isChecked ? 'opacity:0.45;' : '';
+        const bg = isChecked ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.04)';
+        const cursor = isChecked ? 'not-allowed' : 'pointer';
+        return `
+        <div class="self-row ${isChecked ? 'self-row-disabled' : ''}" data-pid="${pidNum}"
+          style="background:${bg}; border-radius:10px; padding:10px 12px;
+          display:flex; align-items:center; gap:10px; cursor:${cursor}; border:1.5px solid transparent;
+          transition:all 0.15s; -webkit-tap-highlight-color:transparent; user-select:none; ${opacity}">
+          ${renderAvatar(p, 'sm')}
+          <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:baseline; gap:6px;">
+              <span style="background:rgba(139,92,246,0.2); color:#a78bfa; padding:0 5px; border-radius:4px; font-size:9px; font-weight:800;">#${pidNum}</span>
+              <span class="self-name" style="font-size:13px; font-weight:800; color:#fff;">${esc(p.name)}</span>
+            </div>
+            ${realName ? `<div class="self-real" style="font-size:10px; color:rgba(255,255,255,0.5); margin-top:2px;">👤 ${realName}</div>` : ''}
+          </div>
+          ${isChecked
+            ? '<span style="background:#10b981;color:#fff;padding:2px 8px;border-radius:5px;font-size:10px;font-weight:800;">✓ มาแล้ว</span>'
+            : `<span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${esc(p.skill)}</span>`
+          }
+        </div>
+      `;
+      }).join('');
+
+      const handleSelect = (e) => {
+        const row = e.target.closest('.self-row');
+        if (!row) return;
+        if (row.classList.contains('self-row-disabled')) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        const pid = +row.dataset.pid;
+        if (!pid) return;
+        e.preventDefault();
+        e.stopPropagation();
+        _selectSelfCheckInRow(pid);
+      };
+
+      const newList = listEl.cloneNode(true);
+      listEl.parentNode.replaceChild(newList, listEl);
+      newList.addEventListener('touchend', handleSelect, { passive: false });
+      newList.addEventListener('click', handleSelect);
+    }
+
+    function _selectSelfCheckInRow(pid) {
+      _selfSelectedId = pid;
+      const overlay = document.getElementById('self-checkin-modal');
+      if (!overlay) return;
+
+      overlay.querySelectorAll('.self-row').forEach(r => {
+        if (r.classList.contains('self-row-disabled')) return;
+        r.style.background = 'rgba(255,255,255,0.04)';
+        r.style.borderColor = 'transparent';
+        const oldCheck = r.querySelector('.self-check-mark');
+        if (oldCheck) oldCheck.remove();
+      });
+
+      const row = overlay.querySelector(`.self-row[data-pid="${pid}"]`);
+      if (row) {
+        row.style.background = 'rgba(139,92,246,0.25)';
+        row.style.borderColor = '#8b5cf6';
+        if (!row.querySelector('.self-check-mark')) {
+          const check = document.createElement('span');
+          check.className = 'self-check-mark';
+          check.textContent = '✓';
+          check.style.cssText = `
+            background:#8b5cf6; color:#fff; width:24px; height:24px;
+            border-radius:50%; display:flex; align-items:center; justify-content:center;
+            font-size:13px; font-weight:800; flex-shrink:0;
+            box-shadow:0 2px 8px rgba(139,92,246,0.5);
+            animation: check-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+          `;
+          row.appendChild(check);
+        }
+      }
+
+      const player = state.players.find(p => +p.id === +pid);
+      if (player) {
+        const bar = document.getElementById('self-confirm-bar');
+        const nameEl = document.getElementById('self-selected-name');
+        if (bar) bar.style.display = 'flex';
+        if (nameEl) nameEl.textContent = player.name;
+      }
+    }
+
+    function showSelfCheckInSuccess(player) {
+      const overlay = document.createElement('div');
+      overlay.id = 'self-success-modal';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,0.92);
+        z-index:10001; display:flex; align-items:center; justify-content:center;
+        padding:20px; backdrop-filter:blur(10px);
+      `;
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+      overlay.innerHTML = `
+        <div style="background:rgba(20,30,50,0.98); border-radius:20px;
+          border:1px solid rgba(16,185,129,0.4); padding:32px 24px; max-width:380px; width:100%;
+          text-align:center; box-shadow:0 20px 60px rgba(16,185,129,0.3);
+          animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);">
+
+          <div style="font-size:64px; animation: pop-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);">✅</div>
+          <div style="font-size:22px; font-weight:800; color:#10b981; margin-top:8px;">Check-in สำเร็จ!</div>
+          <div style="font-size:14px; color:rgba(255,255,255,0.7); margin-top:8px;">สวัสดี <b style="color:#fff;">${esc(player.name)}</b> ยินดีต้อนรับ 🏸</div>
+          <div style="font-size:12px; color:rgba(255,255,255,0.5); margin-top:14px;">เวลาเช็คอิน: ${timeStr}</div>
+
+          <button onclick="bbContinueToDisplay(${+player.id})"
+            style="background:linear-gradient(135deg,#0ea5e9,#0284c7); color:#fff; border:none;
+            padding:12px 28px; border-radius:999px; font-size:14px; font-weight:800; margin-top:22px;
+            cursor:pointer; box-shadow:0 6px 20px rgba(14,165,233,0.4); width:100%;">
+            👁 ติดตามคิวของฉัน →
+          </button>
+          <button onclick="document.getElementById('self-success-modal').remove(); window.location.href = window.location.pathname"
+            style="background:transparent; color:rgba(255,255,255,0.5); border:none;
+            padding:10px; font-size:12px; margin-top:8px; cursor:pointer; width:100%;">
+            แค่ดูคิว ไม่ต้องติดตาม
+          </button>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    }
+
+    // เปลี่ยนเข้าสู่ display + auto-follow player ที่เพิ่ง check-in
+    window.bbContinueToDisplay = function(pid) {
+      // Auto-watch this player
+      try {
+        toggleWatch(+pid);
+      } catch(e) {}
+      // ลบ ?checkin=1 ออก
+      const m = document.getElementById('self-success-modal');
+      if (m) m.remove();
+      window.location.href = window.location.pathname;
+    };
+
     function openWelcomeModal() {
       // ลบ modal เก่า (ถ้ามี)
       const old = document.getElementById('welcome-modal');
       if (old) old.remove();
 
       const players = state.players || [];
-      const checkedIn = players.filter(p => p.isCheckedIn);
-
-      // ถ้าไม่มีคนเช็คอินเลย → ไม่ต้องเด้ง
-      if (checkedIn.length === 0) return;
+      if (players.length === 0) return;  // ไม่มีผู้เล่นเลย
 
       const overlay = document.createElement('div');
       overlay.id = 'welcome-modal';
@@ -2759,56 +3090,57 @@
       `;
 
       overlay.innerHTML = `
-        <div class="welcome-modal-inner" style="background:rgba(20,30,50,0.98); border-radius:20px;
-          border:1px solid rgba(0,168,204,0.4); padding:18px; max-width:400px; width:100%;
-          box-shadow:0 20px 60px rgba(0,0,0,0.6); max-height:90vh; display:flex; flex-direction:column;
+        <div style="background:rgba(20,30,50,0.98); border-radius:20px;
+          border:1px solid rgba(0,168,204,0.4); padding:22px; max-width:380px; width:100%;
+          box-shadow:0 20px 60px rgba(0,0,0,0.6); display:flex; flex-direction:column;
           animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);">
 
-          <!-- Header -->
-          <div style="text-align:center; margin-bottom:14px; flex-shrink:0;">
-            <div style="font-size:36px;">👋</div>
+          <div style="text-align:center; margin-bottom:18px;">
+            <div style="font-size:42px;">🔐</div>
             <div style="font-size:17px; font-weight:800; color:#fff; margin-top:4px;">
-              ยินดีต้อนรับ!
+              เข้าระบบก๊วน
             </div>
             <div style="font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">
-              เลือกชื่อของคุณเพื่อติดตามคิว
+              ใส่รหัส 4 หลักที่ได้รับจาก admin
             </div>
           </div>
 
-          <!-- Search -->
-          <div style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
-            border-radius:10px; padding:9px 12px; display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-shrink:0;">
-            <span style="opacity:0.5;">🔍</span>
-            <input id="welcome-search" type="text" placeholder="ค้นหาชื่อ..."
-              style="flex:1; background:transparent; border:none; outline:none; color:#fff; font-size:14px;">
+          <!-- Code input boxes -->
+          <div id="code-boxes" style="display:flex; gap:8px; justify-content:center; margin-bottom:6px;">
+            <div class="code-box" data-idx="0" style="width:50px; height:60px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="code-box" data-idx="1" style="width:50px; height:60px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="code-box" data-idx="2" style="width:50px; height:60px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="code-box" data-idx="3" style="width:50px; height:60px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
           </div>
 
-          <!-- List -->
-          <div id="welcome-list" style="display:flex; flex-direction:column; gap:5px;
-            overflow-y:auto; flex:1; padding:2px; max-height:50vh; -webkit-overflow-scrolling:touch;">
+          <!-- Hidden input for keyboard -->
+          <input id="code-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+            style="position:absolute; opacity:0; pointer-events:none; height:0; width:0;"
+            autocomplete="off">
+
+          <!-- Numeric keypad (mobile-friendly) -->
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; margin-top:12px;">
+            ${[1,2,3,4,5,6,7,8,9].map(n => `
+              <button class="keypad-btn" data-key="${n}" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; font-size:22px; font-weight:700; padding:14px; border-radius:10px; cursor:pointer; -webkit-tap-highlight-color:transparent;">${n}</button>
+            `).join('')}
+            <button class="keypad-btn" data-key="clear" style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); color:#fbbf24; font-size:13px; font-weight:700; padding:14px; border-radius:10px; cursor:pointer; -webkit-tap-highlight-color:transparent;">ล้าง</button>
+            <button class="keypad-btn" data-key="0" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; font-size:22px; font-weight:700; padding:14px; border-radius:10px; cursor:pointer; -webkit-tap-highlight-color:transparent;">0</button>
+            <button class="keypad-btn" data-key="back" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; font-size:16px; font-weight:700; padding:14px; border-radius:10px; cursor:pointer; -webkit-tap-highlight-color:transparent;">⌫</button>
           </div>
 
-          <!-- Confirm Bar -->
-          <div id="welcome-confirm-bar" style="display:none; background:linear-gradient(90deg, rgba(0,168,204,0.25), rgba(0,168,204,0.1));
-            border:1.5px solid var(--cyan); border-radius:12px; padding:10px 12px; margin-top:10px;
-            align-items:center; justify-content:space-between; gap:10px; flex-shrink:0;">
-            <div style="font-size:13px; color:rgba(255,255,255,0.9); flex:1;">
-              เลือก: <strong id="welcome-selected-name" style="color:var(--cyan);">—</strong>
-            </div>
-            <button id="welcome-confirm-btn" style="background:linear-gradient(135deg, #10b981, #059669);
-              color:#fff; border:none; padding:10px 22px; border-radius:999px; font-size:13px;
-              font-weight:800; cursor:pointer; box-shadow:0 4px 14px rgba(16,185,129,0.4); flex-shrink:0;
-              -webkit-tap-highlight-color:transparent;">
-              ✓ ยืนยัน
-            </button>
-          </div>
+          <!-- Error message -->
+          <div id="code-error" style="display:none; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:8px 12px; border-radius:8px; font-size:12px; text-align:center; margin-top:10px; font-weight:700;"></div>
 
           <!-- Skip button -->
           <button id="welcome-skip-btn" style="background:transparent; border:none;
-            color:rgba(255,255,255,0.4); font-size:12px; padding:10px; margin-top:6px; cursor:pointer;
-            text-align:center; flex-shrink:0;">
+            color:rgba(255,255,255,0.4); font-size:12px; padding:14px 10px; margin-top:6px; cursor:pointer;
+            text-align:center;">
             ข้าม - ดูคิวเฉยๆ
           </button>
+
+          <div style="font-size:10px; color:rgba(255,255,255,0.4); text-align:center; margin-top:4px;">
+            🤔 ลืมรหัส? ติดต่อ admin
+          </div>
         </div>
       `;
 
@@ -2832,6 +3164,99 @@
         overlay.remove();
       };
 
+      // State
+      let codeBuffer = '';
+
+      const updateBoxes = () => {
+        const boxes = overlay.querySelectorAll('.code-box');
+        boxes.forEach((box, idx) => {
+          if (idx < codeBuffer.length) {
+            box.textContent = codeBuffer[idx];
+            box.style.background = 'rgba(0,168,204,0.2)';
+            box.style.borderColor = '#00a8cc';
+          } else if (idx === codeBuffer.length) {
+            box.textContent = '_';
+            box.style.background = 'rgba(0,168,204,0.1)';
+            box.style.borderColor = '#00a8cc';
+            box.style.boxShadow = '0 0 0 3px rgba(0,168,204,0.2)';
+          } else {
+            box.textContent = '_';
+            box.style.background = 'rgba(255,255,255,0.06)';
+            box.style.borderColor = 'rgba(0,168,204,0.4)';
+            box.style.boxShadow = 'none';
+          }
+        });
+        // Auto submit when 4 digits
+        if (codeBuffer.length === 4) {
+          setTimeout(tryLogin, 200);
+        }
+      };
+
+      const showError = (msg) => {
+        const errEl = document.getElementById('code-error');
+        if (errEl) {
+          errEl.textContent = msg;
+          errEl.style.display = 'block';
+        }
+        // Shake animation
+        const cb = document.getElementById('code-boxes');
+        if (cb) {
+          cb.style.animation = 'none';
+          setTimeout(() => { cb.style.animation = 'shake 0.4s'; }, 10);
+        }
+        // Clear after shake
+        setTimeout(() => {
+          codeBuffer = '';
+          updateBoxes();
+          if (errEl) errEl.style.display = 'none';
+        }, 1200);
+      };
+
+      const tryLogin = () => {
+        if (codeBuffer.length !== 4) return;
+        // หา player ที่มี loginCode ตรง
+        const player = (state.players || []).find(p => p.loginCode === codeBuffer);
+        if (!player) {
+          showError('❌ รหัสไม่ถูกต้อง');
+          return;
+        }
+        // เก็บ code ใน localStorage
+        try { localStorage.setItem('bb-user-code', codeBuffer); } catch(e) {}
+
+        // Auto check-in + watch
+        if (!player.isCheckedIn) {
+          db.ref(`badmintonState/players/${state.players.findIndex(p => p.id === player.id)}`).update({
+            isCheckedIn: true,
+            selfCheckedIn: true,
+            checkInTime: Date.now()
+          }).catch(()=>{});
+        }
+        // toggleWatch ติดตามตัวเอง
+        toggleWatch(player.id);
+
+        close();
+        showToast(`✅ ยินดีต้อนรับ ${player.name}!`, '#10b981');
+      };
+
+      // Keypad handlers
+      const handleKeypad = (e) => {
+        const btn = e.target.closest('.keypad-btn');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const key = btn.dataset.key;
+        if (key === 'clear') {
+          codeBuffer = '';
+        } else if (key === 'back') {
+          codeBuffer = codeBuffer.slice(0, -1);
+        } else if (codeBuffer.length < 4) {
+          codeBuffer += key;
+        }
+        updateBoxes();
+      };
+      overlay.addEventListener('touchend', handleKeypad, { passive: false });
+      overlay.addEventListener('click', handleKeypad);
+
       // Skip button
       const skipBtn = overlay.querySelector('#welcome-skip-btn');
       const handleSkip = (e) => {
@@ -2839,131 +3264,32 @@
         e.stopPropagation();
         _skippedThisSession = true;
         close();
-        showToast('👁 ดูคิวอย่างเดียว — ปิดแอปแล้วเปิดใหม่จะเด้งให้เลือกอีก', '#0ea5e9');
+        showToast('👁 ดูคิวอย่างเดียว — ปิดแอปแล้วเปิดใหม่จะเด้งให้ใส่รหัสอีก', '#0ea5e9');
       };
       skipBtn.addEventListener('touchend', handleSkip, { passive: false });
       skipBtn.addEventListener('click', handleSkip);
 
-      // Render list
-      _renderWelcomeList(checkedIn);
-
-      // Search filter
-      const searchEl = overlay.querySelector('#welcome-search');
-      searchEl.addEventListener('input', () => {
-        const q = searchEl.value.toLowerCase();
-        overlay.querySelectorAll('.welcome-row').forEach(row => {
-          const name = row.querySelector('.welcome-name')?.textContent.toLowerCase() || '';
-          const real = row.querySelector('.welcome-real')?.textContent.toLowerCase() || '';
-          const id = row.dataset.pid;
-          row.style.display = (name.includes(q) || real.includes(q) || (id && id.includes(q))) ? '' : 'none';
-        });
-      });
-
-      // Confirm button
-      const confirmBtn = overlay.querySelector('#welcome-confirm-btn');
-      const handleConfirm = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!_welcomeSelectedId) return;
-        const player = state.players.find(p => +p.id === +_welcomeSelectedId);
-        if (!player) return;
-        // ใช้ toggleWatch (logic ที่ stable)
-        toggleWatch(_welcomeSelectedId);
-        close();
-        try { renderWatchBar(); } catch(_) {}
-        try { highlightMyQueues(); } catch(_) {}
-        try { updatePayBtn(); } catch(_) {}
-        showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
+      // Keyboard support (desktop)
+      const handleKeydown = (e) => {
+        if (e.key >= '0' && e.key <= '9' && codeBuffer.length < 4) {
+          codeBuffer += e.key;
+          updateBoxes();
+        } else if (e.key === 'Backspace') {
+          codeBuffer = codeBuffer.slice(0, -1);
+          updateBoxes();
+        } else if (e.key === 'Escape') {
+          handleSkip(e);
+        }
       };
-      confirmBtn.addEventListener('touchend', handleConfirm, { passive: false });
-      confirmBtn.addEventListener('click', handleConfirm);
-    }
-
-    let _welcomeSelectedId = null;
-
-    function _renderWelcomeList(checkedIn) {
-      const listEl = document.getElementById('welcome-list');
-      if (!listEl) return;
-
-      listEl.innerHTML = checkedIn.map(p => {
-        const pidNum = +p.id;
-        const skill = esc(p.skill || 'N');
-        const realName = p.realName ? esc(p.realName) : '';
-        return `
-        <div class="welcome-row" data-pid="${pidNum}"
-          style="background:rgba(255,255,255,0.04); border-radius:10px; padding:10px 12px;
-          display:flex; align-items:center; gap:10px; cursor:pointer; border:1.5px solid transparent;
-          transition:all 0.15s; -webkit-tap-highlight-color:transparent; user-select:none;">
-          ${renderAvatar(p, 'sm')}
-          <div style="flex:1; min-width:0;">
-            <div style="display:flex; align-items:baseline; gap:6px;">
-              <span style="background:rgba(0,168,204,0.2); color:#00a8cc; padding:0 5px; border-radius:4px; font-size:9px; font-weight:800;">#${pidNum}</span>
-              <span class="welcome-name" style="font-size:13px; font-weight:800; color:#fff;">${esc(p.name)}</span>
-            </div>
-            ${realName
-              ? `<div class="welcome-real" style="font-size:10px; color:rgba(255,255,255,0.5); margin-top:2px;">👤 ${realName}</div>`
-              : ''}
-          </div>
-          <span style="background:rgba(255,255,255,0.1); padding:2px 8px; border-radius:5px; font-size:10px; font-weight:800;">${skill}</span>
-        </div>
-      `;
-      }).join('');
-
-      const handleSelect = (e) => {
-        const row = e.target.closest('.welcome-row');
-        if (!row) return;
-        const pid = +row.dataset.pid;
-        if (!pid) return;
-        e.preventDefault();
-        e.stopPropagation();
-        _selectWelcomeRow(pid);
+      document.addEventListener('keydown', handleKeydown);
+      // cleanup on close
+      const oldRemove = overlay.remove.bind(overlay);
+      overlay.remove = function() {
+        document.removeEventListener('keydown', handleKeydown);
+        oldRemove();
       };
 
-      const newList = listEl.cloneNode(true);
-      listEl.parentNode.replaceChild(newList, listEl);
-      newList.addEventListener('touchend', handleSelect, { passive: false });
-      newList.addEventListener('click', handleSelect);
-    }
-
-    function _selectWelcomeRow(pid) {
-      _welcomeSelectedId = pid;
-      const overlay = document.getElementById('welcome-modal');
-      if (!overlay) return;
-
-      // Reset rows
-      overlay.querySelectorAll('.welcome-row').forEach(r => {
-        r.style.background = 'rgba(255,255,255,0.04)';
-        r.style.borderColor = 'transparent';
-        const oldCheck = r.querySelector('.welcome-check');
-        if (oldCheck) oldCheck.remove();
-      });
-
-      // Highlight selected
-      const row = overlay.querySelector(`.welcome-row[data-pid="${pid}"]`);
-      if (row) {
-        row.style.background = 'rgba(0,168,204,0.25)';
-        row.style.borderColor = 'var(--cyan)';
-        const check = document.createElement('span');
-        check.className = 'welcome-check';
-        check.textContent = '✓';
-        check.style.cssText = `
-          background:var(--cyan); color:#fff; width:24px; height:24px;
-          border-radius:50%; display:flex; align-items:center; justify-content:center;
-          font-size:13px; font-weight:800; flex-shrink:0;
-          box-shadow:0 2px 8px rgba(0,168,204,0.5);
-          animation: check-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        `;
-        row.appendChild(check);
-      }
-
-      // Show confirm bar
-      const player = state.players.find(p => +p.id === +pid);
-      if (player) {
-        const bar = document.getElementById('welcome-confirm-bar');
-        const nameEl = document.getElementById('welcome-selected-name');
-        if (bar) bar.style.display = 'flex';
-        if (nameEl) nameEl.textContent = player.name;
-      }
+      updateBoxes();
     }
 
     function renderWatchBar() {

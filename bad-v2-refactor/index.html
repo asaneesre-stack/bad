@@ -499,10 +499,40 @@
                         </button>
                     </div>
                 </div>
-                <div style="display:flex;gap:0.75rem;flex-wrap:wrap;margin-bottom:1rem;">
-                    <button class="success" onclick="App.checkInAll()" style="min-height:40px;font-size:0.9rem;">✅ เช็คอินทั้งหมด</button>
-                    <button class="secondary" onclick="App.uncheckInAll()" style="min-height:40px;font-size:0.9rem;">❌ ยกเลิกเช็คอินทั้งหมด</button>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center;">
+                    <button class="success" onclick="App.checkInAll()" style="min-height:38px;font-size:0.85rem;">✅ เช็คอินทั้งหมด</button>
+                    <button class="secondary" onclick="App.uncheckInAll()" style="min-height:38px;font-size:0.85rem;">❌ ยกเลิกทั้งหมด</button>
+                    <button id="checkin-select-mode-btn" onclick="App.toggleCheckInSelectMode()" type="button"
+                        style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:6px 12px;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;min-height:38px;">
+                        ☑️ เลือกหลายคน
+                    </button>
+                    <button onclick="App.openQRCheckIn()" type="button"
+                        style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:800;cursor:pointer;min-height:38px;box-shadow:0 4px 12px rgba(139,92,246,0.3);">
+                        📱 QR Self Check-in
+                    </button>
                 </div>
+
+                <!-- Bulk action bar (hidden default) -->
+                <div id="checkin-bulk-bar" style="display:none;background:linear-gradient(135deg,#0ea5e9,#0284c7);color:#fff;padding:10px 14px;border-radius:12px;margin-bottom:0.6rem;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;box-shadow:0 4px 14px rgba(14,165,233,0.3);">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span id="checkin-bulk-count" style="font-weight:800;font-size:0.95rem;">เลือกแล้ว 0</span>
+                        <button onclick="App._selectAllUncheckedIn()" type="button"
+                            style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:0.75rem;font-weight:700;cursor:pointer;min-height:unset;">เลือกที่ยังไม่เช็คอิน</button>
+                        <button onclick="App._clearCheckInSelection()" type="button"
+                            style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:4px 10px;border-radius:6px;font-size:0.75rem;font-weight:700;cursor:pointer;min-height:unset;">ล้าง</button>
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <button onclick="App._bulkCheckIn()" type="button"
+                            style="background:#10b981;color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:800;cursor:pointer;min-height:unset;box-shadow:0 2px 8px rgba(0,0,0,0.2);">
+                            ✅ เช็คอินที่เลือก
+                        </button>
+                        <button onclick="App.toggleCheckInSelectMode()" type="button"
+                            style="background:rgba(255,255,255,0.15);color:#fff;border:none;padding:6px 12px;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;min-height:unset;">
+                            ปิด
+                        </button>
+                    </div>
+                </div>
+
                 <div id="checkin-count" style="font-size:0.82rem;color:#888;margin-bottom:0.5rem;"></div>
                 <div id="check-in-list" class="check-in-grid"></div>
 
@@ -889,6 +919,25 @@
                         📤 แชร์ลิงก์ + QR Code
                     </button>
                 </div>
+            </div>
+
+            <!-- 🔐 Login Codes -->
+            <div class="card">
+                <h2>🔐 รหัสล็อกอินผู้เล่น</h2>
+                <p>Generate รหัส 4 หลักให้ user แต่ละคน เพื่อใช้ login เข้าระบบ</p>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:0.75rem;">
+                    <button onclick="App.generateAllCodes()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:0.6rem 1rem;border-radius:8px;font-weight:700;cursor:pointer;">
+                        🎲 Generate รหัสที่ยังไม่มี
+                    </button>
+                    <button onclick="App.regenerateAllCodes()" style="background:#ef4444;color:#fff;border:none;padding:0.6rem 1rem;border-radius:8px;font-weight:700;cursor:pointer;">
+                        🔄 Gen ใหม่ทั้งหมด (เก่าใช้ไม่ได้)
+                    </button>
+                    <button onclick="App.copyAllCodes()" style="background:#0ea5e9;color:#fff;border:none;padding:0.6rem 1rem;border-radius:8px;font-weight:700;cursor:pointer;">
+                        📋 Copy รายชื่อ + รหัส
+                    </button>
+                </div>
+                <div id="codes-status" style="margin-top:0.5rem;font-size:0.82rem;color:#888;"></div>
+                <div id="codes-list" style="margin-top:1rem;"></div>
             </div>
 
             <!-- เครื่องมืออื่น -->
@@ -2123,6 +2172,7 @@
                 case 'manager-tools':
                     this.loadPaymentStatus();
                     this.checkConnectedDevices();
+                    this.renderCodesList();
                     if (!this._paymentListener) {
                         this._paymentListener = true;
                         firebase.database().ref('badmintonState/payments').on('value', snap => {
@@ -4159,6 +4209,145 @@
         },
 
         // ✅ เคลียร์ presence ค้าง (กรณี user ปิดแอปไม่สมบูรณ์)
+        // ✅ Generate รหัสล็อกอินที่ยังไม่มี (ของเดิมไม่กระทบ)
+        generateAllCodes: function() {
+            const used = new Set();
+            (appState.players || []).forEach(p => {
+                if (p.loginCode) used.add(p.loginCode);
+            });
+            const genUnique = () => {
+                let tries = 0;
+                while (tries < 100) {
+                    const code = String(Math.floor(1000 + Math.random() * 9000));
+                    if (!used.has(code)) {
+                        used.add(code);
+                        return code;
+                    }
+                    tries++;
+                }
+                return null;
+            };
+            let added = 0;
+            (appState.players || []).forEach(p => {
+                if (!p.loginCode) {
+                    const code = genUnique();
+                    if (code) {
+                        p.loginCode = code;
+                        added++;
+                    }
+                }
+            });
+            saveState();
+            this.renderCodesList();
+            const statusEl = document.getElementById('codes-status');
+            if (statusEl) {
+                statusEl.textContent = `✅ Generate ${added} รหัสใหม่ — เก่ายังคงอยู่`;
+                statusEl.style.color = '#10b981';
+                setTimeout(() => { statusEl.textContent = ''; }, 4000);
+            }
+        },
+
+        // 🔄 Regen ทั้งหมด — รหัสเก่าใช้ไม่ได้
+        regenerateAllCodes: function() {
+            if (!confirm('Generate รหัสใหม่ทั้งหมด? user ที่ใช้รหัสเก่าจะ login ไม่ได้และต้องใส่รหัสใหม่')) return;
+            const used = new Set();
+            const genUnique = () => {
+                let tries = 0;
+                while (tries < 100) {
+                    const code = String(Math.floor(1000 + Math.random() * 9000));
+                    if (!used.has(code)) {
+                        used.add(code);
+                        return code;
+                    }
+                    tries++;
+                }
+                return null;
+            };
+            (appState.players || []).forEach(p => {
+                p.loginCode = genUnique();
+            });
+            saveState();
+            this.renderCodesList();
+            const statusEl = document.getElementById('codes-status');
+            if (statusEl) {
+                statusEl.textContent = '✅ Generate รหัสใหม่ทั้งหมดแล้ว';
+                statusEl.style.color = '#10b981';
+                setTimeout(() => { statusEl.textContent = ''; }, 4000);
+            }
+        },
+
+        // 📋 Copy รายชื่อ + รหัส (ไปแชร์ใน LINE)
+        copyAllCodes: function() {
+            const lines = (appState.players || []).map(p => {
+                const code = p.loginCode || '—';
+                const real = p.realName ? ` (${p.realName})` : '';
+                return `#${p.id} ${p.name}${real}: ${code}`;
+            }).join('\n');
+            const text = `🔐 รหัสล็อกอินก๊วน\n\n${lines}\n\n📱 วิธีใช้: เปิดแอป → ใส่รหัส 4 หลัก`;
+            navigator.clipboard.writeText(text).then(() => {
+                const statusEl = document.getElementById('codes-status');
+                if (statusEl) {
+                    statusEl.textContent = `✅ คัดลอกแล้ว (${(appState.players || []).length} คน) — paste ใน LINE ได้`;
+                    statusEl.style.color = '#10b981';
+                    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+                }
+            }).catch(() => {
+                alert(text);
+            });
+        },
+
+        // Reset รหัสคนเดียว (ใช้ตอนลืม)
+        resetPlayerCode: function(playerId) {
+            const p = (appState.players || []).find(p => +p.id === +playerId);
+            if (!p) return;
+            if (!confirm(`Reset รหัสของ ${p.name}? รหัสเก่าจะใช้ไม่ได้`)) return;
+            const used = new Set();
+            (appState.players || []).forEach(pl => {
+                if (pl.loginCode && pl.id !== p.id) used.add(pl.loginCode);
+            });
+            let tries = 0, newCode;
+            while (tries < 100) {
+                newCode = String(Math.floor(1000 + Math.random() * 9000));
+                if (!used.has(newCode)) break;
+                tries++;
+            }
+            p.loginCode = newCode;
+            saveState();
+            this.renderCodesList();
+            showSuccess(`✅ รหัสใหม่ของ ${p.name}: ${newCode}`);
+        },
+
+        renderCodesList: function() {
+            const container = document.getElementById('codes-list');
+            if (!container) return;
+            const players = appState.players || [];
+            if (players.length === 0) {
+                container.innerHTML = '<p style="color:#888;">ยังไม่มีผู้เล่น</p>';
+                return;
+            }
+            const hasCode = players.filter(p => p.loginCode).length;
+            container.innerHTML = `
+                <div style="font-size:0.85rem;color:#475569;margin-bottom:0.5rem;">
+                    มีรหัส: <b style="color:#10b981;">${hasCode}</b> / ${players.length} คน
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:400px;overflow-y:auto;padding:4px;">
+                ${players.map(p => `
+                    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px;display:flex;align-items:center;gap:8px;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-size:0.78rem;font-weight:700;color:#1e293b;">#${p.id} ${escapeHtml(p.name)}</div>
+                            ${p.realName ? `<div style="font-size:0.7rem;color:#64748b;">${escapeHtml(p.realName)}</div>` : ''}
+                            ${p.loginCode
+                                ? `<div style="font-family:'Courier New',monospace;font-size:1.05rem;font-weight:800;color:#b45309;background:#fef3c7;padding:2px 8px;border-radius:5px;display:inline-block;margin-top:3px;letter-spacing:2px;">${p.loginCode}</div>`
+                                : `<div style="font-size:0.72rem;color:#94a3b8;font-style:italic;margin-top:3px;">— ยังไม่มี —</div>`
+                            }
+                        </div>
+                        <button onclick="App.resetPlayerCode(${p.id})" style="background:#fef3c7;color:#b45309;border:1px solid #fbbf24;padding:4px 8px;border-radius:5px;font-size:0.7rem;font-weight:700;cursor:pointer;min-height:unset;">🔄 Reset</button>
+                    </div>
+                `).join('')}
+                </div>
+            `;
+        },
+
         clearAllPresence: function() {
             if (!confirm('เคลียร์ presence ทั้งหมด? user ที่ online อยู่จะต้องเปิดแอปใหม่เพื่อกลับมา online')) return;
             const statusEl = document.getElementById('clear-token-status');
@@ -4311,6 +4500,231 @@
         /**
          * Check-in functions
          */
+        // ✅ Multi-select for Check-in
+        _checkInSelectedIds: new Set(),
+
+        toggleCheckInSelectMode: function() {
+            uiState.checkInSelectMode = !uiState.checkInSelectMode;
+            if (!uiState.checkInSelectMode) {
+                this._checkInSelectedIds.clear();
+            }
+            const bar = document.getElementById('checkin-bulk-bar');
+            const btn = document.getElementById('checkin-select-mode-btn');
+            if (bar) bar.style.display = uiState.checkInSelectMode ? 'flex' : 'none';
+            if (btn) {
+                btn.textContent = uiState.checkInSelectMode ? '✕ ยกเลิก' : '☑️ เลือกหลายคน';
+                btn.style.background = uiState.checkInSelectMode ? '#fee2e2' : '#f1f5f9';
+                btn.style.color = uiState.checkInSelectMode ? '#dc2626' : '#475569';
+            }
+            this._updateCheckInBulkCount();
+            this.renderCheckInList();
+        },
+
+        _toggleCheckInSelection: function(playerId) {
+            if (this._checkInSelectedIds.has(playerId)) {
+                this._checkInSelectedIds.delete(playerId);
+            } else {
+                this._checkInSelectedIds.add(playerId);
+            }
+            this._updateCheckInBulkCount();
+            this.renderCheckInList();
+        },
+
+        _selectAllUncheckedIn: function() {
+            (appState.players || []).forEach(p => {
+                if (!p.isCheckedIn) this._checkInSelectedIds.add(p.id);
+            });
+            this._updateCheckInBulkCount();
+            this.renderCheckInList();
+        },
+
+        _clearCheckInSelection: function() {
+            this._checkInSelectedIds.clear();
+            this._updateCheckInBulkCount();
+            this.renderCheckInList();
+        },
+
+        _updateCheckInBulkCount: function() {
+            const el = document.getElementById('checkin-bulk-count');
+            if (el) el.textContent = `เลือกแล้ว ${this._checkInSelectedIds.size}`;
+        },
+
+        _bulkCheckIn: function() {
+            const ids = Array.from(this._checkInSelectedIds);
+            if (ids.length === 0) {
+                showError('กรุณาเลือกผู้เล่นก่อน');
+                return;
+            }
+            try { _autoBackup('before_bulk_checkin'); } catch(_) {}
+            let count = 0;
+            ids.forEach(id => {
+                const p = appState.players.find(pl => +pl.id === +id);
+                if (p && !p.isCheckedIn) {
+                    p.isCheckedIn = true;
+                    p.checkInTime = Date.now();
+                    p.availability = p.availability || 'ready';
+                    count++;
+                }
+            });
+            this._checkInSelectedIds.clear();
+            saveState();
+            this.toggleCheckInSelectMode();
+            showSuccess(`✅ เช็คอิน ${count} คนแล้ว`);
+        },
+
+        // ✅ QR Self Check-in
+        openQRCheckIn: function() {
+            // Generate URL ที่จะ encode เป็น QR
+            // ใช้ display.html?checkin=1 → จะแสดงหน้า self check-in
+            const baseUrl = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+            const checkInUrl = baseUrl + 'display.html?checkin=1';
+
+            // สร้าง overlay
+            const overlay = document.createElement('div');
+            overlay.id = 'qr-checkin-overlay';
+            overlay.style.cssText = `
+                position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:99998;
+                display:flex; align-items:center; justify-content:center; padding:20px;
+                backdrop-filter:blur(8px);
+            `;
+
+            overlay.innerHTML = `
+                <div style="background:linear-gradient(135deg,#0f172a,#1e293b); border-radius:20px;
+                    padding:30px 24px; max-width:520px; width:100%; text-align:center; color:#fff;
+                    box-shadow:0 20px 60px rgba(0,0,0,0.5); max-height:95vh; overflow:auto;">
+
+                    <button onclick="document.getElementById('qr-checkin-overlay').remove()"
+                        style="position:absolute; top:30px; right:30px; background:rgba(255,255,255,0.1);
+                        border:none; color:#fff; width:36px; height:36px; border-radius:50%;
+                        font-size:18px; cursor:pointer; z-index:10;">×</button>
+
+                    <div style="font-size:18px; font-weight:800; color:#fbbf24; margin-bottom:6px;">
+                        🏸 B&B Badminton
+                    </div>
+                    <div style="font-size:12px; color:rgba(255,255,255,0.6); margin-bottom:18px;">
+                        📅 ${new Date().toLocaleDateString('th-TH', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}
+                    </div>
+
+                    <!-- QR Container -->
+                    <div id="qr-canvas-wrap" style="background:#fff; border-radius:14px; padding:16px;
+                        display:inline-block; margin:0 auto 16px;">
+                        <div id="qr-canvas" style="width:260px; height:260px; display:flex; align-items:center; justify-content:center;">
+                            <div style="color:#888; font-size:12px;">กำลังสร้าง QR...</div>
+                        </div>
+                    </div>
+
+                    <div style="font-size:14px; color:#fbbf24; font-weight:700; margin-bottom:10px;">
+                        👆 สแกนเพื่อเช็คอินตัวเอง
+                    </div>
+
+                    <!-- URL -->
+                    <div style="background:rgba(255,255,255,0.05); padding:8px 14px; border-radius:8px;
+                        font-family:monospace; font-size:11px; color:rgba(255,255,255,0.6);
+                        word-break:break-all; margin-bottom:16px;">
+                        ${checkInUrl}
+                    </div>
+
+                    <!-- Live stats -->
+                    <div style="display:flex; gap:12px; justify-content:center; margin-bottom:16px;">
+                        <div style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3);
+                            padding:10px 18px; border-radius:10px;">
+                            <div id="qr-stat-in" style="font-size:24px; font-weight:800; color:#10b981;">0</div>
+                            <div style="font-size:10px; color:rgba(255,255,255,0.6);">มาแล้ว</div>
+                        </div>
+                        <div style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.3);
+                            padding:10px 18px; border-radius:10px;">
+                            <div id="qr-stat-out" style="font-size:24px; font-weight:800; color:#f59e0b;">0</div>
+                            <div style="font-size:10px; color:rgba(255,255,255,0.6);">ยังไม่มา</div>
+                        </div>
+                    </div>
+
+                    <!-- Recently checked in -->
+                    <div id="qr-recent-list" style="text-align:left; max-height:200px; overflow-y:auto;
+                        background:rgba(255,255,255,0.04); border-radius:10px; padding:10px;">
+                        <div style="font-size:10px; color:#10b981; font-weight:800; margin-bottom:6px;">📋 เพิ่งเช็คอิน</div>
+                        <div id="qr-recent-items" style="font-size:11px; color:rgba(255,255,255,0.7);">
+                            ยังไม่มีคนเช็คอิน — รอ user สแกน...
+                        </div>
+                    </div>
+
+                    <div style="font-size:11px; color:rgba(255,255,255,0.4); margin-top:14px;">
+                        💡 หน้าต่างนี้จะ update เรียลทาม • วาง iPad/Tablet ที่ทางเข้า
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            // Render QR code (ใช้ QR API ภายนอก เพราะ simple)
+            this._renderQRCode(checkInUrl);
+
+            // Start watching realtime
+            this._startQRWatcher();
+        },
+
+        _renderQRCode: function(url) {
+            const wrap = document.getElementById('qr-canvas');
+            if (!wrap) return;
+            // ใช้ Google Charts QR API (free, no auth)
+            const size = 260;
+            const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(url)}&margin=10`;
+            wrap.innerHTML = `<img src="${qrSrc}" alt="QR" style="width:${size}px;height:${size}px;display:block;" 
+                onerror="this.parentNode.innerHTML='<div style=&quot;color:#ef4444;font-size:12px;padding:20px;&quot;>โหลด QR ไม่ได้<br>ใช้ URL ด้านล่างแทน</div>'">`;
+        },
+
+        _startQRWatcher: function() {
+            const updateStats = () => {
+                const overlay = document.getElementById('qr-checkin-overlay');
+                if (!overlay) return; // ปิดแล้ว stop
+                const players = appState.players || [];
+                const checkedIn = players.filter(p => p.isCheckedIn);
+                const notYet = players.length - checkedIn.length;
+                const inEl = document.getElementById('qr-stat-in');
+                const outEl = document.getElementById('qr-stat-out');
+                if (inEl) inEl.textContent = checkedIn.length;
+                if (outEl) outEl.textContent = notYet;
+
+                // Recent list (5 ล่าสุด)
+                const recent = checkedIn
+                    .filter(p => p.checkInTime)
+                    .sort((a, b) => (b.checkInTime || 0) - (a.checkInTime || 0))
+                    .slice(0, 5);
+                const recentEl = document.getElementById('qr-recent-items');
+                if (recentEl) {
+                    if (recent.length === 0) {
+                        recentEl.innerHTML = '<div style="opacity:0.5;font-style:italic;">ยังไม่มีคนเช็คอิน...</div>';
+                    } else {
+                        recentEl.innerHTML = recent.map((p, idx) => {
+                            const t = new Date(p.checkInTime);
+                            const timeStr = t.getHours().toString().padStart(2,'0') + ':' + t.getMinutes().toString().padStart(2,'0');
+                            const isNew = idx === 0 && (Date.now() - p.checkInTime) < 5000;
+                            return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;
+                                background:${isNew?'rgba(251,191,36,0.25)':'rgba(16,185,129,0.1)'};
+                                border-radius:6px;margin-bottom:3px;${isNew?'animation:qr-new-glow 1.5s ease-out;':''}">
+                                ${isNew?'✨':'✓'} <b>${escapeHtml(p.name)}</b>
+                                <span style="margin-left:auto;opacity:0.5;font-size:10px;">${timeStr}</span>
+                            </div>`;
+                        }).join('');
+                    }
+                }
+
+                // Schedule next update
+                if (document.getElementById('qr-checkin-overlay')) {
+                    setTimeout(updateStats, 2000);
+                }
+            };
+
+            // Inject animation CSS
+            if (!document.getElementById('qr-anim-css')) {
+                const s = document.createElement('style');
+                s.id = 'qr-anim-css';
+                s.textContent = `@keyframes qr-new-glow { 0% { background: rgba(251,191,36,0.5); transform: scale(1.02); } 100% { background: rgba(251,191,36,0.25); transform: scale(1); } }`;
+                document.head.appendChild(s);
+            }
+
+            updateStats();
+        },
+
         toggleCheckIn: function(id) {
             const player = PlayerUtils.getById(id);
             if (!player) return;
@@ -5143,6 +5557,9 @@
                 card.classList.add('check-in-card');
                 card.dataset.playerId = player.id;
 
+                const inSelectMode = !!uiState.checkInSelectMode;
+                const isSelected = inSelectMode && this._checkInSelectedIds && this._checkInSelectedIds.has(player.id);
+
                 if (player.isPlaying) {
                     card.classList.add('playing-now');
                     card.style.borderColor = 'var(--accent)';
@@ -5161,7 +5578,23 @@
                     card.style.opacity = '0.7';
                 }
 
-                card.onclick = () => this.toggleCheckIn(player.id);
+                if (isSelected) {
+                    card.style.background = 'linear-gradient(135deg, rgba(14,165,233,0.2), rgba(14,165,233,0.08))';
+                    card.style.borderColor = '#0ea5e9';
+                    card.style.transform = 'scale(0.97)';
+                    card.style.opacity = '1';
+                }
+
+                // เปลี่ยน behavior ของ card click
+                card.onclick = () => {
+                    if (inSelectMode) {
+                        // ไม่ให้เลือกคนที่ check-in อยู่แล้ว (no-op)
+                        if (player.isCheckedIn) return;
+                        this._toggleCheckInSelection(player.id);
+                    } else {
+                        this.toggleCheckIn(player.id);
+                    }
+                };
 
                 let statusIcon = player.isCheckedIn ? '✅' : '❌';
                 if (player.isPlaying) statusIcon = '🏸';
@@ -5170,9 +5603,16 @@
                 const restingBadge = (player.isCheckedIn && !player.isPlaying && player.availability === 'resting')
                     ? `<div style="position:absolute;top:6px;right:6px;background:#e67e22;color:#fff;font-size:0.65rem;font-weight:700;padding:2px 7px;border-radius:999px;box-shadow:0 2px 4px rgba(0,0,0,0.2);">🛑 พักอยู่</div>`
                     : '';
-                if (restingBadge) card.style.position = 'relative';
+
+                // Select checkbox
+                const selectCheck = inSelectMode && !player.isCheckedIn
+                    ? `<div style="position:absolute;top:-3px;left:-3px;width:24px;height:24px;border-radius:50%;background:${isSelected?'#0ea5e9':'rgba(255,255,255,0.95)'};border:2px solid ${isSelected?'#0ea5e9':'#cbd5e1'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;font-weight:800;z-index:5;box-shadow:0 2px 6px rgba(0,0,0,0.15);">${isSelected?'✓':''}</div>`
+                    : '';
+
+                if (restingBadge || selectCheck) card.style.position = 'relative';
 
                 card.innerHTML = `
+                    ${selectCheck}
                     ${restingBadge}
                     <div style="display:flex; justify-content:center; margin-bottom:6px;">
                         ${PlayerUtils.renderAvatar(player, 'md', false)}
