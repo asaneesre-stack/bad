@@ -3676,18 +3676,25 @@
         const player = state.players.find(p => +p.id === pidNum);
         if (!player) return;
 
-        // ✅ ใช้ toggleWatch (logic ที่ stable แล้ว) — เช็ค device อื่นใน registerFCMToken
-        // toggleWatch จะ: clear old, setupPresence, setupDirectMessageListener, registerFCMToken (ที่ alert ถ้ามี device อื่น)
-        toggleWatch(pidNum);
+        // ✅ ต้องใส่รหัสของคนที่จะติดตาม (กันคนเลือกของคนอื่น)
+        if (!player.loginCode) {
+          showToast(`⚠️ ${player.name} ยังไม่มีรหัส — ติดต่อ admin`, '#f59e0b');
+          return;
+        }
 
-        close();
-        renderWatchBar();
-        try { highlightMyQueues(); } catch(_) {}
-        try { updatePayBtn(); } catch(_) {}
-        try { syncStateToSW(); } catch(_) {}
-
-        // Toast แจ้งว่าเริ่มติดตาม (alert จาก registerFCMToken จะเด้งทับถ้าเจอ device อื่น)
-        showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
+        // เปิด password prompt
+        promptPasswordForWatch(player, () => {
+          // รหัสถูกต้อง → ติดตาม
+          toggleWatch(pidNum);
+          // ✅ Save user code → next time auto-login
+          try { localStorage.setItem('bb-user-code', player.loginCode); } catch(_) {}
+          close();
+          renderWatchBar();
+          try { highlightMyQueues(); } catch(_) {}
+          try { updatePayBtn(); } catch(_) {}
+          try { syncStateToSW(); } catch(_) {}
+          showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
+        });
       };
       confirmBtn.addEventListener('touchend', handleConfirm, { passive: false });
       confirmBtn.addEventListener('click', handleConfirm);
@@ -4102,6 +4109,146 @@
       if (!chip) return;
       toggleWatch(+chip.dataset.watchPid);
     });
+
+    // ✅ Prompt รหัสก่อนติดตามคนใหม่ (กันคนเลือกของคนอื่น)
+    function promptPasswordForWatch(player, onSuccess) {
+      const old = document.getElementById('pw-prompt-modal');
+      if (old) old.remove();
+
+      const overlay = document.createElement('div');
+      overlay.id = 'pw-prompt-modal';
+      overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,0.85);
+        z-index:10001; display:flex; align-items:center; justify-content:center;
+        padding:16px; backdrop-filter:blur(10px);
+        animation: fade-in 0.3s ease-out;
+      `;
+
+      overlay.innerHTML = `
+        <div style="background:rgba(20,30,50,0.98); border-radius:20px;
+          border:1px solid rgba(0,168,204,0.4); padding:22px; max-width:340px; width:100%;
+          box-shadow:0 20px 60px rgba(0,0,0,0.6);
+          animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);">
+
+          <div style="text-align:center; margin-bottom:16px;">
+            <div style="font-size:36px;">🔐</div>
+            <div style="font-size:15px; font-weight:800; color:#fff; margin-top:6px;">
+              ใส่รหัสของ ${esc(player.name)}
+            </div>
+            <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-top:4px;">
+              เพื่อยืนยันว่าคุณคือเจ้าของ
+            </div>
+          </div>
+
+          <div id="pwp-boxes" style="display:flex; gap:6px; justify-content:center; margin-bottom:10px;">
+            <div class="pwp-box" data-idx="0" style="width:44px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="pwp-box" data-idx="1" style="width:44px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="pwp-box" data-idx="2" style="width:44px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="pwp-box" data-idx="3" style="width:44px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; margin-top:10px;">
+            ${[1,2,3,4,5,6,7,8,9].map(n => `
+              <button class="pwp-key" data-key="${n}" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; font-size:20px; font-weight:700; padding:12px; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent;">${n}</button>
+            `).join('')}
+            <button class="pwp-key" data-key="clear" style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); color:#fbbf24; font-size:12px; font-weight:700; padding:12px; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent;">ล้าง</button>
+            <button class="pwp-key" data-key="0" style="background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.15); color:#fff; font-size:20px; font-weight:700; padding:12px; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent;">0</button>
+            <button class="pwp-key" data-key="back" style="background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; font-size:14px; font-weight:700; padding:12px; border-radius:9px; cursor:pointer; -webkit-tap-highlight-color:transparent;">⌫</button>
+          </div>
+
+          <div id="pwp-err" style="display:none; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:7px 10px; border-radius:7px; font-size:11px; text-align:center; margin-top:10px; font-weight:700;"></div>
+
+          <button id="pwp-cancel" style="background:rgba(255,255,255,0.06); border:none; color:rgba(255,255,255,0.6); font-size:11px; padding:10px; border-radius:8px; width:100%; margin-top:10px; cursor:pointer;">
+            ยกเลิก
+          </button>
+        </div>
+      `;
+
+      document.body.appendChild(overlay);
+
+      let buffer = '';
+      const update = () => {
+        const boxes = overlay.querySelectorAll('.pwp-box');
+        boxes.forEach((b, i) => {
+          if (i < buffer.length) {
+            b.textContent = buffer[i];
+            b.style.background = 'rgba(0,168,204,0.2)';
+            b.style.borderColor = '#00a8cc';
+          } else if (i === buffer.length) {
+            b.textContent = '_';
+            b.style.background = 'rgba(0,168,204,0.1)';
+            b.style.borderColor = '#00a8cc';
+            b.style.boxShadow = '0 0 0 3px rgba(0,168,204,0.2)';
+          } else {
+            b.textContent = '_';
+            b.style.background = 'rgba(255,255,255,0.06)';
+            b.style.borderColor = 'rgba(0,168,204,0.4)';
+            b.style.boxShadow = 'none';
+          }
+        });
+        // ลองตรวจตอน buffer ยาวพอ (รหัส player อาจเป็น 4-10 หลัก)
+        if (buffer.length >= 4 && buffer === player.loginCode) {
+          // ถูกแล้ว
+          setTimeout(() => {
+            overlay.remove();
+            onSuccess();
+          }, 200);
+        } else if (buffer.length >= (player.loginCode || '').length) {
+          // เต็มความยาวรหัสแต่ผิด
+          const errEl = document.getElementById('pwp-err');
+          if (errEl) {
+            errEl.textContent = '❌ รหัสไม่ถูกต้อง';
+            errEl.style.display = 'block';
+          }
+          const boxesEl = document.getElementById('pwp-boxes');
+          if (boxesEl) {
+            boxesEl.style.animation = 'none';
+            setTimeout(() => { boxesEl.style.animation = 'shake 0.4s'; }, 10);
+          }
+          setTimeout(() => {
+            buffer = '';
+            update();
+            if (errEl) errEl.style.display = 'none';
+          }, 1200);
+        }
+      };
+
+      const handleKey = (e) => {
+        const btn = e.target.closest('.pwp-key');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const k = btn.dataset.key;
+        if (k === 'clear') buffer = '';
+        else if (k === 'back') buffer = buffer.slice(0, -1);
+        else if (buffer.length < 10) buffer += k;
+        update();
+      };
+      overlay.addEventListener('touchend', handleKey, { passive: false });
+      overlay.addEventListener('click', handleKey);
+
+      overlay.querySelector('#pwp-cancel').onclick = () => overlay.remove();
+
+      const handleKb = (e) => {
+        if (e.key >= '0' && e.key <= '9' && buffer.length < 10) {
+          buffer += e.key;
+          update();
+        } else if (e.key === 'Backspace') {
+          buffer = buffer.slice(0, -1);
+          update();
+        } else if (e.key === 'Escape') {
+          overlay.remove();
+        }
+      };
+      document.addEventListener('keydown', handleKb);
+      const oldRemove = overlay.remove.bind(overlay);
+      overlay.remove = function() {
+        document.removeEventListener('keydown', handleKb);
+        oldRemove();
+      };
+
+      update();
+    }
 
     function toggleWatch(pid) {
       if (watchedIds.has(pid)) {
