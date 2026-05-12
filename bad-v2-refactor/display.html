@@ -4115,6 +4115,9 @@
         const _did1 = localStorage.getItem('bb-device-id');
         if (_did1) db.ref(`pushTokens/${pid}/${_did1}`).remove().catch(()=>{});
         db.ref('alertState/' + pid).remove().catch(()=>{});
+        // ✅ ลบ bb-user-code → ครั้งหน้าเปิดแอปจะไม่ auto-login
+        // (ผู้ใช้ตั้งใจยกเลิก = เริ่มต้นใหม่)
+        try { localStorage.removeItem('bb-user-code'); } catch(_) {}
       } else {
         // เปิดติดตาม — ยกเลิกคนเก่าก่อน (แค่ 1 คนเท่านั้น)
         watchedIds.forEach(oldPid => {
