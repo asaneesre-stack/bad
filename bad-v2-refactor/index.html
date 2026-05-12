@@ -924,7 +924,7 @@
             <!-- 🔐 Login Codes -->
             <div class="card">
                 <h2>🔐 รหัสล็อกอินผู้เล่น</h2>
-                <p>Generate รหัส 4 หลักให้ user แต่ละคน เพื่อใช้ login เข้าระบบ</p>
+                <p>Generate รหัส 6 หลักให้ user แต่ละคน เพื่อใช้ login เข้าระบบ</p>
                 <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:0.75rem;">
                     <button onclick="App.generateAllCodes()" style="background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;padding:0.6rem 1rem;border-radius:8px;font-weight:700;cursor:pointer;">
                         🎲 Generate รหัสที่ยังไม่มี
@@ -4249,7 +4249,7 @@
             const genUnique = () => {
                 let tries = 0;
                 while (tries < 100) {
-                    const code = String(Math.floor(1000 + Math.random() * 9000));
+                    const code = String(Math.floor(100000 + Math.random() * 900000));
                     if (!used.has(code)) {
                         used.add(code);
                         return code;
@@ -4286,7 +4286,7 @@
             const genUnique = () => {
                 let tries = 0;
                 while (tries < 100) {
-                    const code = String(Math.floor(1000 + Math.random() * 9000));
+                    const code = String(Math.floor(100000 + Math.random() * 900000));
                     if (!used.has(code)) {
                         used.add(code);
                         return code;
@@ -4317,7 +4317,7 @@
                 const real = p.realName ? ` (${p.realName})` : '';
                 return `#${p.id} ${p.name}${real}: ${code}`;
             }).join('\n');
-            const text = `🔐 รหัสล็อกอินก๊วน\n\n${lines}\n\n📱 วิธีใช้: เปิดแอป → ใส่รหัส 4 หลัก`;
+            const text = `🔐 รหัสล็อกอินก๊วน\n\n${lines}\n\n📱 วิธีใช้: เปิดแอป → ใส่รหัส 6 หลัก`;
             navigator.clipboard.writeText(text).then(() => {
                 const statusEl = document.getElementById('codes-status');
                 if (statusEl) {
@@ -4338,7 +4338,7 @@
             // ✅ ถาม: random หรือ กำหนดเอง
             const customCode = prompt(
                 `Reset รหัสของ ${p.name}\n\n` +
-                `ใส่รหัสใหม่ (4-10 ตัวเลข) หรือเว้นว่างเพื่อสุ่ม:`,
+                `ใส่รหัสใหม่ (6 ตัวเลข) หรือเว้นว่างเพื่อสุ่ม:`,
                 ''
             );
             if (customCode === null) return; // cancel
@@ -4355,15 +4355,15 @@
                 });
                 let tries = 0;
                 while (tries < 100) {
-                    newCode = String(Math.floor(1000 + Math.random() * 9000));
+                    newCode = String(Math.floor(100000 + Math.random() * 900000));
                     if (!used.has(newCode)) break;
                     tries++;
                 }
             } else {
                 // ✅ Custom — validate
                 const trimmed = customCode.trim();
-                if (!/^\d{4,10}$/.test(trimmed)) {
-                    showError('รหัสต้องเป็นตัวเลข 4-10 หลัก');
+                if (!/^\d{6}$/.test(trimmed)) {
+                    showError('รหัสต้องเป็นตัวเลข 6 หลัก');
                     return;
                 }
                 // เช็คซ้ำ

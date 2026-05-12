@@ -2096,7 +2096,7 @@
           <div style="margin-bottom:10px;">
             <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">รหัสปัจจุบัน</div>
             <input id="cpw-old" type="tel" inputmode="numeric" pattern="[0-9]*"
-              maxlength="10" placeholder="ใส่รหัสปัจจุบัน"
+              maxlength="6" placeholder="ใส่รหัสปัจจุบัน"
               style="width:100%; background:rgba(0,0,0,0.4); border:1.5px solid rgba(255,255,255,0.15);
               border-radius:8px; padding:10px 12px; color:#fff; font-size:16px;
               font-family:'Courier New',monospace; letter-spacing:3px; text-align:center;">
@@ -2104,9 +2104,9 @@
 
           <!-- New password -->
           <div style="margin-bottom:10px;">
-            <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">รหัสใหม่ (4-10 ตัวเลข)</div>
+            <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">รหัสใหม่ (6 ตัวเลข)</div>
             <input id="cpw-new" type="tel" inputmode="numeric" pattern="[0-9]*"
-              maxlength="10" placeholder="ใส่รหัสใหม่"
+              maxlength="6" placeholder="ใส่รหัสใหม่"
               style="width:100%; background:rgba(0,0,0,0.4); border:1.5px solid rgba(99,102,241,0.4);
               border-radius:8px; padding:10px 12px; color:#fff; font-size:16px;
               font-family:'Courier New',monospace; letter-spacing:3px; text-align:center;">
@@ -2116,7 +2116,7 @@
           <div style="margin-bottom:14px;">
             <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">ยืนยันรหัสใหม่</div>
             <input id="cpw-confirm" type="tel" inputmode="numeric" pattern="[0-9]*"
-              maxlength="10" placeholder="ใส่รหัสใหม่อีกครั้ง"
+              maxlength="6" placeholder="ใส่รหัสใหม่อีกครั้ง"
               style="width:100%; background:rgba(0,0,0,0.4); border:1.5px solid rgba(99,102,241,0.4);
               border-radius:8px; padding:10px 12px; color:#fff; font-size:16px;
               font-family:'Courier New',monospace; letter-spacing:3px; text-align:center;">
@@ -2183,8 +2183,8 @@
           showMsg('❌ รหัสปัจจุบันไม่ถูกต้อง', 'error');
           return;
         }
-        if (!/^\d{4,10}$/.test(newPw)) {
-          showMsg('❌ รหัสใหม่ต้องเป็นตัวเลข 4-10 หลัก', 'error');
+        if (!/^\d{6}$/.test(newPw)) {
+          showMsg('❌ รหัสใหม่ต้องเป็นตัวเลข 6 หลัก', 'error');
           return;
         }
         if (newPw !== confirmPw) {
@@ -3288,20 +3288,22 @@
               เข้าระบบก๊วน
             </div>
             <div style="font-size:12px; color:rgba(255,255,255,0.6); margin-top:4px;">
-              ใส่รหัส 4 หลักที่ได้รับจาก admin
+              ใส่รหัส 6 หลักที่ได้รับจาก admin
             </div>
           </div>
 
           <!-- Code input boxes -->
-          <div id="code-boxes" style="display:flex; gap:8px; justify-content:center; margin-bottom:6px;">
-            <div class="code-box" data-idx="0" style="width:50px; height:60px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
-            <div class="code-box" data-idx="1" style="width:50px; height:60px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
-            <div class="code-box" data-idx="2" style="width:50px; height:60px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
-            <div class="code-box" data-idx="3" style="width:50px; height:60px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+          <div id="code-boxes" style="display:flex; gap:5px; justify-content:center; margin-bottom:6px;">
+            <div class="code-box" data-idx="0" style="width:40px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="code-box" data-idx="1" style="width:40px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="code-box" data-idx="2" style="width:40px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="code-box" data-idx="3" style="width:40px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="code-box" data-idx="4" style="width:40px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="code-box" data-idx="5" style="width:40px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
           </div>
 
           <!-- Hidden input for keyboard -->
-          <input id="code-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+          <input id="code-input" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="6"
             style="position:absolute; opacity:0; pointer-events:none; height:0; width:0;"
             autocomplete="off">
 
@@ -3374,7 +3376,7 @@
           }
         });
         // Auto submit when 4 digits
-        if (codeBuffer.length === 4) {
+        if (codeBuffer.length === 6) {
           setTimeout(tryLogin, 200);
         }
       };
@@ -3400,7 +3402,7 @@
       };
 
       const tryLogin = () => {
-        if (codeBuffer.length !== 4) return;
+        if (codeBuffer.length !== 6) return;
         // หา player ที่มี loginCode ตรง
         const player = (state.players || []).find(p => p.loginCode === codeBuffer);
         if (!player) {
@@ -3436,7 +3438,7 @@
           codeBuffer = '';
         } else if (key === 'back') {
           codeBuffer = codeBuffer.slice(0, -1);
-        } else if (codeBuffer.length < 4) {
+        } else if (codeBuffer.length < 6) {
           codeBuffer += key;
         }
         updateBoxes();
@@ -3458,7 +3460,7 @@
 
       // Keyboard support (desktop)
       const handleKeydown = (e) => {
-        if (e.key >= '0' && e.key <= '9' && codeBuffer.length < 4) {
+        if (e.key >= '0' && e.key <= '9' && codeBuffer.length < 6) {
           codeBuffer += e.key;
           updateBoxes();
         } else if (e.key === 'Backspace') {
@@ -4140,11 +4142,13 @@
             </div>
           </div>
 
-          <div id="pwp-boxes" style="display:flex; gap:6px; justify-content:center; margin-bottom:10px;">
-            <div class="pwp-box" data-idx="0" style="width:44px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
-            <div class="pwp-box" data-idx="1" style="width:44px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
-            <div class="pwp-box" data-idx="2" style="width:44px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
-            <div class="pwp-box" data-idx="3" style="width:44px; height:54px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+          <div id="pwp-boxes" style="display:flex; gap:4px; justify-content:center; margin-bottom:10px;">
+            <div class="pwp-box" data-idx="0" style="width:36px; height:50px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="pwp-box" data-idx="1" style="width:36px; height:50px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="pwp-box" data-idx="2" style="width:36px; height:50px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="pwp-box" data-idx="3" style="width:36px; height:50px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="pwp-box" data-idx="4" style="width:36px; height:50px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
+            <div class="pwp-box" data-idx="5" style="width:36px; height:50px; background:rgba(255,255,255,0.06); border:2px solid rgba(0,168,204,0.4); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:800; color:#fbbf24; font-family:'Courier New',monospace;">_</div>
           </div>
 
           <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; margin-top:10px;">
@@ -4187,7 +4191,7 @@
           }
         });
         // ลองตรวจตอน buffer ยาวพอ (รหัส player อาจเป็น 4-10 หลัก)
-        if (buffer.length >= 4 && buffer === player.loginCode) {
+        if (buffer.length === 6 && buffer === player.loginCode) {
           // ถูกแล้ว
           setTimeout(() => {
             overlay.remove();
@@ -4221,7 +4225,7 @@
         const k = btn.dataset.key;
         if (k === 'clear') buffer = '';
         else if (k === 'back') buffer = buffer.slice(0, -1);
-        else if (buffer.length < 10) buffer += k;
+        else if (buffer.length < 6) buffer += k;
         update();
       };
       overlay.addEventListener('touchend', handleKey, { passive: false });
@@ -4230,7 +4234,7 @@
       overlay.querySelector('#pwp-cancel').onclick = () => overlay.remove();
 
       const handleKb = (e) => {
-        if (e.key >= '0' && e.key <= '9' && buffer.length < 10) {
+        if (e.key >= '0' && e.key <= '9' && buffer.length < 6) {
           buffer += e.key;
           update();
         } else if (e.key === 'Backspace') {
