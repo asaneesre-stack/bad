@@ -1736,10 +1736,46 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // Anonymous sign-in — ใช้กับ Firebase Security Rules (auth != null)
-    firebase.auth().signInAnonymously()
-      .then(() => console.log("[Auth] Anonymous sign-in OK"))
-      .catch(e => console.warn("[Auth] Sign-in failed:", e.code, e.message));
+    // ✅ Anonymous sign-in พร้อม retry — กันกรณีเชื่อมต่อช้า
+    syncStatus('🔄 กำลังเชื่อมต่อ...', '#0ea5e9');
+    let _authRetryCount = 0;
+    const MAX_AUTH_RETRY = 5;
+
+    function tryAuth() {
+      firebase.auth().signInAnonymously()
+        .then(() => {
+          console.log("[Auth] Anonymous sign-in OK");
+          syncStatus('☁️ เชื่อมต่อแล้ว', '#10b981');
+        })
+        .catch(e => {
+          console.warn("[Auth] Sign-in failed:", e.code, e.message);
+          _authRetryCount++;
+          if (_authRetryCount < MAX_AUTH_RETRY) {
+            syncStatus(`🔄 ลองใหม่... (${_authRetryCount}/${MAX_AUTH_RETRY})`, '#f59e0b');
+            setTimeout(tryAuth, 1500 * _authRetryCount); // exponential backoff
+          } else {
+            syncStatus('⚠️ เชื่อมต่อไม่ได้ - กดเพื่อโหลดใหม่', '#ef4444');
+            // แสดงปุ่ม retry
+            const sync = document.getElementById('sync-status');
+            if (sync) {
+              sync.style.cursor = 'pointer';
+              sync.onclick = () => window.location.reload();
+            }
+          }
+        });
+    }
+
+    // ✅ ใช้ onAuthStateChanged — listener เริ่มเมื่อ auth สำเร็จเท่านั้น
+    let _firebaseListenerStarted = false;
+    firebase.auth().onAuthStateChanged(user => {
+      if (user && !_firebaseListenerStarted) {
+        _firebaseListenerStarted = true;
+        console.log("[Auth] Auth ready, starting Firebase listener");
+        startFirebaseListener();
+      }
+    });
+
+    tryAuth();
 
     // ── State ─────────────────────────────────────────────────────
     let state = { players:[], matches:[], matchQueues:[], courts:[], payments:{} };
@@ -1773,6 +1809,7 @@
       updatePayBtn();
     });
 
+    function startFirebaseListener() {
     db.ref('badmintonState').on('value', snap => {
       const raw = snap.val();
       if (!raw) { syncStatus('⚠️ ยังไม่มีข้อมูล', '#e67e22'); return; }
@@ -1850,6 +1887,7 @@
         setTimeout(() => openWelcomeModal(), 600);
       }
     }, () => syncStatus('❌ เชื่อมต่อไม่ได้', '#e74c3c'));
+    } // end startFirebaseListener
 
     // ── Clock ─────────────────────────────────────────────────────
     function updateClock() {
