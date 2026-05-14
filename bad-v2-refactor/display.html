@@ -4475,6 +4475,26 @@
       return { base, extraSum, total: base + extraSum, mode, games, courtG, perG, buffet, extras: extraArr };
     }
 
+    // ✅ คำนวณยอดรวมของทุก user ที่ติดตาม (สำหรับ multi-watch)
+    function _calcTotalAmountAll() {
+      const items = [];
+      let grandTotal = 0;
+      watchedIds.forEach(pid => {
+        const p = (state.players || []).find(pl => pl.id === pid);
+        if (!p) return;
+        const payment = (state.payments || {})[pid];
+        // ข้ามคนที่ชำระแล้ว
+        if (payment && payment.paid) {
+          items.push({ pid, name: p.name, paid: true, total: 0, info: null });
+          return;
+        }
+        const info = _calcDisplayAmount(pid);
+        grandTotal += info.total;
+        items.push({ pid, name: p.name, paid: false, total: info.total, info, pending: !!(payment && payment.pending) });
+      });
+      return { items, grandTotal };
+    }
+
     // ผู้เล่นที่กำลังดู (คนแรกใน watchedIds)
     function _currentWatchedPid() {
       if (!watchedIds || !watchedIds.size) return null;
@@ -4484,45 +4504,64 @@
     }
 
     async function showPaymentQR() {
-      const pid  = _currentWatchedPid();
-      const watchedPlayer = (state.players||[]).find(p => p.id === pid);
-      const name = watchedPlayer ? watchedPlayer.name : 'ผู้เล่น';
+      // ✅ Multi-watch: รวมยอดของทุก user ที่ติดตาม
+      if (watchedIds.size === 0) return;
 
       // อ่าน promptpay ID จาก Firebase
       const snap = await db.ref('badmintonState/paymentSettings').once('value');
       const settings = snap.val() || {};
       const ppId  = settings.promptpay || '0628801778';
 
-      // คำนวณยอดรายคน (อ้างอิงตามที่ admin ตั้งไว้ — read-only)
-      const info = _calcDisplayAmount(pid);
-      const price = info.total;
+      const { items, grandTotal } = _calcTotalAmountAll();
+      const unpaidItems = items.filter(i => !i.paid);
 
-      // อัปเดตชื่อและยอด
-      document.getElementById('payment-name').textContent  = name;
-      document.getElementById('payment-price-display').textContent = `฿${price} บาท`;
+      // ทุกคนจ่ายแล้ว
+      if (unpaidItems.length === 0) {
+        showToast('✅ ทุกคนชำระแล้ว', '#10b981');
+        return;
+      }
 
-      // อัปเดต breakdown (โชว์เฉพาะโหมดที่ admin เลือกไว้)
+      // ชื่อรวม
+      const namesDisplay = unpaidItems.length === 1
+        ? unpaidItems[0].name
+        : `${unpaidItems.length} คน (${unpaidItems.map(i => i.name).join(', ')})`;
+
+      document.getElementById('payment-name').textContent  = namesDisplay;
+      document.getElementById('payment-price-display').textContent = `฿${grandTotal} บาท`;
+
+      // อัปเดต breakdown — แยกแสดงรายคน
       const bdEl = document.getElementById('payment-breakdown');
       if (bdEl) {
         const rows = [];
-        if (info.mode === 'pergame') {
-          rows.push(`<div style="display:flex;justify-content:space-between;"><span>🎮 รายเกม (${info.courtG} + ${info.perG}×${info.games})</span><b>${info.base}฿</b></div>`);
-        } else {
-          rows.push(`<div style="display:flex;justify-content:space-between;"><span>🍽️ บุฟเฟ่</span><b>${info.base}฿</b></div>`);
-        }
-        info.extras.forEach(e => {
-          const amt = parseFloat(e?.amount) || 0;
-          if (amt > 0) {
-            const lbl = (e?.label || 'ค่าเสริม').replace(/[<>]/g,'');
-            rows.push(`<div style="display:flex;justify-content:space-between;color:#e91e63;"><span>💰 ${lbl}</span><b>+${amt}฿</b></div>`);
+        unpaidItems.forEach((it, idx) => {
+          const info = it.info;
+          // หัวข้อรายคน
+          if (unpaidItems.length > 1) {
+            rows.push(`<div style="margin-top:${idx > 0 ? '8px':'0'};padding-top:${idx > 0 ? '8px':'0'};${idx > 0 ? 'border-top:1px solid rgba(0,0,0,0.08);' : ''}font-weight:800;color:#0284c7;font-size:0.85rem;">👤 ${esc(it.name)}${it.pending ? ' <span style="font-size:0.7rem;color:#f59e0b;font-weight:600;">(รอ admin)</span>' : ''}</div>`);
+          }
+          if (info.mode === 'pergame') {
+            rows.push(`<div style="display:flex;justify-content:space-between;font-size:0.85rem;"><span>🎮 รายเกม (${info.courtG} + ${info.perG}×${info.games})</span><b>${info.base}฿</b></div>`);
+          } else {
+            rows.push(`<div style="display:flex;justify-content:space-between;font-size:0.85rem;"><span>🍽️ บุฟเฟ่</span><b>${info.base}฿</b></div>`);
+          }
+          info.extras.forEach(e => {
+            const amt = parseFloat(e?.amount) || 0;
+            if (amt > 0) {
+              const lbl = (e?.label || 'ค่าเสริม').replace(/[<>]/g,'');
+              rows.push(`<div style="display:flex;justify-content:space-between;color:#e91e63;font-size:0.82rem;"><span>💰 ${lbl}</span><b>+${amt}฿</b></div>`);
+            }
+          });
+          if (unpaidItems.length > 1) {
+            rows.push(`<div style="display:flex;justify-content:space-between;font-size:0.78rem;color:#64748b;"><span>ย่อย</span><span>${info.total}฿</span></div>`);
           }
         });
-        rows.push(`<div style="display:flex;justify-content:space-between;margin-top:0.4rem;padding-top:0.4rem;border-top:1px dashed #ddd;font-weight:800;color:#1a2b47;"><span>รวม</span><span>${info.total}฿</span></div>`);
+        // ยอดรวม
+        rows.push(`<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:2px solid #1a2b47;font-weight:800;color:#1a2b47;font-size:1rem;"><span>${unpaidItems.length > 1 ? '💰 รวมทั้งหมด' : 'รวม'}</span><span>${grandTotal}฿</span></div>`);
         bdEl.innerHTML = rows.join('');
       }
 
-      // Generate QR ด้วยยอดรายคน
-      const payload  = promptPayPayload(ppId, price);
+      // Generate QR ด้วยยอดรวม
+      const payload  = promptPayPayload(ppId, grandTotal);
       const container = document.getElementById('payment-qr-container');
       container.innerHTML = '';
       new QRCode(container, {
@@ -4540,10 +4579,10 @@
       const qrErr = document.getElementById('qr-error');
       qrErr.style.display = 'none';
       qrImg.style.display = 'block';
-      qrImg.src = `https://promptpay.io/${ppNum}/${price}.png`;
+      qrImg.src = `https://promptpay.io/${ppNum}/${grandTotal}.png`;
 
       window._ppNum   = ppNum;
-      window._ppPrice = price;
+      window._ppPrice = grandTotal;
 
       document.getElementById('payment-modal').style.display = 'flex';
     }
@@ -4553,29 +4592,48 @@
       const btn = document.getElementById('pay-btn');
       if (!btn) return;
       if (watchedIds.size === 0) { btn.style.display = 'none'; return; }
-      const pid = [...watchedIds][0];
-      // ใช้ state ที่ sync มาแล้วแทน once() เพื่อความเร็ว
-      const p = (state.payments || {})[pid];
-      if (p && p.paid) {
+
+      // ✅ Multi-watch: คำนวณสถานะรวมของทุกคน
+      let allPaid = true;
+      let anyPending = false;
+      let unpaidCount = 0;
+      let totalUnpaid = 0;
+
+      watchedIds.forEach(pid => {
+        const p = (state.payments || {})[pid];
+        if (p && p.paid) return;
+        allPaid = false;
+        if (p && p.pending) anyPending = true;
+        unpaidCount++;
+        try {
+          const info = _calcDisplayAmount(pid);
+          totalUnpaid += info.total;
+        } catch(_) {}
+      });
+
+      const countLabel = watchedIds.size > 1 ? ` (${unpaidCount}/${watchedIds.size})` : '';
+
+      if (allPaid) {
         btn.textContent  = '✅ ชำระแล้ว';
         btn.style.background = 'linear-gradient(135deg,#27ae60,#219a52)';
         btn.style.display = 'inline-flex';
         btn.onclick = null;
-      } else if (p && p.pending) {
-        btn.textContent  = '⏳ รอยืนยัน...';
+      } else if (anyPending && unpaidCount === watchedIds.size) {
+        // ทุกคนยังไม่จ่าย แต่มีบางคนกำลัง pending
+        btn.textContent  = `⏳ รอยืนยัน${countLabel}`;
         btn.style.background = 'linear-gradient(135deg,#e67e22,#d35400)';
         btn.style.display = 'inline-flex';
         btn.onclick = showPaymentQR;
       } else {
-        btn.textContent  = '💳 จ่ายค่าสนาม';
+        btn.textContent  = `💳 จ่าย ฿${totalUnpaid}${countLabel}`;
         btn.style.background = 'linear-gradient(135deg,#e74c3c,#c0392b)';
         btn.style.display = 'inline-flex';
         btn.onclick = showPaymentQR;
       }
 
-      // reset ปุ่มใน modal ด้วย ถ้า admin ยกเลิกการจ่าย
+      // reset ปุ่มใน modal
       const notifyBtn = document.getElementById('btn-notify-paid');
-      if (notifyBtn && !(p && p.pending) && !(p && p.paid)) {
+      if (notifyBtn && !anyPending && !allPaid) {
         notifyBtn.textContent = '💸 แจ้งจ่ายเงินแล้ว';
         notifyBtn.style.background = 'linear-gradient(135deg,#27ae60,#1e8449)';
         notifyBtn.disabled = false;
@@ -4732,26 +4790,43 @@
     }
 
     async function notifyPaid() {
-      const pid = [...watchedIds][0];
-      if (!pid) return;
-      const p = (state.players||[]).find(pl => pl.id === pid);
-      const name = p ? p.name : '???';
+      // ✅ Multi-watch: แจ้งจ่ายของทุก user ที่ติดตาม (ที่ยังไม่จ่าย)
+      if (watchedIds.size === 0) return;
 
       const btn = document.getElementById('btn-notify-paid');
       btn.textContent = '⏳ กำลังส่ง...';
       btn.disabled = true;
 
-      await db.ref(`badmintonState/payments/${pid}`).set({
-        pending: true,
-        paid: false,
-        name,
-        ts: Date.now(),
+      const ts = Date.now();
+      const promises = [];
+      let count = 0;
+      watchedIds.forEach(pid => {
+        const p = (state.players||[]).find(pl => pl.id === pid);
+        if (!p) return;
+        const payment = (state.payments || {})[pid];
+        if (payment && payment.paid) return; // ข้ามคนที่จ่ายแล้ว
+        count++;
+        promises.push(
+          db.ref(`badmintonState/payments/${pid}`).set({
+            pending: true,
+            paid: false,
+            name: p.name,
+            ts,
+          })
+        );
       });
 
-      btn.textContent = '✅ แจ้งแล้ว รอ admin ยืนยัน';
+      try {
+        await Promise.all(promises);
+        btn.textContent = `✅ แจ้งแล้ว ${count} คน รอ admin ยืนยัน`;
+      } catch(_) {
+        btn.textContent = '⚠️ ส่งไม่สำเร็จ';
+      }
       btn.style.background = '#95a5a6';
-      document.getElementById('payment-modal').style.display = 'none';
-      updatePayBtn();
+      setTimeout(() => {
+        document.getElementById('payment-modal').style.display = 'none';
+        updatePayBtn();
+      }, 1500);
     }
 
 
