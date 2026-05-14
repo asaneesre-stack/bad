@@ -3558,14 +3558,11 @@
           </div>`;
         }
       } else {
-        // ✅ มีคนติดตามแล้ว — แสดงปุ่ม "+ เพิ่ม" เพื่อติดตามคนอื่นด้วย
-        const remainingCount = checkedIn.filter(p => !watchedIds.has(p.id)).length;
-        if (remainingCount > 0) {
-          html += `<div class="watch-chip" id="watch-add-btn"
-            style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.7;cursor:pointer;font-size:0.9em;">
-            + เพิ่ม
-          </div>`;
-        }
+        // ✅ มีคนติดตามแล้ว — แสดงปุ่ม "+ เพิ่ม" เสมอ (เพื่อติดตามคนอื่นด้วย)
+        html += `<div class="watch-chip" id="watch-add-btn"
+          style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.7;cursor:pointer;font-size:0.9em;">
+          + เพิ่ม
+        </div>`;
       }
 
       chipsEl.innerHTML = html;
