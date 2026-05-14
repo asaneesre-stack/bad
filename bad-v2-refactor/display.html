@@ -1320,7 +1320,9 @@
     setInterval(updateNotifBadge, 5000);
     setTimeout(updateNotifBadge, 1500);
 
-    // Hidden feature: tap logo 5 ครั้งเพื่อเปิด Boxing Mode (advanced)
+    // ✅ Hidden Admin Mode — กด logo 5 ครั้งภายใน 2 วินาที → toggle Admin Mode
+    // Admin Mode = bypass การใส่รหัสเวลาติดตามคนอื่น (สำหรับ admin/test)
+    window._adminMode = localStorage.getItem('bb-admin-mode') === '1';
     (function setupLogoTap() {
       const logo = document.getElementById('header-logo');
       if (!logo) return;
@@ -1332,14 +1334,40 @@
         resetTimer = setTimeout(() => { taps = 0; }, 2000);
         if (taps >= 5) {
           taps = 0;
-          const btn = document.getElementById('boxing-mode-trigger');
-          if (btn) {
-            btn.style.display = '';
-            alert('🎯 ปลดล็อก Boxing Mode แล้ว!\n\nใช้กรณีรอคิวเกิน 30 นาที — ปุ่มจะอยู่ใน watch bar');
+          window._adminMode = !window._adminMode;
+          try { localStorage.setItem('bb-admin-mode', window._adminMode ? '1' : '0'); } catch(_) {}
+          updateAdminModeIndicator();
+          if (window._adminMode) {
+            alert('🔓 เข้าสู่ Admin Mode แล้ว!\n\n• ติดตามคนอื่นได้โดยไม่ต้องใส่รหัส\n• กด logo 5 ครั้งอีกครั้งเพื่อออก');
+          } else {
+            alert('🔒 ออกจาก Admin Mode แล้ว');
           }
         }
       });
     })();
+
+    function updateAdminModeIndicator() {
+      let badge = document.getElementById('admin-mode-badge');
+      if (window._adminMode) {
+        if (!badge) {
+          badge = document.createElement('div');
+          badge.id = 'admin-mode-badge';
+          badge.style.cssText = `
+            position:fixed; top:0; left:0; right:0; z-index:9998;
+            background:linear-gradient(135deg, #ef4444, #b91c1c); color:#fff;
+            text-align:center; padding:5px 10px; font-size:11px; font-weight:800;
+            box-shadow:0 2px 8px rgba(239,68,68,0.4);
+            display:flex; align-items:center; justify-content:center; gap:6px;
+          `;
+          badge.innerHTML = '🔓 Admin Mode — กด logo 5 ครั้งเพื่อออก';
+          document.body.appendChild(badge);
+        }
+      } else {
+        if (badge) badge.remove();
+      }
+    }
+    // Apply on load
+    setTimeout(updateAdminModeIndicator, 100);
 
     // Heartbeat ทุก 6 ชั่วโมง — touch timestamp ให้ token ดูสด ไม่โดน TTL ลบ
     // (ทำงานเฉพาะเมื่อแอปเปิดอยู่ ถ้าปิดนานเกิน 7 วันจริงๆ ก็ตามนั้น)
@@ -1838,7 +1866,8 @@
       }
 
       // ✅ Auto-login จาก saved code (ครั้งหน้าหลัง login)
-      if (!_welcomeShown && watchedIds.size === 0 && !_skippedThisSession) {
+      // ข้ามถ้าอยู่ใน Admin Mode (ไม่ต้องเลือกชื่อ)
+      if (!_welcomeShown && watchedIds.size === 0 && !_skippedThisSession && !window._adminMode) {
         const savedCode = localStorage.getItem('bb-user-code');
         if (savedCode) {
           // ลองหา player ที่มี code ตรง
@@ -3710,25 +3739,35 @@
         const player = state.players.find(p => +p.id === pidNum);
         if (!player) return;
 
-        // ✅ ต้องใส่รหัสของคนที่จะติดตาม (กันคนเลือกของคนอื่น)
+        // ✅ Admin Mode → bypass password — ติดตามได้ทันที
+        const doFollow = () => {
+          toggleWatch(pidNum);
+          // Save user code → next time auto-login (เฉพาะกรณีไม่ใช่ admin)
+          if (!window._adminMode && player.loginCode) {
+            try { localStorage.setItem('bb-user-code', player.loginCode); } catch(_) {}
+          }
+          close();
+          renderWatchBar();
+          try { highlightMyQueues(); } catch(_) {}
+          try { updatePayBtn(); } catch(_) {}
+          try { syncStateToSW(); } catch(_) {}
+          showToast(`✅ ติดตาม ${player.name} แล้ว${window._adminMode ? ' (Admin)' : ''}`, '#10b981');
+        };
+
+        if (window._adminMode) {
+          // Admin Mode — bypass password
+          doFollow();
+          return;
+        }
+
+        // ✅ Normal mode — ต้องใส่รหัสของคนที่จะติดตาม (กันคนเลือกของคนอื่น)
         if (!player.loginCode) {
           showToast(`⚠️ ${player.name} ยังไม่มีรหัส — ติดต่อ admin`, '#f59e0b');
           return;
         }
 
         // เปิด password prompt
-        promptPasswordForWatch(player, () => {
-          // รหัสถูกต้อง → ติดตาม
-          toggleWatch(pidNum);
-          // ✅ Save user code → next time auto-login
-          try { localStorage.setItem('bb-user-code', player.loginCode); } catch(_) {}
-          close();
-          renderWatchBar();
-          try { highlightMyQueues(); } catch(_) {}
-          try { updatePayBtn(); } catch(_) {}
-          try { syncStateToSW(); } catch(_) {}
-          showToast(`✅ ติดตาม ${player.name} แล้ว`, '#10b981');
-        });
+        promptPasswordForWatch(player, doFollow);
       };
       confirmBtn.addEventListener('touchend', handleConfirm, { passive: false });
       confirmBtn.addEventListener('click', handleConfirm);
