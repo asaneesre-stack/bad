@@ -1361,36 +1361,49 @@
     // Get FCM token and save to Firebase under pushTokens/<pid>
     // ── Firebase Presence ────────────────────────────────────────
     // ถ้า connection ขาด (kill app) → Firebase ลบ presence อัตโนมัติ
-    let _presenceRef = null;
-    let _presenceHeartbeat = null;
+
+    // ✅ Multi-user presence — เก็บ ref + heartbeat ของแต่ละ pid
+    const _presenceRefs = new Map();  // pid -> ref
+    const _presenceHeartbeats = new Map();  // pid -> intervalId
 
     function setupPresence(pid) {
       const did = localStorage.getItem('bb-device-id');
       if (!did) return;
-      if (_presenceRef) { _presenceRef.remove().catch(()=>{}); }
-      // ✅ ล้าง heartbeat เก่า (ถ้ามี)
-      if (_presenceHeartbeat) {
-        clearInterval(_presenceHeartbeat);
-        _presenceHeartbeat = null;
+      // ล้าง presence เก่าของ pid นี้ (ถ้ามี)
+      if (_presenceRefs.has(pid)) {
+        try { _presenceRefs.get(pid).remove().catch(()=>{}); } catch(_) {}
+      }
+      if (_presenceHeartbeats.has(pid)) {
+        clearInterval(_presenceHeartbeats.get(pid));
       }
       const ref = db.ref(`presence/${pid}/${did}`);
-      _presenceRef = ref;
+      _presenceRefs.set(pid, ref);
       ref.onDisconnect().remove();
       ref.set({ online: true, ts: Date.now() });
-
-      // ✅ Heartbeat ทุก 30 วินาที — update ts (กัน presence ค้าง)
-      _presenceHeartbeat = setInterval(() => {
-        if (_presenceRef) {
-          _presenceRef.update({ online: true, ts: Date.now() }).catch(()=>{});
-        }
+      // Heartbeat
+      const intervalId = setInterval(() => {
+        ref.update({ online: true, ts: Date.now() }).catch(()=>{});
       }, 30000);
+      _presenceHeartbeats.set(pid, intervalId);
     }
 
-    function clearPresence() {
-      if (_presenceRef) { _presenceRef.remove().catch(()=>{}); _presenceRef = null; }
-      if (_presenceHeartbeat) {
-        clearInterval(_presenceHeartbeat);
-        _presenceHeartbeat = null;
+    function clearPresence(pid) {
+      if (pid !== undefined) {
+        // เคลียร์เฉพาะ pid นี้
+        if (_presenceRefs.has(pid)) {
+          try { _presenceRefs.get(pid).remove().catch(()=>{}); } catch(_) {}
+          _presenceRefs.delete(pid);
+        }
+        if (_presenceHeartbeats.has(pid)) {
+          clearInterval(_presenceHeartbeats.get(pid));
+          _presenceHeartbeats.delete(pid);
+        }
+      } else {
+        // เคลียร์ทั้งหมด
+        _presenceRefs.forEach((ref) => { try { ref.remove().catch(()=>{}); } catch(_) {} });
+        _presenceRefs.clear();
+        _presenceHeartbeats.forEach((id) => clearInterval(id));
+        _presenceHeartbeats.clear();
       }
     }
 
@@ -1398,66 +1411,47 @@
     // Direct Message Listener (Plan B) — ฟังข้อความจาก admin ตรง
     // ใช้เป็น backup กรณี Cloud Function ส่ง FCM ไม่ถึงเครื่อง iOS
     // ============================================================
-    let _directMsgRef = null;
-    let _lastDirectMsgTs = 0;
+    // ✅ Multi-user direct message — Map pid -> {ref, lastTs}
+    const _directMsgRefs = new Map();
+    const _directMsgLastTs = new Map();
 
     function setupDirectMessageListener(pid) {
-      // cleanup listener เก่าก่อน
-      if (_directMsgRef) {
-        try { _directMsgRef.off(); } catch(e) {}
-        _directMsgRef = null;
-      }
-
       if (!pid) return;
+      // ล้าง listener เก่าของ pid นี้
+      if (_directMsgRefs.has(pid)) {
+        try { _directMsgRefs.get(pid).off(); } catch(_) {}
+        _directMsgRefs.delete(pid);
+      }
+      // จำ ts ล่าสุด — กัน trigger ข้อความเก่า
+      const initTs = Date.now();
+      _directMsgLastTs.set(pid, initTs);
+      console.log('[DirectMsg] start listening pid', pid, 'initTs', initTs);
 
-      // จำ timestamp ล่าสุดก่อนเริ่มฟัง — เพื่อไม่ให้ trigger ข้อความเก่าที่ค้างใน DB
-      _lastDirectMsgTs = Date.now();
-      console.log('[DirectMsg] start listening pid', pid, '_lastDirectMsgTs =', _lastDirectMsgTs, new Date(_lastDirectMsgTs).toLocaleString());
-
-      _directMsgRef = db.ref(`directMessage/${pid}`);
-      _directMsgRef.on('value', snap => {
+      const ref = db.ref(`directMessage/${pid}`);
+      _directMsgRefs.set(pid, ref);
+      ref.on('value', snap => {
         const data = snap.val();
-        console.log('[DirectMsg] snapshot received:', data);
-        if (!data) {
-          console.log('[DirectMsg] no data — skipping');
-          return;
-        }
-
+        if (!data) return;
         const msgTs = parseInt(data.timestamp || data.ts || 0);
-        console.log('[DirectMsg] msgTs:', msgTs, new Date(msgTs).toLocaleString(), '| _lastDirectMsgTs:', _lastDirectMsgTs, new Date(_lastDirectMsgTs).toLocaleString());
-
-        // ข้าม message เก่าที่ค้างอยู่ก่อนเริ่มฟัง
-        if (!msgTs) {
-          console.log('[DirectMsg] no timestamp — skipping');
-          return;
-        }
-        if (msgTs <= _lastDirectMsgTs) {
-          console.log('[DirectMsg] message older or equal to last — skipping');
-          return;
-        }
-        _lastDirectMsgTs = msgTs;
-        console.log('[DirectMsg] ✅ NEW message — will show notification');
+        if (!msgTs) return;
+        const lastTs = _directMsgLastTs.get(pid) || 0;
+        if (msgTs <= lastTs) return;
+        _directMsgLastTs.set(pid, msgTs);
+        console.log('[DirectMsg] pid', pid, 'NEW message');
 
         const message    = data.message || 'มีข้อความใหม่';
         const playerName = data.playerName || '';
         const sentBy     = data.sentBy || 'admin';
 
-        console.log('[DirectMsg] received:', { message, playerName, sentBy, ts: msgTs });
-
         // นับ notification (สำหรับ Boxing Mode)
         if (window._bmIncrementNotifCount) window._bmIncrementNotifCount();
-
-        // ⚡ Auto refresh token ทุกครั้งที่ได้รับ message — กัน Stale
-        if (typeof touchMyTokens === 'function') {
-          touchMyTokens();
-          console.log('[DirectMsg] ✅ token timestamp refreshed');
-        }
+        // ⚡ Refresh token
+        if (typeof touchMyTokens === 'function') touchMyTokens();
 
         const title = `💬 ข้อความจาก ${sentBy === 'admin' ? 'ผู้จัดการ' : sentBy}`;
         const body  = playerName ? `ถึง ${playerName}: ${message}` : message;
 
-        // 1) แสดง notification ผ่าน Service Worker (ทำงานทั้งตอน PWA เปิด/พับ)
-        let swShown = false;
+        // SW notification
         if (_swRegistration) {
           _swRegistration.showNotification(title, {
             body,
@@ -1468,44 +1462,39 @@
             vibrate: [200, 80, 200, 80, 200],
             requireInteraction: true,
             data: { url: './display.html', type: 'direct' },
-          }).then(() => {
-            swShown = true;
-            console.log('[DirectMsg] ✅ SW notification shown');
-          }).catch(e => console.warn('[DirectMsg] SW showNotification failed:', e));
-        } else {
-          console.warn('[DirectMsg] no SW registration');
+          }).catch(e => console.warn('[DirectMsg] SW failed:', e));
         }
-
-        // 2) Fallback: Browser notification (ถ้า SW ไม่ทำงาน)
+        // Browser notification fallback
         if (!_swRegistration && 'Notification' in window && Notification.permission === 'granted') {
           try {
             const n = new Notification(title, { body, tag: 'direct-msg-' + msgTs, icon: 'apple-touch-icon.png' });
             n.onclick = () => { window.focus(); n.close(); };
-            console.log('[DirectMsg] ✅ browser notification shown');
-          } catch(e) { console.warn('[DirectMsg] browser notification failed:', e); }
+          } catch(_) {}
         }
-
-        // 3) Always show in-app alert — ไม่ว่า notification จะแสดงหรือไม่
-        // เพื่อให้ user ที่ active อยู่ในแอปเห็นทันที
+        // In-app
         showDirectMessageInAppAlert(title, body);
-
-        // เล่นเสียงเตือน + แสดง toast ในแอป (ถ้า PWA active)
         try { playDirectMsgSound(); } catch(_) {}
         if (typeof syncStatus === 'function') {
           syncStatus('💬 ' + body, '#3498db');
           setTimeout(() => syncStatus('☁️ เชื่อมต่อแล้ว', '#00a8cc'), 5000);
         }
       });
-
-      console.log('[DirectMsg] listener attached for pid', pid);
     }
 
-    function clearDirectMessageListener() {
-      if (_directMsgRef) {
-        try { _directMsgRef.off(); } catch(e) {}
-        _directMsgRef = null;
+    function clearDirectMessageListener(pid) {
+      if (pid !== undefined) {
+        if (_directMsgRefs.has(pid)) {
+          try { _directMsgRefs.get(pid).off(); } catch(_) {}
+          _directMsgRefs.delete(pid);
+        }
+        _directMsgLastTs.delete(pid);
+      } else {
+        _directMsgRefs.forEach((ref) => { try { ref.off(); } catch(_) {} });
+        _directMsgRefs.clear();
+        _directMsgLastTs.clear();
       }
     }
+
 
     // เสียง beep สำหรับ direct message — สั้น 3 ครั้ง
     let _dmAudioCtx = null;
@@ -3559,7 +3548,7 @@
       }).join('');
 
       if (watchedPlayers.length === 0) {
-        // ยังไม่ได้เลือก — แสดงปุ่ม "+ เลือกชื่อ" (เด้ง modal เมื่อกด)
+        // ยังไม่ได้เลือก — แสดงปุ่ม "+ เลือกชื่อ"
         if (checkedIn.length === 0) {
           html = '<span class="watch-hint">ยังไม่มีผู้เล่นเช็คอิน</span>';
         } else {
@@ -3568,8 +3557,16 @@
             + เลือกชื่อ
           </div>`;
         }
+      } else {
+        // ✅ มีคนติดตามแล้ว — แสดงปุ่ม "+ เพิ่ม" เพื่อติดตามคนอื่นด้วย
+        const remainingCount = checkedIn.filter(p => !watchedIds.has(p.id)).length;
+        if (remainingCount > 0) {
+          html += `<div class="watch-chip" id="watch-add-btn"
+            style="-webkit-tap-highlight-color:transparent;border-style:dashed;opacity:0.7;cursor:pointer;font-size:0.9em;">
+            + เพิ่ม
+          </div>`;
+        }
       }
-      // ถ้ามีคนที่ติดตามแล้ว — ไม่แสดงปุ่ม picker (เลือกได้แค่ 1 คน)
 
       chipsEl.innerHTML = html;
 
@@ -4299,24 +4296,18 @@
         saveWatchedIds();
         alertShown.delete(`${pid}-next`);
         alertShown.delete(`${pid}-court`);
-        clearPresence();
-        clearDirectMessageListener();
+        // ✅ Clear เฉพาะ pid นี้ (ไม่กระทบคนอื่นที่ติดตามอยู่)
+        clearPresence(pid);
+        clearDirectMessageListener(pid);
         const _did1 = localStorage.getItem('bb-device-id');
         if (_did1) db.ref(`pushTokens/${pid}/${_did1}`).remove().catch(()=>{});
         db.ref('alertState/' + pid).remove().catch(()=>{});
-        // ✅ ลบ bb-user-code → ครั้งหน้าเปิดแอปจะไม่ auto-login
-        // (ผู้ใช้ตั้งใจยกเลิก = เริ่มต้นใหม่)
-        try { localStorage.removeItem('bb-user-code'); } catch(_) {}
+        // ✅ ลบ bb-user-code เฉพาะเมื่อ — ไม่เหลือใครติดตามแล้ว (last unwatch)
+        if (watchedIds.size === 0) {
+          try { localStorage.removeItem('bb-user-code'); } catch(_) {}
+        }
       } else {
-        // เปิดติดตาม — ยกเลิกคนเก่าก่อน (แค่ 1 คนเท่านั้น)
-        watchedIds.forEach(oldPid => {
-          alertShown.delete(`${oldPid}-next`);
-          alertShown.delete(`${oldPid}-court`);
-          const _did2 = localStorage.getItem('bb-device-id');
-          if (_did2) db.ref(`pushTokens/${oldPid}/${_did2}`).remove().catch(()=>{});
-        });
-        watchedIds.clear();
-        // เพิ่มคนใหม่
+        // ✅ เปิดติดตาม — เพิ่มคนใหม่ (รองรับหลายคน — ไม่ clear ของเดิม)
         watchedIds.add(pid);
         saveWatchedIds();
         setupPresence(pid);
