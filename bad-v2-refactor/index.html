@@ -506,10 +506,6 @@
                         style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;padding:6px 12px;border-radius:8px;font-size:0.82rem;font-weight:700;cursor:pointer;min-height:38px;">
                         ☑️ เลือกหลายคน
                     </button>
-                    <button onclick="App.openQRCheckIn()" type="button"
-                        style="background:linear-gradient(135deg,#8b5cf6,#6d28d9);color:#fff;border:none;padding:6px 14px;border-radius:8px;font-size:0.82rem;font-weight:800;cursor:pointer;min-height:38px;box-shadow:0 4px 12px rgba(139,92,246,0.3);">
-                        📱 QR Self Check-in
-                    </button>
                 </div>
 
                 <!-- Bulk action bar (hidden default) -->
@@ -4392,12 +4388,25 @@
                 return;
             }
             const hasCode = players.filter(p => p.loginCode).length;
+            const q = (this._codesSearchQuery || '').trim().toLowerCase();
+            const filtered = q
+                ? players.filter(p =>
+                    String(p.id).includes(q) ||
+                    (p.name || '').toLowerCase().includes(q) ||
+                    (p.realName || '').toLowerCase().includes(q) ||
+                    (p.loginCode || '').includes(q))
+                : players;
             container.innerHTML = `
-                <div style="font-size:0.85rem;color:#475569;margin-bottom:0.5rem;">
-                    มีรหัส: <b style="color:#10b981;">${hasCode}</b> / ${players.length} คน
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;">
+                    <input id="codes-search" type="text" placeholder="🔍 ค้นหา ชื่อ / #ID / รหัส..." value="${escapeHtml(q)}"
+                        oninput="App._codesSearchQuery = this.value; App.renderCodesList(); setTimeout(()=>{const el=document.getElementById('codes-search');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},10);"
+                        style="flex:1;min-width:200px;padding:7px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:0.85rem;">
+                    <div style="font-size:0.82rem;color:#475569;">
+                        ${q ? `พบ <b style="color:#0284c7;">${filtered.length}</b> / ` : ''}มีรหัส: <b style="color:#10b981;">${hasCode}</b> / ${players.length} คน
+                    </div>
                 </div>
                 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;max-height:400px;overflow-y:auto;padding:4px;">
-                ${players.map(p => `
+                ${filtered.map(p => `
                     <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px;display:flex;align-items:center;gap:8px;">
                         <div style="flex:1;min-width:0;">
                             <div style="font-size:0.78rem;font-weight:700;color:#1e293b;">#${p.id} ${escapeHtml(p.name)}</div>
@@ -4410,6 +4419,7 @@
                         <button onclick="App.resetPlayerCode(${p.id})" style="background:#fef3c7;color:#b45309;border:1px solid #fbbf24;padding:4px 8px;border-radius:5px;font-size:0.7rem;font-weight:700;cursor:pointer;min-height:unset;">🔄 Reset</button>
                     </div>
                 `).join('')}
+                ${filtered.length === 0 ? '<div style="grid-column:1/-1;text-align:center;padding:20px;color:#94a3b8;">ไม่พบผู้เล่น</div>' : ''}
                 </div>
             `;
         },
