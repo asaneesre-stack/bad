@@ -778,23 +778,21 @@
                         </div>
                     </div>
 
-                    <h3>ข้อความสำเร็จรูป</h3>
-                    <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.25rem;">
-                        <button class="warning" style="font-size:0.85rem;min-height:38px;"
-                            onclick="App.setAndSendBroadcast('⏸️ หยุดพักสักครู่ — ผู้จัดจะแจ้งเมื่อพร้อมเล่นต่อ')">
-                            ⏸️ หยุดพักสักครู่
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                        <h3 style="margin:0;">ข้อความสำเร็จรูป</h3>
+                        <button onclick="App.toggleEditQuickMsgs()" id="btn-edit-qmsgs"
+                            style="background:#0ea5e9;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:0.78rem;font-weight:700;cursor:pointer;min-height:32px;">
+                            ✏️ แก้ไข
                         </button>
-                        <button class="success" style="font-size:0.85rem;min-height:38px;"
-                            onclick="App.setAndSendBroadcast('▶️ เล่นต่อได้แล้ว — เตรียมตัวได้เลย!')">
-                            ▶️ เล่นต่อได้แล้ว
+                    </div>
+                    <div id="quick-msgs-container" style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1.25rem;"></div>
+                    <div id="quick-msgs-editor" style="display:none;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:1.25rem;">
+                        <div id="quick-msgs-edit-list"></div>
+                        <button onclick="App.addQuickMsg()" style="background:#10b981;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:8px;">
+                            ➕ เพิ่มปุ่มใหม่
                         </button>
-                        <button class="secondary" style="font-size:0.85rem;min-height:38px;"
-                            onclick="App.setAndSendBroadcast('🏸 ลูกแบดหมดแล้ว — รอสักครู่นะครับ')">
-                            🏸 ลูกแบดหมด
-                        </button>
-                        <button style="font-size:0.85rem;min-height:38px;background:#8e44ad;"
-                            onclick="App.setAndSendBroadcast('🎉 สนามปิดแล้ว — ขอบคุณทุกคนที่มาร่วมเล่น!')">
-                            🎉 ปิดสนามวันนี้
+                        <button onclick="App.resetQuickMsgs()" style="background:#94a3b8;color:#fff;border:none;padding:7px 14px;border-radius:6px;font-size:0.82rem;font-weight:700;cursor:pointer;margin-top:8px;margin-left:6px;">
+                            🔄 Reset ค่าเริ่มต้น
                         </button>
                     </div>
                     <h3>พิมพ์ข้อความเอง</h3>
@@ -2169,6 +2167,7 @@
                     this.loadPaymentStatus();
                     this.checkConnectedDevices();
                     this.renderCodesList();
+                    this.renderQuickMsgs();
                     if (!this._paymentListener) {
                         this._paymentListener = true;
                         firebase.database().ref('badmintonState/payments').on('value', snap => {
@@ -3380,6 +3379,110 @@
                 (appState.players || []).map(p =>
                     `<option value="${p.id}" ${p.id == current ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
                 ).join('');
+        },
+
+        // ✅ Quick Messages — custom list (localStorage)
+        _defaultQuickMsgs: [
+            { label: '⏸️ หยุดพักสักครู่', text: '⏸️ หยุดพักสักครู่ — ผู้จัดจะแจ้งเมื่อพร้อมเล่นต่อ' },
+            { label: '▶️ เล่นต่อได้แล้ว',  text: '▶️ เล่นต่อได้แล้ว — เตรียมตัวได้เลย!' },
+            { label: '🏸 ลูกแบดหมด',      text: '🏸 ลูกแบดหมดแล้ว — รอสักครู่นะครับ' },
+            { label: '🎉 ปิดสนามวันนี้',   text: '🎉 สนามปิดแล้ว — ขอบคุณทุกคนที่มาร่วมเล่น!' },
+        ],
+
+        _getQuickMsgs: function() {
+            try {
+                const saved = localStorage.getItem('bb-quick-msgs');
+                if (saved) return JSON.parse(saved);
+            } catch(_) {}
+            return [...this._defaultQuickMsgs];
+        },
+
+        _saveQuickMsgs: function(msgs) {
+            try { localStorage.setItem('bb-quick-msgs', JSON.stringify(msgs)); } catch(_) {}
+        },
+
+        renderQuickMsgs: function() {
+            const container = document.getElementById('quick-msgs-container');
+            if (!container) return;
+            const msgs = this._getQuickMsgs();
+            const colors = ['#e67e22','#27ae60','#7f8c8d','#8e44ad','#3498db','#e91e63','#16a085','#f39c12'];
+            container.innerHTML = msgs.map((m, i) => `
+                <button style="font-size:0.85rem;min-height:38px;background:${colors[i % colors.length]};color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-weight:600;"
+                    onclick="App.setAndSendBroadcast(${JSON.stringify(m.text).replace(/"/g,'&quot;')})">
+                    ${escapeHtml(m.label)}
+                </button>
+            `).join('') || '<span style="color:#94a3b8;font-size:0.85rem;">ไม่มีปุ่ม — กด ✏️ แก้ไข เพื่อเพิ่ม</span>';
+        },
+
+        toggleEditQuickMsgs: function() {
+            const editor = document.getElementById('quick-msgs-editor');
+            const btn = document.getElementById('btn-edit-qmsgs');
+            if (!editor) return;
+            const isOpen = editor.style.display !== 'none';
+            editor.style.display = isOpen ? 'none' : 'block';
+            btn.textContent = isOpen ? '✏️ แก้ไข' : '✅ เสร็จ';
+            btn.style.background = isOpen ? '#0ea5e9' : '#10b981';
+            if (!isOpen) this.renderQuickMsgsEditor();
+        },
+
+        renderQuickMsgsEditor: function() {
+            const list = document.getElementById('quick-msgs-edit-list');
+            if (!list) return;
+            const msgs = this._getQuickMsgs();
+            if (msgs.length === 0) {
+                list.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:14px;font-size:0.85rem;">ยังไม่มีปุ่ม — กด ➕ เพิ่มปุ่มใหม่</p>';
+                return;
+            }
+            list.innerHTML = msgs.map((m, i) => `
+                <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:6px;">
+                    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;">
+                        <span style="background:#f1f5f9;color:#475569;padding:3px 8px;border-radius:4px;font-size:0.72rem;font-weight:700;">#${i+1}</span>
+                        <input type="text" value="${escapeHtml(m.label)}" placeholder="ชื่อปุ่ม (เช่น ⏸️ หยุดพัก)"
+                            oninput="App._updateQuickMsg(${i}, 'label', this.value)"
+                            style="flex:1;padding:5px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:0.82rem;">
+                        <button onclick="App._removeQuickMsg(${i})"
+                            style="background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;padding:4px 8px;border-radius:5px;font-size:0.75rem;font-weight:700;cursor:pointer;min-height:unset;">
+                            🗑️
+                        </button>
+                    </div>
+                    <textarea placeholder="ข้อความที่จะส่ง..." rows="2"
+                        oninput="App._updateQuickMsg(${i}, 'text', this.value)"
+                        style="width:100%;padding:5px 8px;border:1px solid #cbd5e1;border-radius:5px;font-size:0.82rem;font-family:inherit;resize:vertical;">${escapeHtml(m.text)}</textarea>
+                </div>
+            `).join('');
+        },
+
+        _updateQuickMsg: function(idx, field, value) {
+            const msgs = this._getQuickMsgs();
+            if (msgs[idx]) {
+                msgs[idx][field] = value;
+                this._saveQuickMsgs(msgs);
+                this.renderQuickMsgs(); // re-render ปุ่ม preview
+            }
+        },
+
+        _removeQuickMsg: function(idx) {
+            if (!confirm('ลบปุ่มนี้?')) return;
+            const msgs = this._getQuickMsgs();
+            msgs.splice(idx, 1);
+            this._saveQuickMsgs(msgs);
+            this.renderQuickMsgs();
+            this.renderQuickMsgsEditor();
+        },
+
+        addQuickMsg: function() {
+            const msgs = this._getQuickMsgs();
+            msgs.push({ label: '💬 ใหม่', text: 'พิมพ์ข้อความ...' });
+            this._saveQuickMsgs(msgs);
+            this.renderQuickMsgs();
+            this.renderQuickMsgsEditor();
+        },
+
+        resetQuickMsgs: function() {
+            if (!confirm('Reset กลับค่าเริ่มต้น? ปุ่มที่เพิ่ม/แก้ไว้จะหายหมด')) return;
+            try { localStorage.removeItem('bb-quick-msgs'); } catch(_) {}
+            this.renderQuickMsgs();
+            this.renderQuickMsgsEditor();
         },
 
         setAndSendBroadcast: function(msg) {
