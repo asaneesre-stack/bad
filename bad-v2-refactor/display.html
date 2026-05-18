@@ -3638,6 +3638,10 @@
     let _pickerSelectedId = null;
 
     function openWatchPickerModal(checkedIn) {
+      // ✅ ถ้าไม่ส่ง checkedIn → ใช้จาก state ปัจจุบัน
+      if (!checkedIn) {
+        checkedIn = (state.players || []).filter(p => p.isCheckedIn);
+      }
       const old = document.getElementById('watch-picker-modal');
       if (old) old.remove();
       _pickerSelectedId = null;
