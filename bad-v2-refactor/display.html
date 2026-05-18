@@ -1865,6 +1865,20 @@
         return; // ไม่ต้อง trigger welcome modal
       }
 
+      // ✅ Clean orphaned watchedIds — player ที่ admin ลบไปแล้ว/วันใหม่
+      const validIds = new Set((state.players || []).map(p => +p.id));
+      let cleaned = false;
+      [...watchedIds].forEach(id => {
+        if (!validIds.has(+id)) {
+          watchedIds.delete(id);
+          cleaned = true;
+        }
+      });
+      if (cleaned) {
+        saveWatchedIds();
+        console.log('[Watch] Cleaned orphaned IDs — remaining:', [...watchedIds]);
+      }
+
       // ✅ Auto-login จาก saved code (ครั้งหน้าหลัง login)
       // ข้ามถ้าอยู่ใน Admin Mode (ไม่ต้องเลือกชื่อ)
       if (!_welcomeShown && watchedIds.size === 0 && !_skippedThisSession && !window._adminMode) {
