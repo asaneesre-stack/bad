@@ -2914,6 +2914,10 @@
                 `;
                 bulkEditListEl.appendChild(bulkItem);
             });
+            // ✅ Re-render profile list ให้ status "✓ เพิ่มแล้ว" sync
+            if (document.getElementById('profile-list')) {
+                this.renderProfileList();
+            }
         },
 
         updatePlayerInfo: function(id, newName, newRealName) {
@@ -3701,6 +3705,8 @@
             listEl.innerHTML = profiles.map(p => {
                 const sc = getSkillClass(p.skill);
                 const photoURL = p.photoURL || '';
+                // ✅ เช็คว่าโปรไฟล์นี้ถูกเพิ่มเป็นผู้เล่นรายวันหรือยัง (match by name)
+                const isAdded = (appState.players || []).some(pl => pl.name === p.name);
                 const avatarInner = photoURL
                     ? `<img src="${escapeHtml(photoURL)}" alt="${escapeHtml(p.name)}" class="photo">`
                     : `<svg viewBox="0 0 24 24" fill="none">
@@ -3708,8 +3714,10 @@
                           <path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" fill="white" opacity="0.95"/>
                        </svg>`;
                 return `<div style="display:flex;align-items:center;gap:12px;
-                    padding:10px 14px;background:#fff;border-radius:12px;margin-bottom:8px;
-                    box-shadow:0 2px 8px rgba(0,0,0,0.05);border:1px solid rgba(0,0,0,0.04);">
+                    padding:10px 14px;background:${isAdded ? '#f0fdf4' : '#fff'};border-radius:12px;margin-bottom:8px;
+                    box-shadow:0 2px 8px rgba(0,0,0,0.05);border:1px solid ${isAdded ? '#86efac' : 'rgba(0,0,0,0.04)'};
+                    opacity:${isAdded ? '0.65' : '1'};position:relative;transition:all 0.2s;">
+                    ${isAdded ? `<div style="position:absolute;top:8px;right:10px;background:#10b981;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 8px;border-radius:999px;box-shadow:0 2px 6px rgba(16,185,129,0.4);">✓ เพิ่มแล้ว</div>` : ''}
                     <div class="player-avatar avatar-${sc}" onclick="App._uploadProfilePhoto(${p.id})"
                         style="cursor:pointer; width:48px; height:48px; position:relative;">
                         ${avatarInner}
@@ -3717,14 +3725,14 @@
                     </div>
                     <div style="flex:1; min-width:0;">
                         <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="font-weight:700; font-size:0.95rem;">${escapeHtml(p.name)}</span>
+                            <span style="font-weight:700; font-size:0.95rem;${isAdded ? 'text-decoration:line-through;color:#94a3b8;' : ''}">${escapeHtml(p.name)}</span>
                             <span class="skill-badge skill-${sc}">${escapeHtml(p.skill)}</span>
                         </div>
                         <div style="font-size:0.75rem;color:#64748b;">${p.realName ? escapeHtml(p.realName) : '<span style="color:#cbd5e1;">ยังไม่มีชื่อจริง</span>'}</div>
                     </div>
                     <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
-                        <button class="success" style="font-size:0.72rem;padding:5px 10px;min-height:unset;font-weight:700;"
-                            onclick="App.addPlayerFromProfile(${p.id})">+ เพิ่มรายวัน</button>
+                        <button class="${isAdded ? 'secondary' : 'success'}" style="font-size:0.72rem;padding:5px 10px;min-height:unset;font-weight:700;${isAdded ? 'opacity:0.6;cursor:not-allowed;' : ''}"
+                            ${isAdded ? 'disabled' : `onclick="App.addPlayerFromProfile(${p.id})"`}>${isAdded ? '✓ เพิ่มแล้ว' : '+ เพิ่มรายวัน'}</button>
                         <div style="display:flex;gap:4px;">
                             <button class="secondary" style="font-size:0.7rem;padding:4px 8px;min-height:unset;flex:1;"
                                 onclick="App.editProfile(${p.id})">แก้ไข</button>
