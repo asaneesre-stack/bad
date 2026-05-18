@@ -2132,6 +2132,7 @@
         animation: fade-in 0.3s ease-out;
       `;
 
+      const hasCode = !!me.loginCode;
       overlay.innerHTML = `
         <div style="background:rgba(20,30,50,0.98); border-radius:18px;
           border:1px solid rgba(99,102,241,0.4); padding:18px; max-width:360px; width:100%;
@@ -2141,15 +2142,15 @@
           <div style="text-align:center; margin-bottom:14px;">
             <div style="font-size:32px;">🔐</div>
             <div style="font-size:15px; font-weight:800; color:#fff; margin-top:4px;">
-              เปลี่ยนรหัสล็อกอิน
+              ${hasCode ? 'เปลี่ยนรหัสล็อกอิน' : 'ตั้งรหัสล็อกอิน'}
             </div>
             <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-top:4px;">
-              ${esc(me.name)} · รหัสปัจจุบัน: <b style="color:#fbbf24; font-family:Courier;">${me.loginCode || '—'}</b>
+              ${esc(me.name)}${hasCode ? ` · รหัสปัจจุบัน: <b style="color:#fbbf24; font-family:Courier;">${me.loginCode}</b>` : ''}
             </div>
           </div>
 
-          <!-- Current password verify -->
-          <div style="margin-bottom:10px;">
+          <!-- Current password verify (เฉพาะกรณีมีรหัสอยู่) -->
+          <div style="margin-bottom:10px; ${hasCode ? '' : 'display:none;'}">
             <div style="font-size:11px; color:rgba(255,255,255,0.6); margin-bottom:4px;">รหัสปัจจุบัน</div>
             <input id="cpw-old" type="tel" inputmode="numeric" pattern="[0-9]*"
               maxlength="6" placeholder="ใส่รหัสปัจจุบัน"
@@ -2234,8 +2235,8 @@
         const newPw = document.getElementById('cpw-new').value.trim();
         const confirmPw = document.getElementById('cpw-confirm').value.trim();
 
-        // Validate
-        if (oldPw !== me.loginCode) {
+        // Validate — เฉพาะกรณีมี loginCode อยู่ ต้องตรวจรหัสเก่า
+        if (hasCode && oldPw !== me.loginCode) {
           showMsg('❌ รหัสปัจจุบันไม่ถูกต้อง', 'error');
           return;
         }
@@ -2247,7 +2248,7 @@
           showMsg('❌ รหัสใหม่ไม่ตรงกัน', 'error');
           return;
         }
-        if (newPw === oldPw) {
+        if (hasCode && newPw === oldPw) {
           showMsg('⚠️ รหัสใหม่เหมือนรหัสเดิม', 'error');
           return;
         }
@@ -2289,7 +2290,7 @@
 
       // Focus first input
       setTimeout(() => {
-        const f = document.getElementById('cpw-old');
+        const f = document.getElementById(hasCode ? 'cpw-old' : 'cpw-new');
         if (f) f.focus();
       }, 300);
     };
@@ -3376,10 +3377,17 @@
           <!-- Error message -->
           <div id="code-error" style="display:none; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.4); color:#ef4444; padding:8px 12px; border-radius:8px; font-size:12px; text-align:center; margin-top:10px; font-weight:700;"></div>
 
+          <!-- Alternative: เลือกจากรายชื่อ (สำหรับคนไม่มีรหัส) -->
+          <button id="welcome-list-btn" style="background:rgba(0,168,204,0.15); border:1px solid rgba(0,168,204,0.4);
+            color:#00a8cc; font-size:13px; font-weight:700; padding:10px; border-radius:10px; cursor:pointer;
+            margin-top:12px; width:100%;">
+            📋 ไม่มีรหัส? เลือกจากรายชื่อ
+          </button>
+
           <!-- Skip button -->
           <button id="welcome-skip-btn" style="background:transparent; border:none;
-            color:rgba(255,255,255,0.4); font-size:12px; padding:14px 10px; margin-top:6px; cursor:pointer;
-            text-align:center;">
+            color:rgba(255,255,255,0.4); font-size:12px; padding:10px; margin-top:4px; cursor:pointer;
+            text-align:center; width:100%;">
             ข้าม - ดูคิวเฉยๆ
           </button>
 
@@ -3513,6 +3521,22 @@
       };
       skipBtn.addEventListener('touchend', handleSkip, { passive: false });
       skipBtn.addEventListener('click', handleSkip);
+
+      // ✅ ปุ่ม "เลือกจากรายชื่อ" — เปิด watch picker modal
+      const listBtn = overlay.querySelector('#welcome-list-btn');
+      if (listBtn) {
+        const handleList = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          _skippedThisSession = true;
+          close();
+          setTimeout(() => {
+            if (typeof openWatchPickerModal === 'function') openWatchPickerModal();
+          }, 300);
+        };
+        listBtn.addEventListener('touchend', handleList, { passive: false });
+        listBtn.addEventListener('click', handleList);
+      }
 
       // Keyboard support (desktop)
       const handleKeydown = (e) => {
@@ -3760,13 +3784,13 @@
           return;
         }
 
-        // ✅ Normal mode — ต้องใส่รหัสของคนที่จะติดตาม (กันคนเลือกของคนอื่น)
+        // ✅ ถ้า player ไม่มี loginCode → ติดตามได้เลย (user เข้าไปตั้งทีหลังได้)
         if (!player.loginCode) {
-          showToast(`⚠️ ${player.name} ยังไม่มีรหัส — ติดต่อ admin`, '#f59e0b');
+          doFollow();
           return;
         }
 
-        // เปิด password prompt
+        // เปิด password prompt (มี loginCode)
         promptPasswordForWatch(player, doFollow);
       };
       confirmBtn.addEventListener('touchend', handleConfirm, { passive: false });
