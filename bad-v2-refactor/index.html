@@ -4511,16 +4511,34 @@
             const p = (appState.players || []).find(p => +p.id === +playerId);
             if (!p) return;
 
-            // ✅ ถาม: random หรือ กำหนดเอง
-            const customCode = prompt(
-                `Reset รหัสของ ${p.name}\n\n` +
-                `ใส่รหัสใหม่ (6 ตัวเลข) หรือเว้นว่างเพื่อสุ่ม:`,
-                ''
+            // ✅ 3 ตัวเลือก: 1=สุ่ม, 2=กำหนดเอง, 3=เคลียร์ (ไม่มีรหัส)
+            const choice = prompt(
+                `จัดการรหัสของ ${p.name}\n` +
+                `(รหัสปัจจุบัน: ${p.loginCode || 'ไม่มี'})\n\n` +
+                `1 = สุ่มรหัสใหม่\n` +
+                `2 = กำหนดเอง (6 หลัก)\n` +
+                `3 = เคลียร์รหัส (ไม่มี — user เลือกชื่อได้เลย)\n\n` +
+                `พิมพ์: 1, 2, หรือ 3`,
+                '1'
             );
-            if (customCode === null) return; // cancel
+            if (choice === null) return;
+            const c = choice.trim();
+
+            // 🗑️ เคลียร์
+            if (c === '3') {
+                if (!confirm(`เคลียร์รหัสของ ${p.name}? user จะติดตามได้โดยไม่ต้องใส่รหัส`)) return;
+                delete p.loginCode;
+                // เคลียร์ใน profile ด้วย
+                const profile = (appState.playerProfiles || []).find(pf => pf.name === p.name);
+                if (profile) delete profile.loginCode;
+                saveState();
+                this.renderCodesList();
+                showSuccess(`🗑️ เคลียร์รหัสของ ${p.name} แล้ว`);
+                return;
+            }
 
             let newCode;
-            if (customCode.trim() === '') {
+            if (c === '1') {
                 // Random
                 const used = new Set();
                 (appState.players || []).forEach(pl => {
@@ -4535,14 +4553,15 @@
                     if (!used.has(newCode)) break;
                     tries++;
                 }
-            } else {
-                // ✅ Custom — validate
+            } else if (c === '2') {
+                // Custom
+                const customCode = prompt(`กรอกรหัสใหม่ของ ${p.name} (6 ตัวเลข):`, '');
+                if (customCode === null) return;
                 const trimmed = customCode.trim();
                 if (!/^\d{6}$/.test(trimmed)) {
                     showError('รหัสต้องเป็นตัวเลข 6 หลัก');
                     return;
                 }
-                // เช็คซ้ำ
                 const dup = (appState.players || []).find(pl => pl.loginCode === trimmed && pl.id !== p.id);
                 const dupProfile = (appState.playerProfiles || []).find(pl => pl.loginCode === trimmed && pl.name !== p.name);
                 if (dup || dupProfile) {
@@ -4550,6 +4569,9 @@
                     return;
                 }
                 newCode = trimmed;
+            } else {
+                showError('กรุณาเลือก 1, 2, หรือ 3');
+                return;
             }
 
             p.loginCode = newCode;
