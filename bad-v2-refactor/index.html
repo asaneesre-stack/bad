@@ -4186,14 +4186,18 @@
         },
 
         resetAllPayments: function() {
-            if (!confirm('เคลียร์สถานะการจ่ายทั้งหมด?')) return;
+            if (!confirm('เคลียร์สถานะการจ่ายทั้งหมด + ค่าเสริมทั้งหมด?')) return;
             const cnt = Object.keys(appState.payments || {}).length;
-            auditLog('reset_all_payments', { cleared: cnt });
+            const extraCnt = Object.keys(appState.playerPayExtra || {}).length;
+            auditLog('reset_all_payments', { cleared: cnt, extrasCleared: extraCnt });
+            // ✅ เคลียร์ payments + ค่าเสริม
             appState.payments = {};
+            appState.playerPayExtra = {};
             firebase.database().ref('badmintonState/payments').remove();
+            firebase.database().ref('badmintonState/playerPayExtra').remove();
             this.loadPaymentStatus();
             if (document.getElementById('combined-payment-list')) this.renderCombinedPaymentList();
-            showSuccess('เคลียร์แล้ว');
+            showSuccess('เคลียร์แล้ว (รวมค่าเสริม)');
         },
         checkConnectedDevices: async function() {
             const listEl   = document.getElementById('connected-devices-list');
