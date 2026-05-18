@@ -251,7 +251,7 @@
             </div>
 
             <div class="card">
-                <h3>สถิติผู้เล่น (เรียงตามจำนวนเกมที่เล่นน้อยที่สุด)</h3>
+                <h3>📊 สถิติผู้เล่น (จัดกลุ่มตามจำนวนเกม) <span style="font-size:0.75rem;color:#94a3b8;font-weight:500;">— คลิกเพื่อดูรายชื่อ</span></h3>
                 <div id="dashboard-player-list" class="dashboard-player-list"></div>
             </div>
 
@@ -2273,32 +2273,105 @@
                 playerGameCounts[p.id] = PlayerUtils.getGameCount(p.id);
             });
 
-            const sortedPlayers = appState.players.slice().sort((a, b) => {
-                const countA = playerGameCounts[a.id];
-                const countB = playerGameCounts[b.id];
-                if (countA !== countB) return countA - countB;
-                return a.name.localeCompare(b.name, 'th');
+            // ✅ Group by game count
+            const groups = {}; // count -> [players]
+            appState.players.forEach(p => {
+                const c = playerGameCounts[p.id];
+                if (!groups[c]) groups[c] = [];
+                groups[c].push(p);
             });
 
-            sortedPlayers.forEach((player, idx) => {
-                const skillClass = getSkillClass(player.skill);
-                const card = document.createElement('div');
-                card.classList.add('dashboard-player-card');
-                // Top 3 น้อยสุด = highlight ฟ้า, รายสูง = highlight เหลือง
-                if (idx < 3) card.classList.add('rank-low');
-                else if (idx >= sortedPlayers.length - 3) card.classList.add('rank-high');
-                card.style.cursor = 'pointer';
-                card.onclick = () => this.openPlayerHistoryModal(player.id);
-                card.innerHTML = `
-                    <div class="rank-badge">${idx + 1}</div>
-                    <div class="player-info">
-                        <span class="player-name">${escapeHtml(player.name)}</span>
-                        <span class="player-skill"><span class="skill-badge skill-${skillClass}">${escapeHtml(player.skill)}</span></span>
+            // เรียงจำนวนเกมจากมาก → น้อย
+            const sortedCounts = Object.keys(groups)
+                .map(Number)
+                .sort((a, b) => b - a);
+
+            if (sortedCounts.length === 0) {
+                listEl.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:20px;">ยังไม่มีผู้เล่น</p>';
+                return;
+            }
+
+            const expandedSet = this._expandedGameGroups || new Set();
+            this._expandedGameGroups = expandedSet;
+
+            const colors = [
+                { bg:'linear-gradient(135deg,#ef4444,#dc2626)', border:'#ef4444', text:'#fff' },     // เยอะสุด
+                { bg:'linear-gradient(135deg,#f59e0b,#d97706)', border:'#f59e0b', text:'#fff' },
+                { bg:'linear-gradient(135deg,#eab308,#ca8a04)', border:'#eab308', text:'#fff' },
+                { bg:'linear-gradient(135deg,#10b981,#059669)', border:'#10b981', text:'#fff' },
+                { bg:'linear-gradient(135deg,#0ea5e9,#0284c7)', border:'#0ea5e9', text:'#fff' },     // น้อยสุด
+            ];
+
+            const html = sortedCounts.map((count, idx) => {
+                const players = groups[count];
+                const colorIdx = Math.min(idx, colors.length - 1);
+                const color = colors[colorIdx];
+                const isExpanded = expandedSet.has(count);
+                return `
+                    <div class="game-group-card" style="margin-bottom:10px;border-radius:12px;overflow:hidden;border:2px solid ${color.border};box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+                        <div onclick="App._toggleGameGroup(${count})"
+                            style="background:${color.bg};color:${color.text};padding:14px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;user-select:none;-webkit-tap-highlight-color:transparent;">
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <span style="font-size:1.4rem;">🏸</span>
+                                <div>
+                                    <div style="font-size:1.15rem;font-weight:800;">${count} เกม</div>
+                                    <div style="font-size:0.78rem;opacity:0.9;">${players.length} คน</div>
+                                </div>
+                            </div>
+                            <span style="font-size:1.2rem;transition:transform 0.3s;display:inline-block;transform:rotate(${isExpanded ? 90 : 0}deg);">▶</span>
+                        </div>
+                        <div class="game-group-body" style="max-height:${isExpanded ? '2000px' : '0'};overflow:hidden;transition:max-height 0.4s ease;background:#fff;">
+                            <div style="padding:${isExpanded ? '10px' : '0 10px'};">
+                                ${players
+                                    .slice()
+                                    .sort((a,b) => a.name.localeCompare(b.name, 'th'))
+                                    .map((p, pIdx) => {
+                                        const skillClass = getSkillClass(p.skill);
+                                        return `
+                                            <div onclick="event.stopPropagation();App.openPlayerHistoryModal(${p.id})"
+                                                style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;gap:10px;transition:transform 0.2s, background 0.2s;animation:bb-slide-in 0.3s ease-out backwards;animation-delay:${pIdx * 30}ms;"
+                                                onmouseover="this.style.background='#f1f5f9';this.style.transform='translateX(4px)';"
+                                                onmouseout="this.style.background='#f8fafc';this.style.transform='translateX(0)';">
+                                                <div style="background:${color.border};color:#fff;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:800;flex-shrink:0;">${pIdx + 1}</div>
+                                                <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                                                    <span style="font-weight:700;color:#1e293b;">${escapeHtml(p.name)}</span>
+                                                    <span class="skill-badge skill-${skillClass}" style="font-size:0.7rem;">${escapeHtml(p.skill)}</span>
+                                                    ${p.realName ? `<span style="font-size:0.72rem;color:#94a3b8;">(${escapeHtml(p.realName)})</span>` : ''}
+                                                </div>
+                                                <span style="color:#94a3b8;font-size:0.9rem;">›</span>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                            </div>
+                        </div>
                     </div>
-                    <div class="game-count">${playerGameCounts[player.id]} เกม</div>
                 `;
-                listEl.appendChild(card);
-            });
+            }).join('');
+
+            listEl.innerHTML = html;
+
+            // Inject animation
+            if (!document.getElementById('bb-game-group-anim')) {
+                const style = document.createElement('style');
+                style.id = 'bb-game-group-anim';
+                style.textContent = `
+                    @keyframes bb-slide-in {
+                        from { opacity: 0; transform: translateY(-8px); }
+                        to { opacity: 1; transform: translateY(0); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        },
+
+        _toggleGameGroup: function(count) {
+            if (!this._expandedGameGroups) this._expandedGameGroups = new Set();
+            if (this._expandedGameGroups.has(count)) {
+                this._expandedGameGroups.delete(count);
+            } else {
+                this._expandedGameGroups.add(count);
+            }
+            this.renderDashboardPlayerStats();
         },
 
         renderFrequentPartners: function() {
