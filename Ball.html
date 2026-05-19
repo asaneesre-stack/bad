@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0a">
+<title>NOOM IPTV PLAYER</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+:root {
+    --bg: #0a0a0a;
+    --bg-elev: #161616;
+    --bg-elev-2: #1f1f1f;
+    --bg-elev-3: #2a2a2a;
+    --border: #2a2a2a;
+    --text: #f5f5f5;
+    --text-dim: #9a9a9a;
+    --text-dimmer: #6a6a6a;
+    --accent: #ff3b30;
+    --accent-soft: rgba(255, 59, 48, 0.15);
+    --star: #ffcc00;
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Sukhumvit Set", "IBM Plex Sans Thai", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+.app {
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: 100vh;
+    height: 100dvh;
+}
+
+/* ===== Top: Player ===== */
+.player-wrap {
+    position: relative;
+    background: #000;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 50vh;
+}
+video {
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: block;
+}
+.player-overlay {
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    padding: 12px 14px;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    pointer-events: none;
+    z-index: 2;
+}
+.now-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+}
+.now-badge::before {
+    content: "";
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #fff;
+    animation: blink 1.4s infinite;
+}
+@keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0.3; } }
+.now-name {
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Quick controls under player */
+.quick-bar {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+    align-items: center;
+}
+.qbtn {
+    background: var(--bg-elev-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s, transform 0.05s;
+}
+.qbtn:hover { background: var(--bg-elev-3); }
+.qbtn:active { transform: scale(0.96); }
+.qbtn.fav.active { background: var(--star); color: #000; border-color: var(--star); }
+.qbtn svg { width: 18px; height: 18px; }
+.qbtn.icon-only { padding: 8px 10px; }
+
+/* ===== Bottom: Browser ===== */
+.browser {
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    background: var(--bg);
+}
+
+.search-bar {
+    padding: 10px 12px;
+    background: var(--bg);
+    position: sticky; top: 0;
+    z-index: 5;
+}
+.search-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+.search-wrap svg.search-icon {
+    position: absolute;
+    left: 12px;
+    width: 18px; height: 18px;
+    color: var(--text-dim);
+    pointer-events: none;
+}
+.search {
+    width: 100%;
+    padding: 12px 40px 12px 40px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg-elev);
+    color: var(--text);
+    font-size: 15px;
+    outline: none;
+}
+.search:focus { border-color: var(--accent); }
+.search-clear {
+    position: absolute;
+    right: 8px;
+    background: var(--bg-elev-3);
+    border: none;
+    color: var(--text);
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    line-height: 1;
+}
+.search-clear.visible { display: inline-flex; }
+
+/* Category tabs */
+.tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 4px 12px 12px;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+.tab .count {
+    background: var(--bg-elev-3);
+    color: var(--text-dim);
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-weight: 700;
+}
+.tab.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+.tab.active .count { background: rgba(255,255,255,0.25); color: #fff; }
+.tab.fav-tab .star { color: var(--star); }
+
+/* Channel grid */
+.grid {
+    overflow-y: auto;
+    padding: 4px 12px calc(20px + var(--safe-bottom));
+    -webkit-overflow-scrolling: touch;
+}
+.grid-inner {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+}
+.card {
+    position: relative;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 8px 10px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.08s, background 0.15s, border-color 0.15s;
+    overflow: hidden;
+}
+.card:hover { background: var(--bg-elev-2); }
+.card:active { transform: scale(0.96); }
+.card.playing {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+.card.playing::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 2px solid var(--accent);
+    border-radius: 14px;
+    pointer-events: none;
+}
+.logo-box {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    overflow: hidden;
+}
+.logo-box img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+}
+.logo-box .fallback {
+    font-size: 22px;
+    font-weight: 800;
+    color: #333;
+}
+.card-name {
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.25;
+    color: var(--text);
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    min-height: 30px;
+}
+.card-group {
+    font-size: 10px;
+    color: var(--text-dimmer);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.fav-star {
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.5);
+    backdrop-filter: blur(4px);
+    border: none;
+    color: var(--text-dimmer);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, transform 0.1s;
+    z-index: 2;
+}
+.fav-star svg { width: 14px; height: 14px; }
+.fav-star.active { color: var(--star); }
+.fav-star:active { transform: scale(0.85); }
+.playing-indicator {
+    position: absolute;
+    top: 6px; left: 6px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: none;
+    letter-spacing: 0.5px;
+}
+.card.playing .playing-indicator { display: block; }
+
+.empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: var(--text-dim);
+    padding: 60px 20px;
+    font-size: 14px;
+}
+
+/* Desktop layout: side-by-side */
+@media (min-width: 900px) {
+    .app {
+        grid-template-columns: 1fr 420px;
+        grid-template-rows: 1fr;
+    }
+    .player-col {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .player-wrap {
+        aspect-ratio: auto;
+        max-height: none;
+        flex: 1;
+    }
+    .browser {
+        border-left: 1px solid var(--border);
+        height: 100vh;
+        height: 100dvh;
+    }
+    .grid-inner {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+}
+
+/* Very small screens */
+@media (max-width: 380px) {
+    .grid-inner { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .logo-box { width: 54px; height: 54px; }
+    .card-name { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+    <div class="player-col">
+        <div class="player-wrap">
+            <div class="player-overlay">
+                <span class="now-badge">LIVE</span>
+                <span class="now-name" id="nowName">-</span>
+            </div>
+            <video id="video" controls autoplay playsinline></video>
+        </div>
+        <div class="quick-bar">
+            <button class="qbtn icon-only" id="prevBtn" title="ช่องก่อนหน้า">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button class="qbtn icon-only" id="nextBtn" title="ช่องถัดไป">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+            <button class="qbtn fav" id="favBtn">
+                <svg id="favIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span id="favLabel">ช่องโปรด</span>
+            </button>
+            <button class="qbtn icon-only" id="fsBtn" title="เต็มจอ" style="margin-left:auto">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="browser">
+        <div class="search-bar">
+            <div class="search-wrap">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input class="search" type="text" id="search" placeholder="ค้นหาช่อง..." autocomplete="off">
+                <button class="search-clear" id="searchClear" aria-label="ล้าง">✕</button>
+            </div>
+        </div>
+        <div class="tabs" id="tabs"></div>
+        <div class="grid">
+            <div class="grid-inner" id="grid"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+const channels = [{"name": "NBT 2HD", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/0001.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/1.m3u8"}, {"name": "ThaiPBS", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/0014.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2.m3u8"}, {"name": "ALTV", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/ALTV.PNG", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/3.m3u8"}, {"name": "CH 5 HD", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon//ch5new.logo.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/4.m3u8"}, {"name": "T Sports 7", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/T-SPorts_7_Final.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/5.m3u8"}, {"name": "TPTV", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/0048.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/6.m3u8"}, {"name": "NBT ส่วนภูมิภาค", "group": "Thai TV", "logo": "http://iplaytv.familyds.com:8081/pic/nbt.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/7.m3u8"}, {"name": "TNN 16", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/R2_0053.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/8.m3u8"}, {"name": "JKN 18", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/JKN18.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/9.m3u8"}, {"name": "Nation TV", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0021.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/10.m3u8"}, {"name": "workpoint tv", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//0015_R.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/11.m3u8"}, {"name": "true4U", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0054.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/12.m3u8"}, {"name": "GMM25", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0019.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/13.m3u8"}, {"name": "CH 8", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//0006.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/14.m3u8"}, {"name": "MONO 29", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0016.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/15.m3u8"}, {"name": "MCOT HD", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/MCOT_new.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/16.m3u8"}, {"name": "ONE 31 HD", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0012.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/17.m3u8"}, {"name": "Thairath TV", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0013_R.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/18.m3u8"}, {"name": "CH 3 HD", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/LOGO3HD.PNG", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/19.m3u8"}, {"name": "Amarin TV HD", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/AmarinTV_NEW512.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/20.m3u8"}, {"name": "CH 7 HD", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/0018.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/21.m3u8"}, {"name": "PPTV HD", "group": "Thai TV", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/R_0022.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/22.m3u8"}, {"name": "MONOMAX 1", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/23.m3u8"}, {"name": "MONOMAX 2", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/24.m3u8"}, {"name": "MONOMAX 3", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/25.m3u8"}, {"name": "MONOMAX 4", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/26.m3u8"}, {"name": "MONOMAX 5", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/27.m3u8"}, {"name": "true Sports 1", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cdd42d20-b44d-11ee-9687-e7ccd66e1ea3_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/28.m3u8"}, {"name": "true Sports 2", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/ce5c21d0-b44d-11ee-aa7d-afe908f95743_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/29.m3u8"}, {"name": "true Sports 3", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/ce9707f0-b44d-11ee-8e80-c3f417d0d932_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/30.m3u8"}, {"name": "true Sports 4", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cf36f170-b44d-11ee-b20d-816339e67c2d_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/31.m3u8"}, {"name": "true Sports 5", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cf4a2b50-b44d-11ee-aa7d-afe908f95743_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/32.m3u8"}, {"name": "true Sports 7", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cff0f2a0-b44d-11ee-9687-e7ccd66e1ea3_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/33.m3u8"}, {"name": "SPOTV", "group": "Sports", "logo": "https://ownassetsmysky.blob.core.windows.net/assetsmysky/production/media-upload/1634257286_thumb-spotv.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/34.m3u8"}, {"name": "SPOTV 2", "group": "Sports", "logo": "https://cms.spotvasia.com/upload/channel/file_15a81966-c8d6-492a-aed6-3c6a8ff34604.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/35.m3u8"}, {"name": "EDGE", "group": "Sports", "logo": "https://cdn.cookielaw.org/logos/889c435d-64b4-46d8-ad05-06332fe1d097/d3d8ec96-208c-446b-ab8d-d36a29ec4863/5a2460fc-9b94-4b27-a2d1-6ea282c6a68a/ES_LOGO-01.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/36.m3u8"}, {"name": "Golf Channel Thailand Plus", "group": "Sports", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/GolfChannel.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/37.m3u8"}, {"name": "true TENNIS HD", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2023/04/28/f65ea900-e595-11ed-86b8-bb40638e3c49_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/38.m3u8"}, {"name": "beIN SPORTS 1", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2023/07/24/5f3c5240-29cc-11ee-b2f4-e9de482d866e_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/39.m3u8"}, {"name": "beIN SPORTS 2", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2023/07/24/5f346300-29cc-11ee-b2f4-e9de482d866e_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/40.m3u8"}, {"name": "beIN SPORTS 3", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2023/07/24/5fda18e0-29cc-11ee-846b-a1c4e5181c87_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/41.m3u8"}, {"name": "beIN SPORTS 4", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2023/08/02/2f7a5b20-30f6-11ee-8c65-b3a6cba5ed9d_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/42.m3u8"}, {"name": "MonoMax 6", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/43.m3u8"}, {"name": "MonoMax 7", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/44.m3u8"}, {"name": "MonoMax 8", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/46.m3u8"}, {"name": "Discovery Channels", "group": "Documentary", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//Discovery.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/47.m3u8"}, {"name": "Discovery Asia", "group": "Documentary", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//DiscoveryAsia.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/48.m3u8"}, {"name": "BBC LIFESTYLE", "group": "Documentary", "logo": "https://logo.iptveditor.com/bbclifestyle.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/50.m3u8"}, {"name": "History HD", "group": "Documentary", "logo": "http://iplaytv.familyds.com:8081/pic/history.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/51.m3u8"}, {"name": "true Explore SCi", "group": "Documentary", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/c9f16a20-b44c-11ee-8e80-c3f417d0d932_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/52.m3u8"}, {"name": "true Explore LiFe", "group": "Documentary", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/c97ab380-b44c-11ee-9687-e7ccd66e1ea3_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/54.m3u8"}, {"name": "BBC EARTH", "group": "Documentary", "logo": "http://iplaytv.familyds.com:8081/pic/bbcE.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/55.m3u8"}, {"name": "true Explore Wild", "group": "Documentary", "logo": "https://cms.dmpcdn.com/livetv/2023/04/28/433fe010-e599-11ed-96ec-4d05b9e2ca86_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/58.m3u8"}, {"name": "mySCI", "group": "Documentary", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon///MySCI.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/59.m3u8"}, {"name": "ของดีประเทศไทย", "group": "Documentary", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon///KhongDeeThailand.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/60.m3u8"}, {"name": "สำรวจโลก", "group": "Documentary", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon///SamRujLok.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/61.m3u8"}, {"name": "Animal Show", "group": "Documentary", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon///AnimalShow.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/62.m3u8"}, {"name": "THAINESS", "group": "Documentary", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon///Thainess.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/63.m3u8"}, {"name": "TOP NEWS", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/TOPNEWS.PNG", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/64.m3u8"}, {"name": "News 1", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0036.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/65.m3u8"}, {"name": "CCTV 4", "group": "News", "logo": "http://epg.51zmt.top:8000/tb1/CCTV/CCTV4.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/66.m3u8"}, {"name": "FRANCE 24", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon/0123_1.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/67.m3u8"}, {"name": "CNA NEWS", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon/R_0122.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/68.m3u8"}, {"name": "DW", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon/0121.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/69.m3u8"}, {"name": "TV5MONDE", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//TV5MONDEasie.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/70.m3u8"}, {"name": "Rai Italia", "group": "News", "logo": "http://iplaytv.familyds.com:8081/pic/rai.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/71.m3u8"}, {"name": "RT NEWS", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//RTChannel.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/72.m3u8"}, {"name": "CGTN", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/CGTN.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/73.m3u8"}, {"name": "YTN Korea", "group": "News", "logo": "http://iplaytv.familyds.com:8081/pic/ytn.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/74.m3u8"}, {"name": "Bloomberg", "group": "News", "logo": "http://iplaytv.familyds.com:8081/pic/bloom.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/75.m3u8"}, {"name": "euronews", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon/EuroNnews-1.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/76.m3u8"}, {"name": "TVBS News", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/TVBS.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/77.m3u8"}, {"name": "Al Jazeera", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon//Aljazeera_logo.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/78.m3u8"}, {"name": "CNN", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/0172.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/79.m3u8"}, {"name": "NHK World", "group": "News", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/LOGO_NHK_new.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/80.m3u8"}, {"name": "FOX NEWS", "group": "News", "logo": "http://iplaytv.familyds.com:8081/pic/foxnews.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/81.m3u8"}, {"name": "HBO", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/R_0148.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2539.m3u8"}, {"name": "HBO HiTS", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//0151.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2540.m3u8"}, {"name": "HBO Signature", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//0149.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2541.m3u8"}, {"name": "HBO Family", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0150.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2542.m3u8"}, {"name": "CINEMAX", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/0147.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2543.m3u8"}, {"name": "AXN HD", "group": "Movies", "logo": "http://iplaytv.familyds.com:8081/pic/axn.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2544.m3u8"}, {"name": "true Asian More", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/c8f249a0-b44c-11ee-bbdb-077300b4f5a1_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2545.m3u8"}, {"name": "true MOVIE HITS", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cccc0160-b44c-11ee-9f05-591527f02603_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2546.m3u8"}, {"name": "true FILM ASIA", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cb907420-b44c-11ee-9687-e7ccd66e1ea3_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2547.m3u8"}, {"name": "true Series", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2024/03/01/201c6dd0-d79f-11ee-afcd-214a368edc48_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2548.m3u8"}, {"name": "true THAI FILM", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cffb79f0-b44d-11ee-80bd-b787d7bab688_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2549.m3u8"}, {"name": "true FiLM 1", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cad78460-b44c-11ee-80bd-b787d7bab688_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2550.m3u8"}, {"name": "true FiLM 2", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cb3a8bf0-b44c-11ee-bbdb-077300b4f5a1_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2551.m3u8"}, {"name": "iPlayTV MEDiA", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/media.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2552.m3u8"}, {"name": "Media Series", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/playmedia.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2553.m3u8"}, {"name": "BOOMERANG", "group": "Kids", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/Boomerang2024.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2555.m3u8"}, {"name": "nick JR.", "group": "Kids", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/Nickjr_2024.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2556.m3u8"}, {"name": "Cartoonito", "group": "Kids", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon//Cartoonito.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2557.m3u8"}, {"name": "DreamWorks", "group": "Kids", "logo": "https://truevisions.co.th/static/c2eeff90-d612-441e-8df9-5d8985502166.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2558.m3u8"}, {"name": "True Spark Play", "group": "Kids", "logo": "https://cms.dmpcdn.com/livetv/2024/01/16/cdd2cd90-b44d-11ee-bbdb-077300b4f5a1_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2559.m3u8"}, {"name": "Cartoon Network", "group": "Kids", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon//0171.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2560.m3u8"}, {"name": "Play KIDs", "group": "Premium", "logo": "http://iplaytv.FamilyDS.com:8081/pic/playkids.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2561.m3u8"}, {"name": "X-Zyte", "group": "Entertainment", "logo": "https://cms.dmpcdn.com/livetv/2024/04/10/5ecb9e30-f724-11ee-a17f-0795ff88f566_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2562.m3u8"}, {"name": "A'Lure Channel", "group": "Entertainment", "logo": "http://iplaytv.familyds.com:8081/pic/alure.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2563.m3u8"}, {"name": "Food Network", "group": "Entertainment", "logo": "https://cms.dmpcdn.com/livetv/2021/10/31/bd3a2340-3a63-11ec-84ef-a5cdc7ce4314_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2564.m3u8"}, {"name": "MonoMax 9", "group": "Sports", "logo": "https://www.mono.co.th/wp-content/uploads/2025/06/Monomax-2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2565.m3u8"}, {"name": "NOOM MOVIES", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/asianfilm.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2566.m3u8"}, {"name": "MOVIES STATION", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/iplaystation.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2567.m3u8"}, {"name": "Action MOVIES", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/actionM.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2568.m3u8"}, {"name": "MONO29 Plus", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon//Mono29Plus_new.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2569.m3u8"}, {"name": "Movie DAY", "group": "Movies", "logo": "http://iplaytv.familyds.com:8081/pic/day.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2570.m3u8"}, {"name": "HORROR", "group": "Movies", "logo": "http://iplaytv.familyds.com:8081/pic/horror.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2571.m3u8"}, {"name": "CRIME + INVESTIGATION", "group": "Documentary", "logo": "http://iplaytv.familyds.com:8081/pic/crime.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2572.m3u8"}, {"name": "Sport Live ", "group": "Sports", "logo": "https://png.pngtree.com/png-clipart/20221217/original/pngtree-live-streaming-icon-football-clipart-png-image_8761487.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2574.m3u8"}, {"name": "ID STATION", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2023/09/25/c3898e20-5b4f-11ee-a599-1d1a4f7c1125_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2575.m3u8"}, {"name": "NBC Golf", "group": "Sports", "logo": "https://nbcsports.brightspotcdn.com/dims4/default/e2482a1/2147483647/strip/true/crop/1920x1080+0+0/resize/1440x810!/quality/90/?url=https%3A%2F%2Fnbc-sports-production-nbc-sports.s3.us-east-1.amazonaws.com%2Fbrightspot%2Fcd%2Ff5%2F9b9f1883ca3be696f3790934fd55%2Fdrupal-gc-logo.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2576.m3u8"}, {"name": "MU TV", "group": "Sports", "logo": "https://assets.manutd.com/AssetPicker/images/0/0/7/70/476872/MUTV-LightBG1515755997863.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2577.m3u8"}, {"name": "LFC TV", "group": "Sports", "logo": "https://media.info/l/o/1/1442.1642633783.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2578.m3u8"}, {"name": "iPlayTV MUSIC", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/iplaymusic.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2579.m3u8"}, {"name": "18+", "group": "Movies", "logo": "https://png.pngtree.com/png-vector/20220925/ourmid/pngtree-18-icon-png-image_6212805.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2580.m3u8"}, {"name": "ROCK Action", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/RockAction.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2582.m3u8"}, {"name": "ROCK ENTERTAINMENT", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/Rock-Entertainment.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2583.m3u8"}, {"name": "KBS WOLRD", "group": "Entertainment", "logo": "https://cms.dmpcdn.com/livetv/2023/05/26/e13eeed0-fb8a-11ed-9087-3197146bda13_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2584.m3u8"}, {"name": "KMTV", "group": "Entertainment", "logo": "https://cms.dmpcdn.com/livetv/2017/10/17/1dd95b24-9fb7-474d-bc4d-af3a6df84302.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2585.m3u8"}, {"name": "BALLTHAI 1", "group": "Football", "logo": "https://cms.dmpcdn.com/livetv/2023/08/02/89262f60-30e1-11ee-b445-3703761d6f4d_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2586.m3u8"}, {"name": "BALLTHAI 2", "group": "Football", "logo": "https://cms.dmpcdn.com/livetv/2023/08/02/8a0c49a0-30e1-11ee-b220-4544ede97b74_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2587.m3u8"}, {"name": "BALLTHAI 3", "group": "Football", "logo": "https://cms.dmpcdn.com/livetv/2023/08/02/8a3b21d0-30e1-11ee-a53e-b3f87dc8ba1e_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2588.m3u8"}, {"name": "AIS BALLTHAI 4", "group": "Football", "logo": "https://cms.dmpcdn.com/livetv/2024/02/01/e3adbba0-c0ed-11ee-9f09-d517c2f32137_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2589.m3u8"}, {"name": "BG SPORT 1", "group": "Football", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon//SIAMSPORT1.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2590.m3u8"}, {"name": "SIAMSPORT 2", "group": "Football", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon//SIAMSPORT2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2591.m3u8"}, {"name": "SIAMSPORT 3", "group": "Football", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon//SIAMSPORT3.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2592.m3u8"}, {"name": "SIAMSPORT 4", "group": "Football", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon//SIAMSPORT4.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2593.m3u8"}, {"name": "nickelodeon", "group": "Kids", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE//channelicon/LOGO_Nickelodeon2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2594.m3u8"}, {"name": "MTV Asia", "group": "Entertainment", "logo": "http://iplaytv.familyds.com:8081/pic/mtv.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2595.m3u8"}, {"name": "หนังไทย", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/filmthai.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2596.m3u8"}, {"name": "Doxzilla ((Dual Language))", "group": "Documentary", "logo": "https://cdn-nextstep.enveu.tv/web/images/NewLogoDoxzilla-231005.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2597.m3u8"}, {"name": "Warner TV", "group": "Kids", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE/channelicon/0105.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2598.m3u8"}, {"name": "CCM", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2018/12/17/febce46e-fb05-41d9-b294-08ecb3f1d1e6.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2581.m3u8"}, {"name": "Sweet", "group": "Entertainment", "logo": "http://iplaytv.familyds.com:8081/pic/sweet.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2599.m3u8"}, {"name": "3BB Asian", "group": "Movies", "logo": "https://ais-s.ais-vidnt.com/ais/play/origin/LIVE///channelicon//3BBAsian_new.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2600.m3u8"}, {"name": "True Football HD5", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2023/05/03/bbea1690-e966-11ed-935b-df134f58d288_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2601.m3u8"}, {"name": "TVB ", "group": "Movies", "logo": "https://cms.dmpcdn.com/livetv/2019/04/23/08f0470b-4f2f-4459-a6cc-0006e97887b7_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2602.m3u8"}, {"name": "BOX OFFICE", "group": "Premium", "logo": "http://iplaytv.familyds.com:8802/pic/bb.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2603.m3u8"}, {"name": "วาไรตี้", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/variety.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2604.m3u8"}, {"name": "RUSH Stories", "group": "Entertainment", "logo": "http://iplaytv.familyds.com:8081/pic/rush.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2605.m3u8"}, {"name": "CINEMA TODAY", "group": "Premium", "logo": "http://iplaytv.familyds.com:8081/pic/cinema2.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2607.m3u8"}, {"name": "True Football HD3", "group": "Sports", "logo": "https://cms.dmpcdn.com/livetv/2023/05/03/baf9ea30-e966-11ed-a3d3-f3f98ac7a1a1_webp_original.png", "url": "http://noomemby.ddns.net:25461/live/0628801778/444555/2608.m3u8"}];
+
+// ---- State ----
+const FAV_KEY = 'noom_iptv_favs_v1';
+const LAST_KEY = 'noom_iptv_last_v1';
+let favs = new Set(JSON.parse(localStorage.getItem(FAV_KEY) || '[]'));
+let activeGroup = 'ALL';
+let searchText = '';
+let currentUrl = null;
+let hls = null;
+
+// Build group counts
+const groups = {};
+channels.forEach(c => { groups[c.group] = (groups[c.group] || 0) + 1; });
+
+// Group icons (emoji for simplicity)
+const groupIcons = {
+    'Thai TV': '📺',
+    'Sports': '⚽',
+    'Movies': '🎬',
+    'News': '📰',
+    'Documentary': '🌍',
+    'Kids': '🧸',
+    'Entertainment': '🎭',
+    'Premium': '⭐',
+    'Football': '🏆'
+};
+
+// ---- Render tabs ----
+const tabsEl = document.getElementById('tabs');
+function renderTabs() {
+    tabsEl.innerHTML = '';
+    const order = [
+        ['FAV', '⭐ ช่องโปรด', favs.size],
+        ['ALL', 'ทั้งหมด', channels.length],
+        ...Object.keys(groups).map(g => [g, (groupIcons[g] || '') + ' ' + g, groups[g]])
+    ];
+    order.forEach(([key, label, count]) => {
+        const btn = document.createElement('button');
+        btn.className = 'tab' + (key === activeGroup ? ' active' : '') + (key === 'FAV' ? ' fav-tab' : '');
+        btn.innerHTML = `<span>${label}</span><span class="count">${count}</span>`;
+        btn.onclick = () => { activeGroup = key; renderTabs(); renderGrid(); };
+        tabsEl.appendChild(btn);
+    });
+}
+
+// ---- Render grid ----
+const gridEl = document.getElementById('grid');
+function renderGrid() {
+    const q = searchText.trim().toLowerCase();
+    let list = channels;
+    if (activeGroup === 'FAV') {
+        list = list.filter(c => favs.has(c.url));
+    } else if (activeGroup !== 'ALL') {
+        list = list.filter(c => c.group === activeGroup);
+    }
+    if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+
+    if (list.length === 0) {
+        gridEl.innerHTML = `<div class="empty">${activeGroup === 'FAV' && !q ? '⭐ ยังไม่มีช่องโปรด<br><small>กดดาวที่ช่องเพื่อบันทึก</small>' : 'ไม่พบช่อง'}</div>`;
+        return;
+    }
+
+    gridEl.innerHTML = '';
+    const frag = document.createDocumentFragment();
+    list.forEach(ch => {
+        const card = document.createElement('div');
+        card.className = 'card' + (ch.url === currentUrl ? ' playing' : '');
+        const isFav = favs.has(ch.url);
+        const initial = (ch.name || '?').trim().charAt(0).toUpperCase();
+        card.innerHTML = `
+            <div class="playing-indicator">▶ กำลังเล่น</div>
+            <button class="fav-star ${isFav ? 'active' : ''}" aria-label="ช่องโปรด">
+                <svg viewBox="0 0 24 24" fill="${isFav ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </button>
+            <div class="logo-box">
+                ${ch.logo ? `<img src="${ch.logo}" onerror="this.parentElement.innerHTML='<span class=\'fallback\'>${initial}</span>'">` : `<span class="fallback">${initial}</span>`}
+            </div>
+            <div class="card-name">${ch.name}</div>
+            <div class="card-group">${ch.group}</div>
+        `;
+        card.onclick = (e) => {
+            if (e.target.closest('.fav-star')) return;
+            playStream(ch);
+        };
+        card.querySelector('.fav-star').onclick = (e) => {
+            e.stopPropagation();
+            toggleFav(ch.url);
+        };
+        frag.appendChild(card);
+    });
+    gridEl.appendChild(frag);
+}
+
+// ---- Favorites ----
+function toggleFav(url) {
+    if (favs.has(url)) favs.delete(url); else favs.add(url);
+    localStorage.setItem(FAV_KEY, JSON.stringify([...favs]));
+    renderTabs();
+    renderGrid();
+    updateFavBtn();
+}
+function updateFavBtn() {
+    const btn = document.getElementById('favBtn');
+    const icon = document.getElementById('favIcon');
+    const label = document.getElementById('favLabel');
+    const isFav = currentUrl && favs.has(currentUrl);
+    btn.classList.toggle('active', isFav);
+    icon.setAttribute('fill', isFav ? 'currentColor' : 'none');
+    label.textContent = isFav ? 'ลบจากโปรด' : 'ช่องโปรด';
+}
+document.getElementById('favBtn').onclick = () => {
+    if (currentUrl) toggleFav(currentUrl);
+};
+
+// ---- Search ----
+const searchEl = document.getElementById('search');
+const searchClear = document.getElementById('searchClear');
+searchEl.oninput = (e) => {
+    searchText = e.target.value;
+    searchClear.classList.toggle('visible', searchText.length > 0);
+    renderGrid();
+};
+searchClear.onclick = () => {
+    searchEl.value = '';
+    searchText = '';
+    searchClear.classList.remove('visible');
+    renderGrid();
+    searchEl.focus();
+};
+
+// ---- Player ----
+const video = document.getElementById('video');
+const nowName = document.getElementById('nowName');
+
+function playStream(ch) {
+    currentUrl = ch.url;
+    nowName.textContent = ch.name;
+    document.title = ch.name + ' • NOOM IPTV';
+    localStorage.setItem(LAST_KEY, ch.url);
+
+    if (hls) { hls.destroy(); hls = null; }
+
+    if (Hls.isSupported()) {
+        hls = new Hls({ enableWorker: true, lowLatencyMode: false });
+        hls.loadSource(ch.url);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(()=>{}));
+        hls.on(Hls.Events.ERROR, (e, data) => {
+            if (data.fatal) console.warn('HLS error', data);
+        });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = ch.url;
+        video.play().catch(()=>{});
+    }
+    updateFavBtn();
+    renderGrid();
+}
+
+// ---- Prev / Next ----
+function getCurrentList() {
+    // Use the same filter as grid for prev/next, so it feels intuitive
+    const q = searchText.trim().toLowerCase();
+    let list = channels;
+    if (activeGroup === 'FAV') list = list.filter(c => favs.has(c.url));
+    else if (activeGroup !== 'ALL') list = list.filter(c => c.group === activeGroup);
+    if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+    return list.length ? list : channels;
+}
+document.getElementById('prevBtn').onclick = () => {
+    const list = getCurrentList();
+    const idx = list.findIndex(c => c.url === currentUrl);
+    const next = list[(idx - 1 + list.length) % list.length];
+    if (next) playStream(next);
+};
+document.getElementById('nextBtn').onclick = () => {
+    const list = getCurrentList();
+    const idx = list.findIndex(c => c.url === currentUrl);
+    const next = list[(idx + 1) % list.length];
+    if (next) playStream(next);
+};
+
+// ---- Fullscreen ----
+document.getElementById('fsBtn').onclick = () => {
+    const el = document.querySelector('.player-wrap');
+    if (!document.fullscreenElement) {
+        (el.requestFullscreen || el.webkitRequestFullscreen || video.webkitEnterFullscreen)?.call(el.requestFullscreen ? el : video);
+    } else {
+        document.exitFullscreen?.();
+    }
+};
+
+// ---- Keyboard shortcuts (desktop) ----
+document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'ArrowRight' || e.key === 'n') document.getElementById('nextBtn').click();
+    else if (e.key === 'ArrowLeft' || e.key === 'p') document.getElementById('prevBtn').click();
+    else if (e.key === 'f') document.getElementById('fsBtn').click();
+    else if (e.key === '/') { e.preventDefault(); searchEl.focus(); }
+});
+
+// ---- Init ----
+renderTabs();
+renderGrid();
+const lastUrl = localStorage.getItem(LAST_KEY);
+const startCh = channels.find(c => c.url === lastUrl) || channels[0];
+playStream(startCh);
+</script>
+</body>
+</html>
