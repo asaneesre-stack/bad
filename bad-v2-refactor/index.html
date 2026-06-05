@@ -4682,6 +4682,8 @@
             // ✅ เก็บ snapshot ก่อนลบ — สำหรับ Undo
             const playersBackup = JSON.parse(JSON.stringify(appState.players || []));
             const queuesBackup  = JSON.parse(JSON.stringify(appState.matchQueues || []));
+            const matchesBackup = JSON.parse(JSON.stringify(appState.matches || []));
+            const courtsBackup  = JSON.parse(JSON.stringify(appState.courts || []));
 
             // ✅ บันทึก backup ก่อนลบ — เพื่อให้กู้คืนผ่านเมนู Backup ได้
             // (auto-backup ที่ทำใน saveState() จะเก็บ state หลังลบ ซึ่งไม่มีประโยชน์)
@@ -4693,17 +4695,32 @@
 
             appState.players = [];
             appState.nextId.player = 1;
+
+            // ✅ Reset matches และ court status ด้วย — ป้องกันสนามค้าง "กำลังเล่น"
+            appState.matches = [];
+            appState.matchQueues = [];
+            (appState.courts || []).forEach(c => {
+                if (c.status === 'playing') {
+                    c.status = 'free';
+                    delete c.currentMatchId;
+                }
+            });
+
             auditLog('clear_all_players');
             saveState();
             this.renderDashboard();
             this.renderPlayerList();
             this.renderCheckInList();
+            this.renderCourtSettings();
+            this.renderActiveMatches();
             showSuccess('ลบข้อมูลผู้เล่นทั้งหมดสำเร็จ');
 
             // ✅ แสดง Undo Toast — กดได้ภายใน 30 วินาที
             this._showUndoToast(`ลบผู้เล่น ${playersBackup.length} คน`, 30, () => {
                 appState.players = playersBackup;
                 appState.matchQueues = queuesBackup;
+                appState.matches = matchesBackup;
+                appState.courts = courtsBackup;
                 auditLog('undo_clear_all_players', { restored: playersBackup.length });
                 window._intentionalClear = true;
                 window._intentionalClearTime = Date.now();
@@ -4711,6 +4728,8 @@
                 this.renderDashboard();
                 this.renderPlayerList();
                 this.renderCheckInList();
+                this.renderCourtSettings();
+                this.renderActiveMatches();
                 showSuccess(`✅ กู้คืน ${playersBackup.length} คนสำเร็จ`);
             });
         },
