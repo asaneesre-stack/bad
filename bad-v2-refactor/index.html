@@ -1956,6 +1956,15 @@
             const nowSec  = now.getHours()*3600 + now.getMinutes()*60 + now.getSeconds();
             const dayKeys = ['sun','mon','tue','wed','thu','fri','sat'];
             const todayKey= dayKeys[now.getDay()];
+            // ✅ สนาม playing แต่ไม่มี match จริง = ค้างจาก session เก่า → ถือว่า free
+            const activeMatchCourtIds = new Set((appState.matches || []).map(m => m.courtId));
+            (appState.courts || []).forEach(c => {
+                if (c.status === 'playing' && !activeMatchCourtIds.has(c.id)) {
+                    c.status = 'free';
+                    delete c.currentMatchId;
+                }
+            });
+
             return appState.courts.filter(c => {
                 if (c.status !== 'free') return false;
                 if (c.autoSchedule) {
@@ -4668,13 +4677,14 @@
         },
 
         clearAllPlayers: async function() {
-            if (appState.matches.length > 0) {
-                showError('ไม่สามารถลบผู้เล่นได้! มีผู้เล่นบางคนกำลังแข่ง');
-                return;
-            }
+            const stuckMatches = appState.matches.length;
+            const stuckCourts  = (appState.courts || []).filter(c => c.status === 'playing').length;
+            const stuckNote    = (stuckMatches > 0 || stuckCourts > 0)
+                ? `\n\n⚠️ มีสนามค้างอยู่ ${stuckCourts} สนาม / แมตช์ค้าง ${stuckMatches} รายการ — จะถูกเคลียร์ให้อัตโนมัติ`
+                : '';
 
             const ok = await showConfirm(
-                `ลบผู้เล่นทั้งหมดออกจากระบบ?\n\n• ผู้เล่น: ${appState.players.length} คน\n• ประวัติเกม: คงอยู่\n\n💡 หลังลบ จะมีปุ่ม "ยกเลิก" 30 วินาที — กดได้ถ้าเปลี่ยนใจ`,
+                `ลบผู้เล่นทั้งหมดออกจากระบบ?\n\n• ผู้เล่น: ${appState.players.length} คน\n• ประวัติเกม: คงอยู่${stuckNote}\n\n💡 หลังลบ จะมีปุ่ม "ยกเลิก" 30 วินาที — กดได้ถ้าเปลี่ยนใจ`,
                 { danger: true, title: '⚠️ ลบผู้เล่นทั้งหมด', okText: '🗑️ ลบ', cancelText: 'ยกเลิก' }
             );
             if (!ok) return;
@@ -5137,13 +5147,27 @@
                 set('shuttle-tube-price',   s.tubePr    || 960);
                 set('shuttle-per-tube',     s.perTube   || 12);
                 set('shuttle-used',         s.used      || 0);
-                // restore court rows
+                // restore court rows — ถ้ามี saved ใช้ saved, ถ้าไม่มี sync จากสนาม
                 if (s.courtRows && s.courtRows.length > 0) {
                     const list = document.getElementById('court-cost-list');
                     if (list) {
                         list.innerHTML = '';
                         this._courtCostRows = 0;
-                        s.courtRows.forEach(r => this.addCourtCostRow(r.price, r.hours));
+                        // ✅ ถ้า saved rows น้อยกว่าสนามจริง → sync จากสนามแทน (สนามเพิ่มขึ้น)
+                        const courts = appState.courts || [];
+                        if (courts.length > 0 && s.courtRows.length !== courts.length) {
+                            courts.forEach((court, i) => {
+                                const saved = s.courtRows[i];
+                                const price = saved ? saved.price : 170;
+                                const hours = this._courtHours(court);
+                                this.addCourtCostRow(price, hours, court.name);
+                            });
+                        } else {
+                            s.courtRows.forEach((r, i) => {
+                                const court = (appState.courts || [])[i];
+                                this.addCourtCostRow(r.price, r.hours, court ? court.name : null);
+                            });
+                        }
                     }
                 } else {
                     this.initCostCalculator();
@@ -5588,27 +5612,60 @@
 
                 _courtCostRows: 1,
 
+        // ✅ คำนวณชั่วโมงจาก openTime → closeTime ของสนาม
+        _courtHours: function(court) {
+            if (!court.openTime || !court.closeTime || court.openTime === '--:--' || court.closeTime === '--:--') return 3;
+            const [oh, om] = court.openTime.split(':').map(Number);
+            const [ch, cm] = court.closeTime.split(':').map(Number);
+            const diff = (ch * 60 + cm) - (oh * 60 + om);
+            return diff > 0 ? diff / 60 : 3;
+        },
+
+        // ✅ ซิงค์ rows จาก appState.courts (รักษา price เดิมถ้ามี)
+        syncCourtsFromSettings: function(silent) {
+            const courts = (appState.courts || []);
+            if (!courts.length) { if (!silent) showError('ยังไม่มีสนามในระบบ'); return; }
+            const list = document.getElementById('court-cost-list');
+            if (!list) return;
+            // เก็บ price เดิมของแต่ละ row ก่อน clear (เผื่อ user เคยกรอกไว้)
+            const oldPrices = [];
+            list.querySelectorAll('.court-price').forEach(el => oldPrices.push(parseFloat(el.value) || 170));
+            list.innerHTML = '';
+            this._courtCostRows = 0;
+            courts.forEach((court, i) => {
+                const hours = this._courtHours(court);
+                const price = oldPrices[i] || 170;
+                this.addCourtCostRow(price, hours, court.name);
+            });
+            if (!silent) showSuccess('ซิงค์สนามจากตั้งค่าแล้ว ' + courts.length + ' สนาม');
+        },
+
         initCostCalculator: function() {
-            // โหลด default 1 แถวสนาม
             const list = document.getElementById('court-cost-list');
             if (!list || list.children.length > 0) return;
             this._courtCostRows = 0;
-            this.addCourtCostRow();
+            // ✅ ถ้ามีสนามในระบบ → sync อัตโนมัติ ไม่ต้อง default 1 row
+            if ((appState.courts || []).length > 0) {
+                this.syncCourtsFromSettings(true);
+            } else {
+                this.addCourtCostRow();
+            }
         },
 
-        addCourtCostRow: function(defaultPrice, defaultHours) {
+        addCourtCostRow: function(defaultPrice, defaultHours, courtName) {
             const list = document.getElementById('court-cost-list');
             if (!list) return;
             this._courtCostRows = (this._courtCostRows || 0) + 1;
             const idx = this._courtCostRows;
             const dp = defaultPrice || 170;
             const dh = defaultHours || 3;
+            const label = courtName ? `สนาม ${courtName}` : `ราคา/ชม (บาท):`;
             const row = document.createElement('div');
             row.id = `court-row-${idx}`;
             row.style.cssText = 'display:flex;gap:0.5rem;align-items:flex-end;flex-wrap:wrap;';
             row.innerHTML = `
                 <div style="flex:2;min-width:100px;">
-                    <label style="font-size:0.8rem;font-weight:600;">ราคา/ชม (บาท):</label>
+                    <label style="font-size:0.8rem;font-weight:600;">${label}</label>
                     <input type="number" class="court-price" value="${dp}" min="0"
                         style="width:100%;padding:0.65rem;border:1px solid #ced4da;border-radius:8px;font-size:1rem;"
                         oninput="App.calcCost()">
@@ -5623,8 +5680,8 @@
                     <label style="font-size:0.8rem;font-weight:600;">รวม:</label>
                     <div class="court-subtotal" style="padding:0.65rem 0;font-weight:700;color:#1a2b47;font-size:1rem;">510</div>
                 </div>
-                ${idx > 1 ? `<button onclick="App.removeCourtRow(${idx})" class="danger"
-                    style="padding:0.5rem 0.75rem;min-height:unset;font-size:0.85rem;align-self:flex-end;margin-bottom:2px;">✕</button>` : ''}
+                <button onclick="App.removeCourtRow(${idx})" class="danger"
+                    style="padding:0.5rem 0.75rem;min-height:unset;font-size:0.85rem;align-self:flex-end;margin-bottom:2px;">✕</button>
             `;
             list.appendChild(row);
             this.calcCost();
@@ -8474,6 +8531,7 @@ setInterval(updateWaitBadgeColors,1000);
           <div style="font-size:0.78rem;font-weight:700;color:#555;margin-bottom:0.5rem;">📐 ต้นทุนจริง (คำนวณกำไร)</div>
           <div id="court-cost-list" style="display:flex;flex-direction:column;gap:0.4rem;margin-bottom:0.5rem;"></div>
           <button onclick="App.addCourtCostRow()" class="secondary" style="font-size:0.78rem;padding:3px 10px;min-height:unset;">➕ เพิ่มสนาม</button>
+          <button onclick="App.syncCourtsFromSettings()" class="secondary" style="font-size:0.78rem;padding:3px 10px;min-height:unset;margin-left:6px;background:#e8f8f0;border-color:#27ae60;color:#27ae60;">🔄 ซิงค์จากสนาม</button>
           <div id="court-cost-summary" style="margin-top:0.5rem;padding:0.5rem 0.75rem;background:#e8f4fd;border-radius:8px;font-size:0.82rem;color:#1a2b47;display:none;"></div>
         </div>
       </div>
