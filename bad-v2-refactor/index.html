@@ -670,8 +670,12 @@
                                 <label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-sun" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">อา</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-mon" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">จ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-tue" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">อ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-wed" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">พ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-thu" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">พฤ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-fri" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">ศ</span></label><label style="display:flex;align-items:center;gap:2px;cursor:pointer;"><input type="checkbox" id="court-day-sat" checked style="width:14px;height:14px;"><span style="font-size:0.82rem;">ส</span></label>
                             </div>
                         </div>
-                        <div>
+                        <div style="display:flex;flex-direction:column;gap:4px;">
                             <button type="submit" id="btn-add-court">เพิ่มสนาม</button>
+                            <button type="button" onclick="App.saveCourtFormDefault()" class="secondary"
+                                style="font-size:0.75rem;padding:3px 8px;min-height:unset;white-space:nowrap;">
+                                💾 บันทึกเป็น default
+                            </button>
                         </div>
                     </div>
                 </form>
@@ -6157,6 +6161,13 @@
             this.renderCourtList();
             this.updateShuttleDisplay();
             this.loadPaymentSettings();
+            // ✅ โหลด default ฟอร์มเพิ่มสนาม จาก Firebase/state
+            firebase.database().ref('badmintonState/courtFormDefault').once('value').then(snap => {
+                if (snap.val()) {
+                    appState.courtFormDefault = snap.val();
+                    this.applyCourtFormDefault();
+                }
+            });
             // ticker ทุก 1 วินาที — อัพเดทเฉพาะ countdown text ไม่ re-render ทั้งหมด
             if (!this._courtTimer) {
                 this._courtTimer = setInterval(() => {
@@ -6245,6 +6256,36 @@
             if (!checked) days = days.filter(d => d !== day);
             appState.courts[idx].openDays = days;
             this.saveState();
+        },
+
+        // ✅ บันทึก default ฟอร์มเพิ่มสนาม
+        saveCourtFormDefault: function() {
+            const openTime  = document.getElementById('court-open-time')?.value.trim()  || '20:00';
+            const closeTime = document.getElementById('court-close-time')?.value.trim() || '23:00';
+            const openDays  = ['sun','mon','tue','wed','thu','fri','sat'].filter(d =>
+                document.getElementById('court-day-'+d)?.checked
+            );
+            const def = { openTime, closeTime, openDays };
+            appState.courtFormDefault = def;
+            firebase.database().ref('badmintonState/courtFormDefault').set(def);
+            const dayNames = {'sun':'อา','mon':'จ','tue':'อ','wed':'พ','thu':'พฤ','fri':'ศ','sat':'ส'};
+            showSuccess('💾 บันทึก default แล้ว — ' + openDays.map(d=>dayNames[d]).join(' ') + ' ' + openTime + '–' + closeTime);
+        },
+
+        // ✅ apply default ลงฟอร์ม (เรียกหลังเพิ่มสนาม หรือตอนโหลดหน้า)
+        applyCourtFormDefault: function() {
+            const def = appState.courtFormDefault || {};
+            const openTime  = def.openTime  || '20:00';
+            const closeTime = def.closeTime || '23:00';
+            const openDays  = def.openDays  || ['sun','mon','tue','wed','thu','fri','sat'];
+            const ot = document.getElementById('court-open-time');
+            const ct = document.getElementById('court-close-time');
+            if (ot) ot.value = openTime;
+            if (ct) ct.value = closeTime;
+            ['sun','mon','tue','wed','thu','fri','sat'].forEach(d => {
+                const el = document.getElementById('court-day-'+d);
+                if (el) el.checked = openDays.includes(d);
+            });
         },
 
         toggleCourtAuto: function(courtId, enabled) {
@@ -7852,12 +7893,7 @@ if (btnViewQueue) {
         );
         if (App.addCourt(name, openTime, closeTime, true, openDays)) {
             document.getElementById('court-name').value = '';
-            document.getElementById('court-open-time').value  = '20:00';
-            document.getElementById('court-close-time').value = '23:00';
-            ['sun','mon','tue','wed','thu','fri','sat'].forEach(d => {
-                const el = document.getElementById('court-day-'+d);
-                if (el) el.checked = true;
-            });
+            App.applyCourtFormDefault();
         }
     }));
 
