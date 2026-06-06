@@ -4721,7 +4721,7 @@
             this.renderDashboard();
             this.renderPlayerList();
             this.renderCheckInList();
-            this.renderCourtSettings();
+            this.renderCourtList();
             this.renderActiveMatches();
             showSuccess('ลบข้อมูลผู้เล่นทั้งหมดสำเร็จ');
 
@@ -4738,7 +4738,7 @@
                 this.renderDashboard();
                 this.renderPlayerList();
                 this.renderCheckInList();
-                this.renderCourtSettings();
+                this.renderCourtList();
                 this.renderActiveMatches();
                 showSuccess(`✅ กู้คืน ${playersBackup.length} คนสำเร็จ`);
             });
@@ -6039,6 +6039,18 @@
         },
 
         renderCourtList: function() {
+            // ✅ auto-heal สนามค้าง playing โดยไม่มี match จริง
+            const activeMatchCourtIds = new Set((appState.matches || []).map(m => m.courtId));
+            let healed = 0;
+            (appState.courts || []).forEach(c => {
+                if (c.status === 'playing' && !activeMatchCourtIds.has(c.id)) {
+                    c.status = 'free';
+                    delete c.currentMatchId;
+                    healed++;
+                }
+            });
+            if (healed > 0) { saveState(); }
+
             const listEl = document.getElementById('court-list');
             listEl.innerHTML = '';
 
@@ -6181,18 +6193,18 @@
 
         updateCourtName: function(courtId, newName) {
             const name = newName.trim();
-            if (!name) { showError('ชื่อสนามห้ามว่าง'); this.renderCourtSettings(); return; }
+            if (!name) { showError('ชื่อสนามห้ามว่าง'); this.renderCourtList(); return; }
             const court = CourtUtils.getById(courtId);
             if (!court) return;
             if (court.name === name) return; // ไม่เปลี่ยน
             // เช็คชื่อซ้ำ
             if (appState.courts.some(c => c.id !== courtId && c.name.toLowerCase() === name.toLowerCase())) {
-                showError('ชื่อสนามซ้ำกับสนามอื่น'); this.renderCourtSettings(); return;
+                showError('ชื่อสนามซ้ำกับสนามอื่น'); this.renderCourtList(); return;
             }
             court.name = name;
             saveState();
             showSuccess(`เปลี่ยนชื่อเป็น "${name}" แล้ว`);
-            this.renderCourtSettings();
+            this.renderCourtList();
             this.renderCourtList();
         },
 
@@ -6218,8 +6230,12 @@
             const idx = appState.courts.findIndex(c => c.id === courtId);
             if (idx === -1) return;
             appState.courts[idx].autoSchedule = enabled;
+            // ✅ ถ้าปลด auto → court ควรแสดงทันที (ไม่กรองวัน/เวลา)
+            // re-render เพื่อให้ UI สอดคล้อง + renderMatchSetup sync dropdown
             this.saveState();
-            showSuccess(`${enabled ? 'เปิด' : 'ปิด'} auto schedule สำหรับสนามนี้แล้ว`);
+            this.renderCourtList();
+            this.renderMatchSetup();
+            showSuccess(`${enabled ? '✅ เปิด' : '🔓 ปิด'} auto schedule — สนามนี้จะ${enabled ? 'ขึ้นตามวัน/เวลาที่ตั้ง' : 'แสดงตลอดเวลา'}`);
         },
 
         /**
