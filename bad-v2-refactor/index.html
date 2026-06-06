@@ -6164,6 +6164,14 @@
                         const openT  = el.dataset.open;
                         const closeT = el.dataset.close;
                         if (!openT || !closeT) return;
+                        // ✅ init _wasOpen ครั้งแรกตามสถานะปัจจุบัน (ไม่ trigger render ซ้ำ)
+                        if (el._wasOpen === undefined) {
+                            const _now = new Date();
+                            const [_oh,_om] = openT.split(':').map(Number);
+                            const [_ch,_cm] = closeT.split(':').map(Number);
+                            const _ns = _now.getHours()*3600+_now.getMinutes()*60+_now.getSeconds();
+                            el._wasOpen = (_ns >= _oh*3600+_om*60 && _ns < _ch*3600+_cm*60);
+                        }
                         const now    = new Date();
                         const [oh,om] = openT.split(':').map(Number);
                         const [ch,cm] = closeT.split(':').map(Number);
@@ -6180,11 +6188,24 @@
                         } else if (nowSec < openSec) {
                             el.textContent = '⏳ เปิดใน ' + fmt(openSec - nowSec);
                             el.style.color = '#e67e22';
+                            el._wasOpen = false;
                         } else if (nowSec < closeSec) {
                             el.textContent = '✅ เปิดอยู่ — ปิดใน ' + fmt(closeSec - nowSec);
                             el.style.color = '#27ae60';
+                            // ✅ ข้าม threshold เปิด → trigger render dropdown ทันที
+                            if (!el._wasOpen) {
+                                el._wasOpen = true;
+                                App.renderCourtList();
+                                App.renderMatchSetup();
+                            }
                         } else {
                             el.textContent = '🔒 ปิดแล้ว'; el.style.color = '#999';
+                            // ✅ ข้าม threshold ปิด → render ออกจาก dropdown
+                            if (el._wasOpen) {
+                                el._wasOpen = false;
+                                App.renderCourtList();
+                                App.renderMatchSetup();
+                            }
                         }
                     });
                 }, 1000);
